@@ -37,7 +37,7 @@ const renderer = new CanvasRenderer(canvas, {
   },
 });
 
-const engine = await MlirEngine.load('/mlir_core.wasm');
+const engine = await MlirEngine.load(`${import.meta.env.BASE_URL}mlir_core.wasm`);
 
 function parse(text) {
   const t0 = performance.now();
