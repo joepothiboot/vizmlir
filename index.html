@@ -13,6 +13,8 @@
     --dim: #7d8697;
     --accent: #5aa9e6;
     --err: #e5534b;
+    --good: #58c58b;
+    --warn: #e5b34b;
   }
   * { box-sizing: border-box; }
   html, body {
@@ -38,14 +40,31 @@
   button:hover, label.btn:hover { border-color: var(--accent); }
   #file { display: none; }
   main { display: flex; flex: 1 1 auto; min-height: 0; }
+  #source-pane { width: 38%; min-width: 260px; resize: horizontal; overflow: auto; border-right: 1px solid var(--line); }
+  .pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  #source-pane h2, #diff-pane h2 { margin: 0; padding: 7px 10px; color: var(--dim); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+  #baseline {
+    flex: 1; min-height: 120px; resize: none; border: 0; border-bottom: 1px solid var(--line);
+    background: #10141b; color: var(--fg); padding: 10px; font: inherit; tab-size: 2;
+    outline: none; white-space: pre; overflow-wrap: normal;
+  }
   #editor {
-    width: 38%; min-width: 260px; resize: horizontal; overflow: auto;
+    flex: 1; min-height: 120px; resize: none; overflow: auto;
     background: #12151b; color: var(--fg);
-    border: 0; border-right: 1px solid var(--line);
+    border: 0;
     padding: 10px; font: inherit; tab-size: 2;
     outline: none; white-space: pre; overflow-wrap: normal;
   }
   #stage { position: relative; flex: 1 1 auto; min-width: 0; }
+  #diff-pane { width: 280px; border-left: 1px solid var(--line); overflow: auto; }
+  #diff-summary { padding: 0 10px 8px; color: var(--dim); }
+  #diff-list { margin: 0; padding: 0 10px 12px; list-style: none; }
+  #diff-list li { border-top: 1px solid var(--line); padding: 7px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  #diff-list .added { color: var(--good); }
+  #diff-list .removed { color: var(--err); }
+  #diff-list .changed { color: var(--warn); }
+  @media (max-width: 900px) { #diff-pane { width: 220px; } }
+  @media (max-width: 680px) { main { flex-direction: column; } #source-pane, #diff-pane { width: 100%; min-width: 0; resize: none; } #source-pane { height: 42%; border-right: 0; border-bottom: 1px solid var(--line); } #diff-pane { height: 28%; border-left: 0; border-top: 1px solid var(--line); } }
   #canvas { display: block; width: 100%; height: 100%; }
   #status {
     flex: 0 0 auto;
@@ -73,18 +92,28 @@
     <h1>MLIR VIZ</h1>
     <label class="btn" for="file">Open…</label>
     <input id="file" type="file" accept=".mlir,.txt" />
-    <button id="reparse">Reparse</button>
+    <button id="reparse">Compare</button>
     <button id="fit">Fit</button>
     <span class="sp"></span>
     <span id="abi"></span>
   </header>
 
   <main>
-    <textarea id="editor" spellcheck="false" placeholder="Paste MLIR here…"></textarea>
+    <section id="source-pane" class="pane">
+      <h2>Baseline</h2>
+      <textarea id="baseline" spellcheck="false" placeholder="Paste baseline MLIR here…"></textarea>
+      <h2>Current</h2>
+      <textarea id="editor" spellcheck="false" placeholder="Paste current MLIR here…"></textarea>
+    </section>
     <div id="stage">
       <canvas id="canvas"></canvas>
       <div id="diags"></div>
     </div>
+    <aside id="diff-pane" class="pane">
+      <h2>Pass diff</h2>
+      <div id="diff-summary">No comparison yet</div>
+      <ul id="diff-list"></ul>
+    </aside>
   </main>
 
   <div id="status">
@@ -93,6 +122,7 @@
     <span id="stat-syms">syms 0</span>
     <span id="stat-time">— ms</span>
     <span id="stat-flags"></span>
+    <span id="detail">—</span>
   </div>
 </div>
 
