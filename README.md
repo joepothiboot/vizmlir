@@ -2,11 +2,19 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-A lightweight, browser-based visualizer for MLIR. Designed to help developers inspect lowering passes and understand IR flow without the noise of raw text logs.
+A lightweight, browser-based visualizer for MLIR. Designed primarily for compiler engineers who need to inspect lowering passes and understand IR flow without the noise of raw text logs.
+
+**[Try VizMLIR live](https://joepotibutr.github.io/vizmlir/)**
 
 ## Why VizMLIR?
 
 Parsing complex MLIR by eye is a bottleneck. VizMLIR provides an interactive graph interface to render your IR instantly. It’s built to be a simple, "no-friction" tool that you can keep open in a side tab while you iterate on your compiler passes.
+
+## Who is it for?
+
+- **Compiler engineers:** Inspect MLIR graphs and compare the effect of lowering passes.
+- **Frontend engineers:** Explore the React and WebAssembly implementation, or contribute improvements to the UI.
+- **Technical readers:** Build an intuition for how MLIR operations connect without needing to read raw dumps alone.
 
 ## Features
 
@@ -17,7 +25,7 @@ Parsing complex MLIR by eye is a bottleneck. VizMLIR provides an interactive gra
 
 ## Quick Start
 
-To get a local instance running:
+To run VizMLIR locally:
 
 ```bash
 git clone https://github.com/joepotibutr/vizmlir

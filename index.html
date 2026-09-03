@@ -32,6 +32,9 @@
   }
   header h1 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: .04em; }
   header .sp { flex: 1; }
+  .nav-link { color: var(--dim); text-decoration: none; padding: 4px 6px; }
+  .nav-link:hover, .nav-link[aria-current="page"] { color: var(--fg); }
+  .love-note { color: var(--dim); font-size: 11px; }
   button, label.btn {
     background: #222733; color: var(--fg);
     border: 1px solid var(--line); border-radius: 4px;
@@ -39,22 +42,25 @@
   }
   button:hover, label.btn:hover { border-color: var(--accent); }
   #file { display: none; }
+  #workspace[hidden], #docs-view[hidden] { display: none; }
   main { display: flex; flex: 1 1 auto; min-height: 0; }
   #source-pane { width: 38%; min-width: 260px; resize: horizontal; overflow: auto; border-right: 1px solid var(--line); }
   .pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
   #source-pane h2, #diff-pane h2 { margin: 0; padding: 7px 10px; color: var(--dim); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
-  #baseline {
-    flex: 1; min-height: 120px; resize: none; border: 0; border-bottom: 1px solid var(--line);
-    background: #10141b; color: var(--fg); padding: 10px; font: inherit; tab-size: 2;
-    outline: none; white-space: pre; overflow-wrap: normal;
-  }
-  #editor {
-    flex: 1; min-height: 120px; resize: none; overflow: auto;
-    background: #12151b; color: var(--fg);
-    border: 0;
-    padding: 10px; font: inherit; tab-size: 2;
-    outline: none; white-space: pre; overflow-wrap: normal;
-  }
+  .code-editor { position: relative; flex: 1; min-height: 120px; overflow: hidden; background: #12151b; }
+  .code-editor pre, .code-editor textarea { position: absolute; inset: 0; margin: 0; padding: 10px; border: 0; font: inherit; line-height: 1.5; tab-size: 2; white-space: pre; overflow: auto; overflow-wrap: normal; }
+  .code-editor pre { pointer-events: none; color: var(--fg); }
+  .code-editor textarea { z-index: 1; width: 100%; height: 100%; resize: none; background: transparent; color: transparent; caret-color: var(--fg); -webkit-text-fill-color: transparent; outline: none; }
+  .code-editor textarea::selection { background: rgba(90, 169, 230, .28); }
+  .syntax-comment { color: #718096; }
+  .syntax-string { color: #d6a86a; }
+  .syntax-ssa { color: #8bd5ca; }
+  .syntax-symbol { color: #f6c177; }
+  .syntax-keyword { color: #82aaff; }
+  .syntax-type { color: #c3a6ff; }
+  .syntax-number { color: #f78c6c; }
+  .syntax-operation { color: #7fdbca; }
+  .syntax-identifier { color: #d7dae0; }
   #stage { position: relative; flex: 1 1 auto; min-width: 0; }
   #diff-pane { width: 280px; border-left: 1px solid var(--line); overflow: auto; }
   #diff-summary { padding: 0 10px 8px; color: var(--dim); }
@@ -84,6 +90,22 @@
   }
   #diags:empty { display: none; }
   #diags div { color: var(--err); white-space: pre-wrap; }
+  #docs-view { flex: 1 1 auto; overflow: auto; padding: 36px min(8vw, 96px) 56px; }
+  .docs-content { max-width: 760px; }
+  .docs-content h2 { margin: 0 0 8px; font-size: 24px; color: var(--fg); }
+  .docs-content h3 { margin: 30px 0 8px; color: var(--fg); font-size: 14px; }
+  .docs-content p, .docs-content li { color: var(--dim); max-width: 680px; }
+  .docs-content ul { padding-left: 20px; }
+  .docs-content a { color: var(--accent); }
+  .docs-kicker { color: var(--good); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+  .sample-editor { margin: 14px 0 0; }
+  .sample-editor textarea { display: block; width: 100%; min-height: 260px; resize: vertical; background: #10141b; color: var(--fg); border: 1px solid var(--line); border-radius: 4px; padding: 12px; font: inherit; line-height: 1.55; tab-size: 2; }
+  .sample-editor textarea:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+  .sample-actions { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .sample-actions span { color: var(--dim); font-size: 11px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 12px 0 0; color: var(--dim); font-size: 11px; }
+  .legend-item::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 2px; background: var(--legend-color); }
+  @media (max-width: 680px) { .love-note { display: none; } #docs-view { padding: 24px 18px 40px; } }
 </style>
 </head>
 <body>
@@ -95,34 +117,86 @@
     <button id="reparse">Compare</button>
     <button id="fit">Fit</button>
     <span class="sp"></span>
+    <a class="nav-link" href="#/" data-route="workspace">Workspace</a>
+    <a class="nav-link" href="#/docs" data-route="docs">Docs</a>
+    <span class="love-note">built with care for compiler explorers</span>
     <span id="abi"></span>
   </header>
 
-  <main>
-    <section id="source-pane" class="pane">
-      <h2>Baseline</h2>
-      <textarea id="baseline" spellcheck="false" placeholder="Paste baseline MLIR here…"></textarea>
-      <h2>Current</h2>
-      <textarea id="editor" spellcheck="false" placeholder="Paste current MLIR here…"></textarea>
-    </section>
-    <div id="stage">
-      <canvas id="canvas"></canvas>
-      <div id="diags"></div>
-    </div>
-    <aside id="diff-pane" class="pane">
-      <h2>Pass diff</h2>
-      <div id="diff-summary">No comparison yet</div>
-      <ul id="diff-list"></ul>
-    </aside>
-  </main>
+  <div id="workspace">
+    <main>
+      <section id="source-pane" class="pane">
+        <h2>Baseline</h2>
+        <div class="code-editor">
+          <pre aria-hidden="true"><code id="baseline-highlight"></code></pre>
+          <textarea id="baseline" spellcheck="false" placeholder="Paste baseline MLIR here…"></textarea>
+        </div>
+        <h2>Current</h2>
+        <div class="code-editor">
+          <pre aria-hidden="true"><code id="editor-highlight"></code></pre>
+          <textarea id="editor" spellcheck="false" placeholder="Paste current MLIR here…"></textarea>
+        </div>
+      </section>
+      <div id="stage">
+        <canvas id="canvas"></canvas>
+        <div id="diags"></div>
+      </div>
+      <aside id="diff-pane" class="pane">
+        <h2>Pass diff</h2>
+        <div id="diff-summary">No comparison yet</div>
+        <ul id="diff-list"></ul>
+      </aside>
+    </main>
 
-  <div id="status">
-    <span id="stat-nodes">nodes 0</span>
-    <span id="stat-edges">edges 0</span>
-    <span id="stat-syms">syms 0</span>
-    <span id="stat-time">— ms</span>
-    <span id="stat-flags"></span>
-    <span id="detail">—</span>
+    <div id="status">
+      <span id="stat-nodes">nodes 0</span>
+      <span id="stat-edges">edges 0</span>
+      <span id="stat-syms">syms 0</span>
+      <span id="stat-time">— ms</span>
+      <span id="stat-flags"></span>
+      <span id="detail">—</span>
+    </div>
+  </div>
+
+  <section id="docs-view" hidden aria-labelledby="docs-title">
+    <div class="docs-content">
+      <div class="docs-kicker">VizMLIR / field guide</div>
+      <h2 id="docs-title">See what your MLIR pass changed.</h2>
+      <p>VizMLIR turns two MLIR snapshots into a graph and a focused structural diff. Everything runs in your browser; your IR stays local.</p>
+
+      <h3>Start here</h3>
+      <ul>
+        <li>Open <strong>Workspace</strong> and paste the earlier IR into <strong>Baseline</strong>.</li>
+        <li>Paste the lowered or transformed IR into <strong>Current</strong>.</li>
+        <li>Use the graph to inspect operation relationships and the pass diff to find added, removed, and changed operations.</li>
+      </ul>
+
+      <h3>Try a small example</h3>
+      <p>This example creates a tensor, fills it, and multiplies it. The graph turns each operation into a node and draws edges for SSA data flow.</p>
+      <div class="sample-editor">
+        <div class="code-editor">
+          <pre aria-hidden="true"><code id="docs-sample-highlight"></code></pre>
+          <textarea id="docs-sample" aria-label="Sample MLIR source" readonly spellcheck="false"></textarea>
+        </div>
+        <div class="sample-actions">
+          <button id="load-sample">Load in workspace</button>
+          <span>Then change <code>linalg.fill</code> and compare.</span>
+        </div>
+      </div>
+
+      <h3>How to read the visual</h3>
+      <p>Follow the arrows from values being produced to operations that consume them. Click a node to see its label and parent. The pass diff on the right highlights what was added, removed, or changed between the two snapshots.</p>
+      <div class="legend" aria-label="Node color legend">
+        <span class="legend-item" style="--legend-color: #3b82f6">functions</span>
+        <span class="legend-item" style="--legend-color: #64748b">operations</span>
+        <span class="legend-item" style="--legend-color: #d97706">blocks</span>
+        <span class="legend-item" style="--legend-color: #e11d48">terminators</span>
+      </div>
+
+      <h3>Good to know</h3>
+      <p>The parser currently focuses on the MLIR constructs supported by the bundled WebAssembly engine. If a snippet does not render as expected, please include it when <a href="https://github.com/joepotibutr/vizmlir/issues" target="_blank" rel="noreferrer">opening an issue</a>.</p>
+      <p><a href="https://github.com/joepotibutr/vizmlir#readme" target="_blank" rel="noreferrer">Read the project README on GitHub</a></p>
+    </div>
   </div>
 </div>
 

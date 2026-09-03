@@ -1,6 +1,3 @@
-//! Tolerant, flat MLIR reader. Produces a node array + def-use edge list.
-//! Deliberately forgiving: malformed input yields diagnostics, never a panic.
-
 use crate::abi::*;
 use crate::intern::{Interner, SymId};
 use crate::lexer::{Lexer, Tok, Token};
@@ -67,7 +64,6 @@ pub fn parse(src: &str, interner: &mut Interner, ast: &mut Ast) {
     let toks = Lexer::new(bytes).tokenize();
     let text = |t: &Token| -> &str { &src[t.start as usize..t.end as usize] };
 
-    // implicit root
     let root_label = interner.intern("module");
     ast.nodes.push(Node { label: root_label, kind: KIND_MODULE, parent: NONE, depth: 0, line: 0 });
 
@@ -95,7 +91,6 @@ pub fn parse(src: &str, interner: &mut Interner, ast: &mut Ast) {
             _ => {}
         }
 
-        // ---- collect one statement ----
         let stmt_start = i;
         let mut depth = 0i32;
         let mut opens_region = false;
@@ -105,14 +100,13 @@ pub fn parse(src: &str, interner: &mut Interner, ast: &mut Ast) {
                 Tok::LParen | Tok::LBrack | Tok::Lt => depth += 1,
                 Tok::RParen | Tok::RBrack | Tok::Gt => depth -= 1,
                 Tok::LBrace if depth == 0 => {
-                    // region body if '{' is the last thing on the line
                     let nxt = toks.get(i + 1).map(|t| t.kind).unwrap_or(Tok::Eof);
                     if matches!(nxt, Tok::Newline | Tok::Eof) {
                         opens_region = true;
                         i += 1;
                         break;
                     }
-                    depth += 1; // inline attribute dictionary
+                    depth += 1;
                 }
                 Tok::RBrace if depth == 0 => break,
                 Tok::RBrace => depth -= 1,
@@ -135,7 +129,6 @@ pub fn parse(src: &str, interner: &mut Interner, ast: &mut Ast) {
             continue;
         }
 
-        // ---- split on top-level '=' ----
         let mut eq_at: Option<usize> = None;
         let mut d = 0i32;
         for (n, t) in stmt.iter().enumerate() {
@@ -158,7 +151,6 @@ pub fn parse(src: &str, interner: &mut Interner, ast: &mut Ast) {
             continue;
         }
 
-        // ---- name + kind ----
         let head = &rhs[0];
         let kind;
         label_buf.clear();
@@ -197,7 +189,6 @@ pub fn parse(src: &str, interner: &mut Interner, ast: &mut Ast) {
             line: head.line,
         });
 
-        // ---- operands => edges (def-use) ----
         let operand_start = if kind == KIND_BLOCK { 0 } else { 1 };
         for t in &rhs[operand_start.min(rhs.len())..] {
             if t.kind != Tok::Ssa {
@@ -218,7 +209,6 @@ pub fn parse(src: &str, interner: &mut Interner, ast: &mut Ast) {
             }
         }
 
-        // ---- results / block args => definitions ----
         for t in lhs.iter().filter(|t| t.kind == Tok::Ssa) {
             let sym = interner.intern(text(t));
             defs.insert(sym, node_idx);
@@ -230,7 +220,6 @@ pub fn parse(src: &str, interner: &mut Interner, ast: &mut Ast) {
             }
         }
 
-        // structural edge to parent when there is no data dependency
         if parent != NONE && parent != node_idx {
             let has_pred = ast.edges.iter().rev().take(8).any(|&(_, dst)| dst == node_idx);
             if !has_pred {

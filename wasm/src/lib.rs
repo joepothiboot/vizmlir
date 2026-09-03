@@ -1,5 +1,3 @@
-//! WASM entry points. No wasm-bindgen — raw C ABI, hand-rolled memory contract.
-
 pub mod abi;
 pub mod arena;
 pub mod intern;
@@ -61,8 +59,6 @@ fn engine() -> &'static mut Engine {
     }
 }
 
-// ----------------------------------------------------------------- exports
-
 #[no_mangle]
 pub extern "C" fn mlir_abi_version() -> u32 { ABI_VERSION }
 
@@ -92,7 +88,6 @@ pub extern "C" fn mlir_reset() {
     e.header[HDR_DIAG_COUNT] = 0;
 }
 
-/// Parse `len` bytes previously written into the input buffer.
 #[no_mangle]
 pub extern "C" fn mlir_parse(len: u32) -> u32 {
     let e = engine();
@@ -115,7 +110,6 @@ pub extern "C" fn mlir_parse(len: u32) -> u32 {
         }
     };
 
-    // SAFETY: `src` borrows `e.input`; parse touches only interner/ast.
     let src: &str = unsafe { &*(src as *const str) };
     ast::parse(src, &mut e.interner, &mut e.ast);
 
@@ -133,10 +127,8 @@ pub extern "C" fn mlir_parse(len: u32) -> u32 {
     let off_bounds = match alloc(&mut e.arena, 4 * 4, 4) { Some(o) => o, None => return oom(e) };
     let off_strings = match alloc(&mut e.arena, pool_len.max(1), 8) { Some(o) => o, None => return oom(e) };
 
-    // strings
     e.arena.bytes(off_strings, pool_len).copy_from_slice(e.interner.pool());
 
-    // meta
     {
         let spans: Vec<(u32, u32)> = e.ast.nodes.iter().map(|nd| e.interner.span(nd.label)).collect();
         let kinds: Vec<(u32, u32)> = e.ast.nodes.iter().map(|nd| (nd.kind, nd.parent)).collect();
@@ -150,7 +142,6 @@ pub extern "C" fn mlir_parse(len: u32) -> u32 {
         }
     }
 
-    // edges
     {
         let pairs: Vec<(u32, u32)> = e.ast.edges.clone();
         let ed = e.arena.u32s(off_edges, m * STRIDE_EDGE);
@@ -160,7 +151,6 @@ pub extern "C" fn mlir_parse(len: u32) -> u32 {
         }
     }
 
-    // diagnostics
     {
         let items: Vec<(u32, u32, u32, u32)> = e
             .ast
@@ -205,7 +195,6 @@ fn oom(e: &mut Engine) -> u32 {
     STATUS_OOM
 }
 
-/// Deterministic layered layout: column = region depth, row = order of appearance.
 #[no_mangle]
 pub extern "C" fn mlir_layout(node_w: f32, node_h: f32, col_gap: f32, row_gap: f32) -> u32 {
     let e = engine();

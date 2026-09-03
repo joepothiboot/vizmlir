@@ -1,4 +1,3 @@
-// Canvas2D painter. Reads WASM-owned buffers directly — no intermediate objects.
 import { KIND_STYLE, STRIDE } from '../wasm/abi.js';
 
 export class CanvasRenderer {
@@ -156,7 +155,6 @@ export class CanvasRenderer {
     ctx.textAlign = 'left';
   }
 
-  /** Screen -> world, then linear scan for a hit. */
   hitTest(clientX, clientY) {
     const s = this.snapshot;
     if (!s) return -1;

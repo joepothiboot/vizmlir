@@ -1,4 +1,3 @@
-// Compare parser snapshots while treating SSA names as unstable identifiers.
 const SSA_NAME = /%[-A-Za-z0-9_.$]+/g;
 
 export function normalizeLabel(label) {

@@ -1,4 +1,3 @@
-// The JS/WASM safety boundary. Nothing above this file touches raw pointers.
 import { MemoryViews } from './views.js';
 import { ABI_MAGIC, ABI_VERSION, HDR, STRIDE, STATUS, STATUS_TEXT, DIAG_CODE, NONE } from './abi.js';
 
@@ -69,7 +68,6 @@ export class MlirEngine {
     this.#exports.mlir_reset();
   }
 
-  /** Encodes `text`, hands it to Rust, and parses. Returns a numeric STATUS. */
   parse(text) {
     const bytes = encoder.encode(text);
     if (bytes.length > this.#inputCap) return STATUS.TOO_LARGE;
@@ -77,15 +75,10 @@ export class MlirEngine {
     return this.#exports.mlir_parse(bytes.length) >>> 0;
   }
 
-  /** Re-runs layout without re-parsing. */
   layout({ nodeWidth = 180, nodeHeight = 30, colGap = 70, rowGap = 14 } = {}) {
     return this.#exports.mlir_layout(nodeWidth, nodeHeight, colGap, rowGap) >>> 0;
   }
 
-  /**
-   * Zero-copy read model. Views are only valid until the next parse()/layout()
-   * call — never cache them across a mutation.
-   */
   snapshot() {
     const h = this.#header();
     const nodeCount = h[HDR.NODE_COUNT];
