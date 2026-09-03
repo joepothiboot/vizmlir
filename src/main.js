@@ -2,6 +2,7 @@ import { MlirEngine } from './wasm/bridge.js';
 import { CanvasRenderer } from './render/canvas-renderer.js';
 import { STATUS } from './wasm/abi.js';
 import { copySnapshot, diffSnapshots } from './diff.js';
+import { bindHighlighting } from './mlir-highlight.js';
 
 const SAMPLE = `module {
   func.func @matmul(%A: tensor<128x256xf32>, %B: tensor<256x64xf32>) -> tensor<128x64xf32> {
@@ -21,6 +22,13 @@ const statusEl = document.getElementById('status');
 const detailEl = document.getElementById('detail');
 const diffSummary = document.getElementById('diff-summary');
 const diffList = document.getElementById('diff-list');
+const workspace = document.getElementById('workspace');
+const docsView = document.getElementById('docs-view');
+const routeLinks = document.querySelectorAll('[data-route]');
+const docsSample = document.getElementById('docs-sample');
+const baselineHighlight = document.getElementById('baseline-highlight');
+const editorHighlight = document.getElementById('editor-highlight');
+const docsSampleHighlight = document.getElementById('docs-sample-highlight');
 
 const renderer = new CanvasRenderer(canvas, {
   onSelect(index, snap) {
@@ -80,9 +88,22 @@ function run() {
     (diags.length ? ` · ${diags.length} warning(s): ${diags[0].message} "${diags[0].symbol}"` : '');
 }
 
+function updateRoute() {
+  const isDocs = window.location.hash === '#/docs';
+  workspace.hidden = isDocs;
+  docsView.hidden = !isDocs;
+  routeLinks.forEach((link) => {
+    link.setAttribute('aria-current', isDocs === (link.dataset.route === 'docs') ? 'page' : 'false');
+  });
+}
+
 let timer = 0;
 baseline.value = SAMPLE;
 input.value = SAMPLE.replace('linalg.fill', 'linalg.fill_relu');
+docsSample.value = SAMPLE;
+bindHighlighting(baseline, baselineHighlight);
+bindHighlighting(input, editorHighlight);
+bindHighlighting(docsSample, docsSampleHighlight);
 function scheduleRun() {
   clearTimeout(timer);
   timer = setTimeout(run, 140);
@@ -96,4 +117,13 @@ document.getElementById('fit')?.addEventListener('click', () => {
   renderer.requestDraw();
 });
 
+document.getElementById('load-sample')?.addEventListener('click', () => {
+  baseline.value = SAMPLE;
+  input.value = SAMPLE.replace('linalg.fill', 'linalg.fill_relu');
+  window.location.hash = '#/';
+  run();
+});
+
+window.addEventListener('hashchange', updateRoute);
+updateRoute();
 run();

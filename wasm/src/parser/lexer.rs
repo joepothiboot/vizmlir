@@ -1,5 +1,3 @@
-//! Zero-allocation scanner. Emits byte spans; never copies source text.
-
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Tok {
     Eof, Newline, Ssa, Block, Symbol, Attr, Type, Ident, Number, Str,

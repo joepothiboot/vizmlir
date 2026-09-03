@@ -1,9 +1,6 @@
-//! Bump allocator with a fixed, never-reallocated backing store.
-//! Backed by Vec<u64> so the base pointer is 8-byte aligned.
-
 pub struct Arena {
     buf: Vec<u64>,
-    head: usize, // byte offset
+    head: usize,
     oom: bool,
 }
 
@@ -26,7 +23,6 @@ impl Arena {
         self.oom = false;
     }
 
-    /// Returns a byte offset, or None on exhaustion.
     pub fn alloc(&mut self, bytes: usize, align: usize) -> Option<usize> {
         debug_assert!(align.is_power_of_two() && align <= 8);
         let start = (self.head + align - 1) & !(align - 1);
@@ -42,7 +38,6 @@ impl Arena {
     #[inline]
     fn base(&self) -> *mut u8 { self.buf.as_ptr() as *mut u8 }
 
-    /// Absolute address inside WASM linear memory (what JS needs).
     #[inline]
     pub fn addr(&self, off: usize) -> u32 { (self.base() as usize + off) as u32 }
 

@@ -1,6 +1,3 @@
-// Typed-array views over WASM linear memory.
-// Buffers detach whenever memory grows, so every accessor re-validates first.
-
 export class MemoryViews {
   constructor(memory) {
     this.memory = memory;
@@ -11,7 +8,6 @@ export class MemoryViews {
     this.refresh();
   }
 
-  /** Rebuilds views if the underlying ArrayBuffer was replaced. Cheap when unchanged. */
   refresh() {
     const buf = this.memory.buffer;
     if (buf !== this._buffer) {
@@ -53,7 +49,6 @@ export class MemoryViews {
     return this.u8.subarray(ptr, ptr + len);
   }
 
-  /** Copies `bytes` into linear memory at `ptr`. Returns bytes written. */
   writeBytes(ptr, bytes) {
     this.refresh();
     this.#check(ptr, bytes.length, 1);

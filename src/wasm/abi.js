@@ -1,5 +1,4 @@
-// Mirror of wasm/src/abi.rs — keep these values in lockstep.
-export const ABI_MAGIC = 0x4d4c5231; // "MLR1"
+export const ABI_MAGIC = 0x4d4c5231;
 export const ABI_VERSION = 3;
 
 export const HDR = Object.freeze({
@@ -20,10 +19,10 @@ export const HDR = Object.freeze({
 });
 
 export const STRIDE = Object.freeze({
-  NODE_XYWH: 4, // f32 x, y, w, h
-  NODE_META: 4, // u32 kind, labelOff, labelLen, parent
-  EDGE: 2,      // u32 src, dst
-  DIAG: 4,      // u32 code, line, symOff, symLen
+  NODE_XYWH: 4,
+  NODE_META: 4,
+  EDGE: 2,
+  DIAG: 4,
 });
 
 export const STATUS = Object.freeze({

@@ -1,13 +1,10 @@
-//! Symbol interner. Deduplicates label text into one contiguous UTF-8 pool
-//! that JS reads directly via TextDecoder — no per-string copies.
-
 use std::collections::HashMap;
 
 pub type SymId = u32;
 
 pub struct Interner {
     map: HashMap<Box<str>, SymId>,
-    spans: Vec<(u32, u32)>, // (offset, len) into pool
+    spans: Vec<(u32, u32)>,
     pool: Vec<u8>,
 }
 
