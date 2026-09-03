@@ -1,0 +1,9 @@
+---
+description: VizMLIR repository conventions
+globs:
+  - "src/**"
+  - "wasm/src/**"
+alwaysApply: false
+---
+
+Follow `CONTRIBUTING.md` for setup and validation. Keep the app browser-only, preserve the existing JavaScript/Rust/WASM boundaries, and synchronize `src/wasm/abi.js` when `wasm/src/abi.rs` changes. Run `npm run build` after code changes.
