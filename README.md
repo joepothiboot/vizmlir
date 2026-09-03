@@ -40,7 +40,7 @@ npm run dev
 
 ## Contributing
 
-Feedback and contributions are highly appreciated. If you encounter a specific MLIR construct that doesn't render as expected, please open an issue with the snippet attached so we can improve the parser.
+Feedback and contributions are highly appreciated. See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup and project conventions. If you encounter a specific MLIR construct that doesn't render as expected, please open an issue with the snippet attached so we can improve the parser.
 
 ## License
 
