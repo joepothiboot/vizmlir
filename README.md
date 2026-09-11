@@ -6,7 +6,9 @@ A lightweight, browser-based visualizer for MLIR. Designed primarily for compile
 
 **[Try VizMLIR live](https://joepothiboot.github.io/vizmlir/)**
 
-![VizMLIR live demo](public/demo/vizmlir-demo.gif)
+![VizMLIR comparison workspace](public/demo/vizmlir-workspace.png)
+
+![VizMLIR field guide](public/demo/vizmlir-docs.png)
 
 ## Why VizMLIR?
 
