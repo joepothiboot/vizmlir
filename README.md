@@ -6,6 +6,8 @@ A lightweight, browser-based visualizer for MLIR. Designed primarily for compile
 
 **[Try VizMLIR live](https://joepothiboot.github.io/vizmlir/)**
 
+![VizMLIR live demo](public/demo/vizmlir-demo.gif)
+
 ## Why VizMLIR?
 
 Parsing complex MLIR by eye is a bottleneck. VizMLIR provides an interactive graph interface to render your IR instantly. It’s built to be a simple, "no-friction" tool that you can keep open in a side tab while you iterate on your compiler passes.
