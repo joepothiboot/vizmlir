@@ -4,7 +4,7 @@
 
 A lightweight, browser-based visualizer for MLIR. Designed primarily for compiler engineers who need to inspect lowering passes and understand IR flow without the noise of raw text logs.
 
-**[Try VizMLIR live](https://joepotibutr.github.io/vizmlir/)**
+**[Try VizMLIR live](https://joepothiboot.github.io/vizmlir/)**
 
 ## Why VizMLIR?
 
@@ -28,7 +28,7 @@ Parsing complex MLIR by eye is a bottleneck. VizMLIR provides an interactive gra
 To run VizMLIR locally:
 
 ```bash
-git clone https://github.com/joepotibutr/vizmlir
+git clone https://github.com/joepothiboot/vizmlir
 cd vizmlir
 npm install
 npm run dev
