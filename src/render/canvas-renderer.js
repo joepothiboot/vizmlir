@@ -15,6 +15,16 @@ function readTheme() {
     selected: v("--accent", "#ff7a1a"),
     added: v("--good", "#9be564"),
     changed: v("--warn", "#f2c94c"),
+    kinds: Object.fromEntries(
+      Object.entries(KIND_STYLE).map(([kind, style]) => [
+        kind,
+        {
+          fill: v(`--node-${kind}-fill`, style.fill),
+          stroke: v(`--node-${kind}-stroke`, style.stroke),
+          text: v(`--node-${kind}-text`, style.text),
+        },
+      ]),
+    ),
   };
 }
 
@@ -54,6 +64,12 @@ export class CanvasRenderer {
     this.selected = -1;
     this.onSelect?.(-1, snapshot);
     if (fit) this.fit();
+    this.requestDraw();
+  }
+
+  /** Re-read colours after the page theme changes. */
+  refreshTheme() {
+    this.theme = readTheme();
     this.requestDraw();
   }
 
@@ -182,7 +198,7 @@ export class CanvasRenderer {
       if (x + w < view.l || x > view.r || y + h < view.t || y > view.b)
         continue;
 
-      const style = KIND_STYLE[s.kindOf(i)] ?? KIND_STYLE[2];
+      const style = this.theme.kinds[s.kindOf(i)] ?? this.theme.kinds[2];
       const mark = this.marks.get(i);
       ctx.fillStyle = style.fill;
       ctx.strokeStyle =
