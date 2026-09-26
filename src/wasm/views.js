@@ -21,10 +21,14 @@ export class MemoryViews {
 
   #check(ptr, byteLen, align) {
     if (ptr % align !== 0) {
-      throw new Error(`misaligned pointer 0x${ptr.toString(16)} (needs ${align}-byte alignment)`);
+      throw new Error(
+        `misaligned pointer 0x${ptr.toString(16)} (needs ${align}-byte alignment)`,
+      );
     }
     if (ptr + byteLen > this._buffer.byteLength) {
-      throw new Error(`view 0x${ptr.toString(16)}+${byteLen} exceeds linear memory`);
+      throw new Error(
+        `view 0x${ptr.toString(16)}+${byteLen} exceeds linear memory`,
+      );
     }
   }
 

@@ -1,8 +1,17 @@
-import { MemoryViews } from './views.js';
-import { ABI_MAGIC, ABI_VERSION, HDR, STRIDE, STATUS, STATUS_TEXT, DIAG_CODE, NONE } from './abi.js';
+import { MemoryViews } from "./views.js";
+import {
+  ABI_MAGIC,
+  ABI_VERSION,
+  HDR,
+  STRIDE,
+  STATUS,
+  STATUS_TEXT,
+  DIAG_CODE,
+  NONE,
+} from "./abi.js";
 
 const encoder = new TextEncoder();
-const decoder = new TextDecoder('utf-8');
+const decoder = new TextDecoder("utf-8");
 
 export class MlirEngine {
   #exports;
@@ -13,12 +22,20 @@ export class MlirEngine {
 
   constructor(instance) {
     this.#exports = instance.exports;
-    const { memory, mlir_header_ptr, mlir_input_ptr, mlir_input_cap, mlir_abi_version } = this.#exports;
-    if (!memory) throw new Error('wasm module does not export `memory`');
+    const {
+      memory,
+      mlir_header_ptr,
+      mlir_input_ptr,
+      mlir_input_cap,
+      mlir_abi_version,
+    } = this.#exports;
+    if (!memory) throw new Error("wasm module does not export `memory`");
 
     const version = mlir_abi_version();
     if (version !== ABI_VERSION) {
-      throw new Error(`ABI mismatch: wasm=${version}, js=${ABI_VERSION}. Rebuild and sync abi.js.`);
+      throw new Error(
+        `ABI mismatch: wasm=${version}, js=${ABI_VERSION}. Rebuild and sync abi.js.`,
+      );
     }
 
     this.#views = new MemoryViews(memory);
@@ -28,13 +45,15 @@ export class MlirEngine {
 
     const magic = this.#header()[HDR.MAGIC];
     if (magic !== ABI_MAGIC) {
-      throw new Error(`bad ABI magic 0x${magic.toString(16)} — memory layout is not what JS expects`);
+      throw new Error(
+        `bad ABI magic 0x${magic.toString(16)} — memory layout is not what JS expects`,
+      );
     }
   }
 
-  static async load(url = '/mlir_core.wasm') {
+  static async load(url = "/mlir_core.wasm") {
     let instance;
-    if (typeof WebAssembly.instantiateStreaming === 'function') {
+    if (typeof WebAssembly.instantiateStreaming === "function") {
       try {
         ({ instance } = await WebAssembly.instantiateStreaming(fetch(url), {}));
       } catch {
@@ -76,7 +95,9 @@ export class MlirEngine {
   }
 
   layout({ nodeWidth = 180, nodeHeight = 30, colGap = 70, rowGap = 14 } = {}) {
-    return this.#exports.mlir_layout(nodeWidth, nodeHeight, colGap, rowGap) >>> 0;
+    return (
+      this.#exports.mlir_layout(nodeWidth, nodeHeight, colGap, rowGap) >>> 0
+    );
   }
 
   snapshot() {
@@ -87,14 +108,20 @@ export class MlirEngine {
     const stringsLen = h[HDR.STRINGS_LEN];
 
     const strings = this.#views.u8At(h[HDR.PTR_STRINGS], stringsLen);
-    const meta = this.#views.u32At(h[HDR.PTR_NODE_META], nodeCount * STRIDE.NODE_META);
+    const meta = this.#views.u32At(
+      h[HDR.PTR_NODE_META],
+      nodeCount * STRIDE.NODE_META,
+    );
 
     return {
       status: h[HDR.STATUS],
       nodeCount,
       edgeCount,
       diagCount,
-      xywh: this.#views.f32At(h[HDR.PTR_NODE_XYWH], nodeCount * STRIDE.NODE_XYWH),
+      xywh: this.#views.f32At(
+        h[HDR.PTR_NODE_XYWH],
+        nodeCount * STRIDE.NODE_XYWH,
+      ),
       meta,
       edges: this.#views.u32At(h[HDR.PTR_EDGES], edgeCount * STRIDE.EDGE),
       bounds: this.#views.f32At(h[HDR.PTR_BOUNDS], 4),
@@ -107,7 +134,9 @@ export class MlirEngine {
         const b = i * STRIDE.NODE_META;
         const off = meta[b + 1];
         const len = meta[b + 2];
-        return len === 0 ? '' : decoder.decode(strings.subarray(off, off + len));
+        return len === 0
+          ? ""
+          : decoder.decode(strings.subarray(off, off + len));
       },
       diagnostics: () => {
         const dv = this.#views.u32At(h[HDR.PTR_DIAG], diagCount * STRIDE.DIAG);
@@ -119,8 +148,8 @@ export class MlirEngine {
           out.push({
             code: dv[b],
             line: dv[b + 1],
-            symbol: len ? decoder.decode(strings.subarray(off, off + len)) : '',
-            message: DIAG_CODE[dv[b]] ?? 'unknown diagnostic',
+            symbol: len ? decoder.decode(strings.subarray(off, off + len)) : "",
+            message: DIAG_CODE[dv[b]] ?? "unknown diagnostic",
           });
         }
         return out;

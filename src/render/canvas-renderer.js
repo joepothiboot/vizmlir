@@ -1,9 +1,9 @@
-import { KIND_STYLE, STRIDE } from '../wasm/abi.js';
+import { KIND_STYLE, STRIDE } from "../wasm/abi.js";
 
 export class CanvasRenderer {
-  constructor(canvas, { background = '#0b1120', onSelect = null } = {}) {
+  constructor(canvas, { background = "#0b1120", onSelect = null } = {}) {
     this.canvas = canvas;
-    this.ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+    this.ctx = canvas.getContext("2d", { alpha: false, desynchronized: true });
     this.background = background;
     this.onSelect = onSelect;
 
@@ -41,7 +41,11 @@ export class CanvasRenderer {
     const [minX, minY, maxX, maxY] = s.bounds;
     const w = Math.max(1, maxX - minX);
     const h = Math.max(1, maxY - minY);
-    const scale = Math.min((this.width - padding * 2) / w, (this.height - padding * 2) / h, 2);
+    const scale = Math.min(
+      (this.width - padding * 2) / w,
+      (this.height - padding * 2) / h,
+      2,
+    );
     this.camera.scale = Math.max(scale, 0.05);
     this.camera.x = this.width / 2 - ((minX + maxX) / 2) * this.camera.scale;
     this.camera.y = this.height / 2 - ((minY + maxY) / 2) * this.camera.scale;
@@ -85,7 +89,7 @@ export class CanvasRenderer {
     const { ctx } = this;
     const { xywh, edges } = s;
     ctx.lineWidth = 1 / scale;
-    ctx.strokeStyle = 'rgba(148,163,184,0.38)';
+    ctx.strokeStyle = "rgba(148,163,184,0.38)";
     ctx.beginPath();
 
     for (let i = 0; i < s.edgeCount; i++) {
@@ -111,7 +115,7 @@ export class CanvasRenderer {
     const { ctx } = this;
     const { xywh } = s;
     const showText = scale > 0.42;
-    ctx.textBaseline = 'middle';
+    ctx.textBaseline = "middle";
     ctx.font = `${13 / 1}px ui-monospace, SFMono-Regular, Menlo, monospace`;
     ctx.lineWidth = 1.25 / scale;
 
@@ -122,11 +126,12 @@ export class CanvasRenderer {
       const w = xywh[o + 2];
       const h = xywh[o + 3];
 
-      if (x + w < view.l || x > view.r || y + h < view.t || y > view.b) continue;
+      if (x + w < view.l || x > view.r || y + h < view.t || y > view.b)
+        continue;
 
       const style = KIND_STYLE[s.kindOf(i)] ?? KIND_STYLE[2];
       ctx.fillStyle = style.fill;
-      ctx.strokeStyle = i === this.selected ? '#f8fafc' : style.stroke;
+      ctx.strokeStyle = i === this.selected ? "#f8fafc" : style.stroke;
 
       const r = Math.min(6, h / 2);
       ctx.beginPath();
@@ -148,11 +153,11 @@ export class CanvasRenderer {
 
   #placeholder() {
     const { ctx } = this;
-    ctx.fillStyle = '#475569';
-    ctx.font = '14px ui-sans-serif, system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('No module loaded', this.width / 2, this.height / 2);
-    ctx.textAlign = 'left';
+    ctx.fillStyle = "#475569";
+    ctx.font = "14px ui-sans-serif, system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("No module loaded", this.width / 2, this.height / 2);
+    ctx.textAlign = "left";
   }
 
   hitTest(clientX, clientY) {
@@ -164,8 +169,12 @@ export class CanvasRenderer {
 
     for (let i = s.nodeCount - 1; i >= 0; i--) {
       const o = i * STRIDE.NODE_XYWH;
-      if (wx >= s.xywh[o] && wx <= s.xywh[o] + s.xywh[o + 2] &&
-          wy >= s.xywh[o + 1] && wy <= s.xywh[o + 1] + s.xywh[o + 3]) {
+      if (
+        wx >= s.xywh[o] &&
+        wx <= s.xywh[o] + s.xywh[o + 2] &&
+        wy >= s.xywh[o + 1] &&
+        wy <= s.xywh[o + 1] + s.xywh[o + 3]
+      ) {
         return i;
       }
     }
@@ -179,7 +188,7 @@ export class CanvasRenderer {
     let lastY = 0;
     let moved = 0;
 
-    c.addEventListener('pointerdown', (e) => {
+    c.addEventListener("pointerdown", (e) => {
       dragging = true;
       moved = 0;
       lastX = e.clientX;
@@ -187,7 +196,7 @@ export class CanvasRenderer {
       c.setPointerCapture(e.pointerId);
     });
 
-    c.addEventListener('pointermove', (e) => {
+    c.addEventListener("pointermove", (e) => {
       if (!dragging) return;
       const dx = e.clientX - lastX;
       const dy = e.clientY - lastY;
@@ -199,7 +208,7 @@ export class CanvasRenderer {
       this.requestDraw();
     });
 
-    c.addEventListener('pointerup', (e) => {
+    c.addEventListener("pointerup", (e) => {
       dragging = false;
       c.releasePointerCapture(e.pointerId);
       if (moved < 4) {
@@ -209,20 +218,24 @@ export class CanvasRenderer {
       }
     });
 
-    c.addEventListener('wheel', (e) => {
-      e.preventDefault();
-      const rect = c.getBoundingClientRect();
-      const mx = e.clientX - rect.left;
-      const my = e.clientY - rect.top;
-      const factor = Math.exp(-e.deltaY * 0.0015);
-      const next = Math.min(4, Math.max(0.05, this.camera.scale * factor));
-      const k = next / this.camera.scale;
-      this.camera.x = mx - (mx - this.camera.x) * k;
-      this.camera.y = my - (my - this.camera.y) * k;
-      this.camera.scale = next;
-      this.requestDraw();
-    }, { passive: false });
+    c.addEventListener(
+      "wheel",
+      (e) => {
+        e.preventDefault();
+        const rect = c.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const factor = Math.exp(-e.deltaY * 0.0015);
+        const next = Math.min(4, Math.max(0.05, this.camera.scale * factor));
+        const k = next / this.camera.scale;
+        this.camera.x = mx - (mx - this.camera.x) * k;
+        this.camera.y = my - (my - this.camera.y) * k;
+        this.camera.scale = next;
+        this.requestDraw();
+      },
+      { passive: false },
+    );
 
-    window.addEventListener('resize', () => this.resize());
+    window.addEventListener("resize", () => this.resize());
   }
 }

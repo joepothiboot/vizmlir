@@ -1,12 +1,16 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from "vite";
 
 export default defineConfig({
-  base: '/vizmlir/',
+  base: "/vizmlir/",
   build: {
-    target: 'esnext'
+    target: "esnext",
   },
 
   worker: {
-    format: 'es'
-  }
-})
+    format: "es",
+  },
+
+  test: {
+    include: ["tests/unit/**/*.test.js"],
+  },
+});

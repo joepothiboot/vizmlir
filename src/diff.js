@@ -1,7 +1,7 @@
 const SSA_NAME = /%[-A-Za-z0-9_.$]+/g;
 
 export function normalizeLabel(label) {
-  return label.replace(SSA_NAME, '%?');
+  return label.replace(SSA_NAME, "%?");
 }
 
 export function copySnapshot(snapshot) {
@@ -22,27 +22,35 @@ export function diffSnapshots(before, after) {
   const used = new Set();
 
   for (const operation of afterOps) {
-    const exact = beforeOps.findIndex((candidate, index) =>
-      !used.has(index) && candidate.signature === operation.signature
+    const exact = beforeOps.findIndex(
+      (candidate, index) =>
+        !used.has(index) && candidate.signature === operation.signature,
     );
     if (exact >= 0) {
       used.add(exact);
       continue;
     }
 
-    const changed = beforeOps.findIndex((candidate, index) =>
-      !used.has(index) && candidate.kind === operation.kind && candidate.parent === operation.parent
+    const changed = beforeOps.findIndex(
+      (candidate, index) =>
+        !used.has(index) &&
+        candidate.kind === operation.kind &&
+        candidate.parent === operation.parent,
     );
     if (changed >= 0) {
       used.add(changed);
-      rows.push({ type: 'changed', before: beforeOps[changed], after: operation });
+      rows.push({
+        type: "changed",
+        before: beforeOps[changed],
+        after: operation,
+      });
     } else {
-      rows.push({ type: 'added', after: operation });
+      rows.push({ type: "added", after: operation });
     }
   }
 
   beforeOps.forEach((operation, index) => {
-    if (!used.has(index)) rows.push({ type: 'removed', before: operation });
+    if (!used.has(index)) rows.push({ type: "removed", before: operation });
   });
 
   return rows;
@@ -50,11 +58,12 @@ export function diffSnapshots(before, after) {
 
 function snapshotOperations(snapshot) {
   if (!snapshot) return [];
-  if (snapshot.nodes) return snapshot.nodes.map((node, index) => ({
-    ...node,
-    index,
-    signature: `${node.kind}:${normalizeLabel(node.label)}`,
-  }));
+  if (snapshot.nodes)
+    return snapshot.nodes.map((node, index) => ({
+      ...node,
+      index,
+      signature: `${node.kind}:${normalizeLabel(node.label)}`,
+    }));
   return Array.from({ length: snapshot.nodeCount }, (_, index) => ({
     index,
     kind: snapshot.kindOf(index),
