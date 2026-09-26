@@ -1,20 +1,40 @@
 import { KIND_STYLE, STRIDE } from "../wasm/abi.js";
 
+const MONO = `"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace`;
+
+const BADGE = { added: "+", changed: "~" };
+
+function readTheme() {
+  const css = getComputedStyle(document.documentElement);
+  const v = (name, fallback) => css.getPropertyValue(name).trim() || fallback;
+  return {
+    background: v("--bg", "#0f0f0d"),
+    gridDot: v("--grid-dot", "#26251f"),
+    edge: v("--edge", "rgba(142,138,128,0.45)"),
+    dim: v("--dim", "#8e8a80"),
+    selected: v("--accent", "#ff7a1a"),
+    added: v("--good", "#9be564"),
+    changed: v("--warn", "#f2c94c"),
+  };
+}
+
 export class CanvasRenderer {
-  constructor(canvas, { background = "#0b1120", onSelect = null } = {}) {
+  constructor(canvas, { onSelect = null } = {}) {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d", { alpha: false, desynchronized: true });
-    this.background = background;
+    this.theme = readTheme();
     this.onSelect = onSelect;
 
     this.camera = { x: 0, y: 0, scale: 1 };
     this.snapshot = null;
+    this.marks = new Map();
     this.selected = -1;
     this.dpr = 1;
     this._raf = 0;
 
     this.#bindInput();
     this.resize();
+    document.fonts?.ready.then(() => this.requestDraw());
   }
 
   resize() {
@@ -30,8 +50,30 @@ export class CanvasRenderer {
 
   setSnapshot(snapshot, { fit = true } = {}) {
     this.snapshot = snapshot;
+    this.marks = new Map();
     this.selected = -1;
+    this.onSelect?.(-1, snapshot);
     if (fit) this.fit();
+    this.requestDraw();
+  }
+
+  /** Map of node index -> "added" | "changed", drawn as coloured outlines. */
+  setMarks(marks) {
+    this.marks = marks;
+    this.requestDraw();
+  }
+
+  select(index, { center = false } = {}) {
+    const s = this.snapshot;
+    this.selected = s && index >= 0 && index < s.nodeCount ? index : -1;
+    if (center && this.selected >= 0) {
+      const o = this.selected * STRIDE.NODE_XYWH;
+      const { scale } = this.camera;
+      this.camera.x = this.width / 2 - (s.xywh[o] + s.xywh[o + 2] / 2) * scale;
+      this.camera.y =
+        this.height / 2 - (s.xywh[o + 1] + s.xywh[o + 3] / 2) * scale;
+    }
+    this.onSelect?.(this.selected, s);
     this.requestDraw();
   }
 
@@ -62,8 +104,9 @@ export class CanvasRenderer {
   draw() {
     const { ctx, dpr } = this;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = this.background;
+    ctx.fillStyle = this.theme.background;
     ctx.fillRect(0, 0, this.width, this.height);
+    this.#drawGrid();
 
     const s = this.snapshot;
     if (!s || s.nodeCount === 0) {
@@ -85,11 +128,22 @@ export class CanvasRenderer {
     this.#drawNodes(s, view, scale);
   }
 
+  #drawGrid() {
+    const { ctx } = this;
+    const step = 18;
+    const ox = ((this.camera.x % step) + step) % step;
+    const oy = ((this.camera.y % step) + step) % step;
+    ctx.fillStyle = this.theme.gridDot;
+    for (let x = ox; x < this.width; x += step) {
+      for (let y = oy; y < this.height; y += step) ctx.fillRect(x, y, 1, 1);
+    }
+  }
+
   #drawEdges(s, view, scale) {
     const { ctx } = this;
     const { xywh, edges } = s;
     ctx.lineWidth = 1 / scale;
-    ctx.strokeStyle = "rgba(148,163,184,0.38)";
+    ctx.strokeStyle = this.theme.edge;
     ctx.beginPath();
 
     for (let i = 0; i < s.edgeCount; i++) {
@@ -116,8 +170,7 @@ export class CanvasRenderer {
     const { xywh } = s;
     const showText = scale > 0.42;
     ctx.textBaseline = "middle";
-    ctx.font = `${13 / 1}px ui-monospace, SFMono-Regular, Menlo, monospace`;
-    ctx.lineWidth = 1.25 / scale;
+    ctx.font = `12px ${MONO}`;
 
     for (let i = 0; i < s.nodeCount; i++) {
       const o = i * STRIDE.NODE_XYWH;
@@ -130,14 +183,23 @@ export class CanvasRenderer {
         continue;
 
       const style = KIND_STYLE[s.kindOf(i)] ?? KIND_STYLE[2];
+      const mark = this.marks.get(i);
       ctx.fillStyle = style.fill;
-      ctx.strokeStyle = i === this.selected ? "#f8fafc" : style.stroke;
+      ctx.strokeStyle =
+        i === this.selected
+          ? this.theme.selected
+          : mark
+            ? this.theme[mark]
+            : style.stroke;
+      ctx.lineWidth = (i === this.selected || mark ? 2 : 1.25) / scale;
 
       const r = Math.min(6, h / 2);
       ctx.beginPath();
       ctx.roundRect(x, y, w, h, r);
       ctx.fill();
       ctx.stroke();
+
+      if (mark && showText) this.#drawBadge(x + w, y, mark);
 
       if (showText) {
         ctx.save();
@@ -151,10 +213,24 @@ export class CanvasRenderer {
     }
   }
 
+  #drawBadge(x, y, mark) {
+    const { ctx } = this;
+    ctx.save();
+    ctx.fillStyle = this.theme[mark];
+    ctx.beginPath();
+    ctx.arc(x, y, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = this.theme.background;
+    ctx.font = `800 11px ${MONO}`;
+    ctx.textAlign = "center";
+    ctx.fillText(BADGE[mark], x, y + 0.5);
+    ctx.restore();
+  }
+
   #placeholder() {
     const { ctx } = this;
-    ctx.fillStyle = "#475569";
-    ctx.font = "14px ui-sans-serif, system-ui, sans-serif";
+    ctx.fillStyle = this.theme.dim;
+    ctx.font = `13px ${MONO}`;
     ctx.textAlign = "center";
     ctx.fillText("No module loaded", this.width / 2, this.height / 2);
     ctx.textAlign = "left";
@@ -211,11 +287,7 @@ export class CanvasRenderer {
     c.addEventListener("pointerup", (e) => {
       dragging = false;
       c.releasePointerCapture(e.pointerId);
-      if (moved < 4) {
-        this.selected = this.hitTest(e.clientX, e.clientY);
-        this.onSelect?.(this.selected, this.snapshot);
-        this.requestDraw();
-      }
+      if (moved < 4) this.select(this.hitTest(e.clientX, e.clientY));
     });
 
     c.addEventListener(
@@ -236,6 +308,7 @@ export class CanvasRenderer {
       { passive: false },
     );
 
-    window.addEventListener("resize", () => this.resize());
+    // Pane layout changes (pass strip, resized editor) also resize the canvas.
+    new ResizeObserver(() => this.resize()).observe(c);
   }
 }

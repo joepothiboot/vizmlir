@@ -50,11 +50,11 @@ export const KIND = Object.freeze({
 });
 
 export const KIND_STYLE = Object.freeze({
-  0: { fill: "#1e293b", stroke: "#475569", text: "#e2e8f0" },
-  1: { fill: "#1e3a5f", stroke: "#3b82f6", text: "#dbeafe" },
-  2: { fill: "#27303f", stroke: "#64748b", text: "#e2e8f0" },
-  3: { fill: "#3f2d1e", stroke: "#d97706", text: "#fed7aa" },
-  4: { fill: "#3f1e2b", stroke: "#e11d48", text: "#fecdd3" },
+  0: { fill: "#1a1a17", stroke: "#3a3833", text: "#ece9e1" },
+  1: { fill: "#2a1c10", stroke: "#ff7a1a", text: "#ffd9bd" },
+  2: { fill: "#1d1d1a", stroke: "#55524a", text: "#ece9e1" },
+  3: { fill: "#24200f", stroke: "#f2c94c", text: "#f5e6ad" },
+  4: { fill: "#2a1614", stroke: "#ff6b5e", text: "#ffd3cc" },
 });
 
 export const DIAG_CODE = Object.freeze({
