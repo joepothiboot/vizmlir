@@ -42,6 +42,9 @@
   }
   button:hover, label.btn:hover { border-color: var(--accent); }
   #file { display: none; }
+  select { max-width: 42vw; background: #222733; color: var(--fg); border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; font: inherit; }
+  select:hover, select:focus { border-color: var(--accent); outline: none; }
+  select[hidden] { display: none; }
   #workspace[hidden], #docs-view[hidden] { display: none; }
   main { display: flex; flex: 1 1 auto; min-height: 0; }
   #source-pane { width: 38%; min-width: 260px; resize: horizontal; overflow: auto; border-right: 1px solid var(--line); }
@@ -90,6 +93,9 @@
   }
   #diags:empty { display: none; }
   #diags div { color: var(--err); white-space: pre-wrap; }
+  #diags div + div { margin-top: 6px; }
+  #diags .warning { color: var(--warn); }
+  #diags .note, #diags .remark { color: var(--dim); }
   #docs-view { flex: 1 1 auto; overflow: auto; padding: 36px min(8vw, 96px) 56px; }
   .docs-content { max-width: 760px; }
   .docs-content h2 { margin: 0 0 8px; font-size: 24px; color: var(--fg); }
@@ -113,7 +119,8 @@
   <header>
     <h1>MLIR VIZ</h1>
     <label class="btn" for="file">Open…</label>
-    <input id="file" type="file" accept=".mlir,.txt" />
+    <input id="file" type="file" accept=".mlir,.txt,.log" />
+    <select id="pass-select" hidden aria-label="Pass dump"></select>
     <button id="reparse">Compare</button>
     <button id="fit">Fit</button>
     <span class="sp"></span>
@@ -126,12 +133,12 @@
   <div id="workspace">
     <main>
       <section id="source-pane" class="pane">
-        <h2>Baseline</h2>
+        <h2 id="baseline-title">Baseline</h2>
         <div class="code-editor">
           <pre aria-hidden="true"><code id="baseline-highlight"></code></pre>
           <textarea id="baseline" spellcheck="false" placeholder="Paste baseline MLIR here…"></textarea>
         </div>
-        <h2>Current</h2>
+        <h2 id="current-title">Current</h2>
         <div class="code-editor">
           <pre aria-hidden="true"><code id="editor-highlight"></code></pre>
           <textarea id="editor" spellcheck="false" placeholder="Paste current MLIR here…"></textarea>
@@ -170,6 +177,11 @@
         <li>Paste the lowered or transformed IR into <strong>Current</strong>.</li>
         <li>Use the graph to inspect operation relationships and the pass diff to find added, removed, and changed operations.</li>
       </ul>
+
+      <h3>Step through a pass pipeline</h3>
+      <p>Capture every pass boundary from <code>mlir-opt</code> and open the log with <strong>Open…</strong>, or paste it into <strong>Current</strong>:</p>
+      <p><code>mlir-opt input.mlir -pass-pipeline='…' -mlir-print-ir-after-all -mlir-print-ir-module-scope -mlir-disable-threading 2&gt; trace.txt</code></p>
+      <p>Pick a pass from the header menu to compare its IR with the IR it received. Passes that failed are marked with ✗, and compiler errors, warnings, notes, and remarks printed around a dump appear over the graph. Without <code>-mlir-print-ir-module-scope</code>, nested passes print only the function they ran on; VizMLIR rebuilds module baselines from those dumps.</p>
 
       <h3>Try a small example</h3>
       <p>This example creates a tensor, fills it, and multiplies it. The graph turns each operation into a node and draws edges for SSA data flow.</p>

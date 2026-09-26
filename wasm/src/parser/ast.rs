@@ -86,6 +86,12 @@ pub fn parse(src: &str, interner: &mut Interner, ast: &mut Ast) {
                     ast.diags.push(Diag { code: DIAG_UNBALANCED, line: toks[i].line, sym: root_label });
                 }
                 i += 1;
+                
+                if toks.get(i).is_some_and(|t| t.kind == Tok::Ident && text(t) == "loc") {
+                    while i < toks.len() && !matches!(toks[i].kind, Tok::Newline | Tok::Eof) {
+                        i += 1;
+                    }
+                }
                 continue;
             }
             _ => {}
@@ -148,6 +154,10 @@ pub fn parse(src: &str, interner: &mut Interner, ast: &mut Ast) {
             None => (&stmt[..0], &stmt[..]),
         };
         if rhs.is_empty() {
+            continue;
+        }
+        // `#loc = loc(...)`, `#map = affine_map<...>`, `!t = ...` alias definitions.
+        if lhs.len() == 1 && matches!(lhs[0].kind, Tok::Attr | Tok::Type) {
             continue;
         }
 
