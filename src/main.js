@@ -429,6 +429,42 @@ input.addEventListener("input", () => {
   positionLineMark();
 });
 
+// ---- Theme -----------------------------------------------------------------
+
+const THEME_KEY = "vizmlir-theme";
+const themeToggle = document.getElementById("theme-toggle");
+const systemLight = matchMedia("(prefers-color-scheme: light)");
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  const next = theme === "dark" ? "light" : "dark";
+  themeToggle.setAttribute("aria-label", `Switch to ${next} theme`);
+  themeToggle.title = `Switch to ${next} theme (Shift+L)`;
+  renderer.refreshTheme();
+}
+
+function toggleTheme() {
+  const theme =
+    document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  try {
+    localStorage.setItem(THEME_KEY, theme);
+  } catch {
+    // Storage can be unavailable (private mode); the toggle still works.
+  }
+  applyTheme(theme);
+}
+
+// Follow the OS setting until the user picks a theme explicitly.
+systemLight.addEventListener("change", (e) => {
+  let saved = null;
+  try {
+    saved = localStorage.getItem(THEME_KEY);
+  } catch {}
+  if (!saved) applyTheme(e.matches ? "light" : "dark");
+});
+themeToggle.addEventListener("click", toggleTheme);
+applyTheme(document.documentElement.dataset.theme || "dark");
+
 // ---- Command palette -------------------------------------------------------
 
 function goToWorkspace() {
@@ -469,6 +505,7 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
     ["Switch baseline / current", "t", toggleTab],
     ["Toggle split sources", "s", toggleSplit],
     ["Load sample", "", loadSample],
+    ["Switch light / dark theme", "shift L", toggleTheme],
     ["Open docs", "", () => (window.location.hash = "#/docs")],
     ["Keyboard shortcuts", "?", () => helpDialog.showModal()],
   ];
@@ -530,6 +567,8 @@ window.addEventListener("keydown", (e) => {
     palette.open();
   } else if (e.key === "?") {
     helpDialog.showModal();
+  } else if (e.key === "L") {
+    toggleTheme();
   } else if (!workspace.hidden && WORKSPACE_KEYS[e.key]) {
     e.preventDefault();
     WORKSPACE_KEYS[e.key]();

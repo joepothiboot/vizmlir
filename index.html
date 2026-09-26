@@ -4,6 +4,18 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>VizMLIR</title>
+    <script>
+      // Apply the saved or system theme before first paint.
+      try {
+        document.documentElement.dataset.theme =
+          localStorage.getItem("vizmlir-theme") ||
+          (matchMedia("(prefers-color-scheme: light)").matches
+            ? "light"
+            : "dark");
+      } catch {
+        document.documentElement.dataset.theme = "dark";
+      }
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -26,8 +38,78 @@
         --warn: #f2c94c;
         --edge: rgba(142, 138, 128, 0.45);
         --grid-dot: #26251f;
+        --selection: rgba(255, 122, 26, 0.25);
+        --line-mark: rgba(155, 229, 100, 0.1);
+        --overlay: rgba(23, 23, 20, 0.94);
+        --shadow: rgba(0, 0, 0, 0.55);
+        --backdrop: rgba(0, 0, 0, 0.45);
+        --syn-comment: #5e5b54;
+        --syn-literal: #b3b89a;
+        --syn-ssa: #d4c49c;
+        --syn-symbol: #d9a577;
+        --syn-operation: #a4bfcc;
+        /* Graph node kinds: module, function, operation, block, terminator. */
+        --node-0-fill: #1a1a17;
+        --node-0-stroke: #3a3833;
+        --node-0-text: #ece9e1;
+        --node-1-fill: #2a1c10;
+        --node-1-stroke: #ff7a1a;
+        --node-1-text: #ffd9bd;
+        --node-2-fill: #1d1d1a;
+        --node-2-stroke: #55524a;
+        --node-2-text: #ece9e1;
+        --node-3-fill: #24200f;
+        --node-3-stroke: #f2c94c;
+        --node-3-text: #f5e6ad;
+        --node-4-fill: #2a1614;
+        --node-4-stroke: #ff6b5e;
+        --node-4-text: #ffd3cc;
+        color-scheme: dark;
+        --code: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         --mono:
           "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      :root[data-theme="light"] {
+        --bg: #f7f5ef;
+        --panel: #efece4;
+        --raised: #e6e2d8;
+        --line: #dcd7cb;
+        --fg: #1f1d19;
+        --dim: #625d53;
+        --faint: #a39e92;
+        --accent: #b34d0b;
+        --accent-bg: #fbe6d4;
+        --err: #b8321f;
+        --good: #3b7d1f;
+        --warn: #8f6200;
+        --edge: rgba(98, 93, 83, 0.5);
+        --grid-dot: #dcd7cb;
+        --selection: rgba(179, 77, 11, 0.18);
+        --line-mark: rgba(59, 125, 31, 0.1);
+        --overlay: rgba(247, 245, 239, 0.96);
+        --shadow: rgba(31, 29, 25, 0.18);
+        --backdrop: rgba(31, 29, 25, 0.25);
+        --syn-comment: #9a958a;
+        --syn-literal: #5f6b2e;
+        --syn-ssa: #85640c;
+        --syn-symbol: #a9521a;
+        --syn-operation: #2f5f7a;
+        --node-0-fill: #efece4;
+        --node-0-stroke: #c9c3b5;
+        --node-0-text: #1f1d19;
+        --node-1-fill: #fbe6d4;
+        --node-1-stroke: #b34d0b;
+        --node-1-text: #5a2a08;
+        --node-2-fill: #ffffff;
+        --node-2-stroke: #b5afa1;
+        --node-2-text: #1f1d19;
+        --node-3-fill: #fbf1d0;
+        --node-3-stroke: #a67a00;
+        --node-3-text: #5a4300;
+        --node-4-fill: #fbe1dd;
+        --node-4-stroke: #b8321f;
+        --node-4-text: #5c1a13;
+        color-scheme: light;
       }
       * {
         box-sizing: border-box;
@@ -268,12 +350,17 @@
         margin: 0;
         padding: 10px;
         border: 0;
-        font: inherit;
-        line-height: 1.5;
+        font: 12px/1.5 var(--code);
+        font-variant-ligatures: none;
         tab-size: 2;
         white-space: pre;
         overflow: auto;
         overflow-wrap: normal;
+      }
+      /* <code> defaults to the UA monospace; match the textarea exactly so the
+         caret lines up with the highlighted text. */
+      .code-editor code {
+        font: inherit;
       }
       .code-editor pre {
         pointer-events: none;
@@ -291,31 +378,27 @@
         outline: none;
       }
       .code-editor textarea::selection {
-        background: rgba(255, 122, 26, 0.25);
+        background: var(--selection);
       }
       .syntax-comment {
-        color: #6e6a60;
+        color: var(--syn-comment);
       }
-      .syntax-string {
-        color: #b5d88a;
+      .syntax-string,
+      .syntax-number {
+        color: var(--syn-literal);
       }
       .syntax-ssa {
-        color: #f2c94c;
+        color: var(--syn-ssa);
       }
       .syntax-symbol {
-        color: #ff9a4d;
+        color: var(--syn-symbol);
       }
-      .syntax-keyword {
-        color: #c792ea;
-      }
+      .syntax-keyword,
       .syntax-type {
-        color: #9a968c;
-      }
-      .syntax-number {
-        color: #c792ea;
+        color: var(--dim);
       }
       .syntax-operation {
-        color: #7fd1ff;
+        color: var(--syn-operation);
       }
       .syntax-identifier {
         color: var(--fg);
@@ -445,12 +528,26 @@
         padding: 0;
         color: var(--dim);
       }
+      .icon-btn svg {
+        display: block;
+        margin: auto;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      /* Show the theme you would switch to. */
+      :root[data-theme="dark"] .icon-moon,
+      :root[data-theme="light"] .icon-sun {
+        display: none;
+      }
       .line-mark {
         position: absolute;
         left: 0;
         right: 0;
         z-index: 0;
-        background: rgba(155, 229, 100, 0.1);
+        background: var(--line-mark);
         box-shadow: inset 2px 0 0 var(--accent);
         pointer-events: none;
       }
@@ -483,10 +580,10 @@
         background: var(--panel);
         color: var(--fg);
         font: inherit;
-        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+        box-shadow: 0 24px 64px var(--shadow);
       }
       dialog::backdrop {
-        background: rgba(0, 0, 0, 0.45);
+        background: var(--backdrop);
       }
       #palette {
         width: min(620px, calc(100vw - 32px));
@@ -622,7 +719,7 @@
         max-width: 44%;
         max-height: 45%;
         overflow: auto;
-        background: rgba(23, 23, 20, 0.94);
+        background: var(--overlay);
         border: 1px solid var(--line);
         border-radius: 6px;
         padding: 6px 8px;
@@ -752,6 +849,29 @@
         <span class="hints" aria-hidden="true">
           <kbd>[</kbd><kbd>]</kbd><span>pass</span> <kbd>f</kbd><span>fit</span>
         </span>
+        <button id="theme-toggle" class="icon-btn" aria-label="Switch theme">
+          <svg
+            class="icon-sun"
+            viewBox="0 0 24 24"
+            width="15"
+            height="15"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="4.5" />
+            <path
+              d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"
+            />
+          </svg>
+          <svg
+            class="icon-moon"
+            viewBox="0 0 24 24"
+            width="15"
+            height="15"
+            aria-hidden="true"
+          >
+            <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z" />
+          </svg>
+        </button>
         <button id="help-open" class="icon-btn" aria-label="Keyboard shortcuts">
           ?
         </button>
@@ -884,6 +1004,8 @@
           <dd>Switch baseline / current tab</dd>
           <dt><kbd>s</kbd></dt>
           <dd>Split: show both sources</dd>
+          <dt><kbd>shift</kbd> <kbd>L</kbd></dt>
+          <dd>Switch light / dark theme</dd>
           <dt><kbd>esc</kbd></dt>
           <dd>Leave the editor so shortcuts work</dd>
           <dt><kbd>?</kbd></dt>
@@ -972,16 +1094,24 @@
             between the two snapshots.
           </p>
           <div class="legend" aria-label="Node color legend">
-            <span class="legend-item" style="--legend-color: #ff7a1a"
+            <span
+              class="legend-item"
+              style="--legend-color: var(--node-1-stroke)"
               >functions</span
             >
-            <span class="legend-item" style="--legend-color: #8e8a80"
+            <span
+              class="legend-item"
+              style="--legend-color: var(--node-2-stroke)"
               >operations</span
             >
-            <span class="legend-item" style="--legend-color: #f2c94c"
+            <span
+              class="legend-item"
+              style="--legend-color: var(--node-3-stroke)"
               >blocks</span
             >
-            <span class="legend-item" style="--legend-color: #ff6b5e"
+            <span
+              class="legend-item"
+              style="--legend-color: var(--node-4-stroke)"
               >terminators</span
             >
           </div>
