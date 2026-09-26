@@ -34,11 +34,11 @@ export const STATUS = Object.freeze({
 });
 
 export const STATUS_TEXT = Object.freeze({
-  0: 'ok',
-  1: 'empty input',
-  2: 'input was not valid UTF-8',
-  3: 'arena exhausted — module too large',
-  4: 'input exceeds the 4 MiB buffer',
+  0: "ok",
+  1: "empty input",
+  2: "input was not valid UTF-8",
+  3: "arena exhausted — module too large",
+  4: "input exceeds the 4 MiB buffer",
 });
 
 export const KIND = Object.freeze({
@@ -50,16 +50,16 @@ export const KIND = Object.freeze({
 });
 
 export const KIND_STYLE = Object.freeze({
-  0: { fill: '#1e293b', stroke: '#475569', text: '#e2e8f0' },
-  1: { fill: '#1e3a5f', stroke: '#3b82f6', text: '#dbeafe' },
-  2: { fill: '#27303f', stroke: '#64748b', text: '#e2e8f0' },
-  3: { fill: '#3f2d1e', stroke: '#d97706', text: '#fed7aa' },
-  4: { fill: '#3f1e2b', stroke: '#e11d48', text: '#fecdd3' },
+  0: { fill: "#1e293b", stroke: "#475569", text: "#e2e8f0" },
+  1: { fill: "#1e3a5f", stroke: "#3b82f6", text: "#dbeafe" },
+  2: { fill: "#27303f", stroke: "#64748b", text: "#e2e8f0" },
+  3: { fill: "#3f2d1e", stroke: "#d97706", text: "#fed7aa" },
+  4: { fill: "#3f1e2b", stroke: "#e11d48", text: "#fecdd3" },
 });
 
 export const DIAG_CODE = Object.freeze({
-  1: 'undefined SSA value',
-  2: 'unbalanced brace',
+  1: "undefined SSA value",
+  2: "unbalanced brace",
 });
 
 export const NONE = 0xffffffff;
