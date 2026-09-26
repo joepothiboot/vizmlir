@@ -24,6 +24,7 @@ Parsing complex MLIR by eye is a bottleneck. VizMLIR provides an interactive gra
 
 - **Interactive Graphs:** Visualize nodes and operations as they connect through your IR.
 - **Pass Traces:** Open `mlir-opt -mlir-print-ir-after-all` output and step through each pass with its before/after diff, failures, and diagnostics.
+- **Keyboard-First:** Jump to any pass, op, or `@symbol` with ⌘K / Ctrl K, step passes with `[` `]`, walk changes with `j` `k` (each change is linked to its graph node and source line), and press `?` for the full list.
 - **Low Latency:** Renders changes in real-time as you modify your MLIR.
 - **Browser-Native:** Runs entirely on the client side—no backend infrastructure required.
 - **Streamlined UI:** Minimalist interface that stays out of your way.
