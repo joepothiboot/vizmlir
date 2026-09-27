@@ -621,6 +621,11 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
             : ["Watch a file for changes…", "", pickWatch],
         ]
       : []),
+    [
+      "Show / hide menu",
+      "m",
+      () => topbar.togglePopover(),
+    ],
     ["Switch light / dark theme", "shift L", toggleTheme],
     ["Open docs", "", () => (window.location.hash = "#/docs")],
     ["Keyboard shortcuts", "?", () => helpDialog.showModal()],
@@ -647,6 +652,14 @@ document
 document
   .getElementById("help-open")
   .addEventListener("click", () => helpDialog.showModal());
+
+// The menu is an overlay: close it once an action runs, but keep it open while
+// switching themes so the change is easy to compare.
+const topbar = document.getElementById("topbar");
+topbar.addEventListener("click", (e) => {
+  const control = e.target.closest("a, button");
+  if (control && control.id !== "theme-toggle") topbar.hidePopover();
+});
 
 // ---- Keyboard --------------------------------------------------------------
 
@@ -698,6 +711,8 @@ window.addEventListener("keydown", (e) => {
     helpDialog.showModal();
   } else if (e.key === "L") {
     toggleTheme();
+  } else if (e.key === "m") {
+    topbar.togglePopover();
   } else if (!workspace.hidden && WORKSPACE_KEYS[e.key]) {
     e.preventDefault();
     WORKSPACE_KEYS[e.key]();
@@ -1012,6 +1027,9 @@ const watcher = new FileWatcher((change, error) => {
 function updateWatchUi() {
   watchButton.hidden = !canWatchFiles || watcher.watching;
   watchLive.hidden = !watcher.watching;
+  document
+    .getElementById("menu-handle")
+    .classList.toggle("watching", watcher.watching);
   if (watcher.watching) {
     watchResume.hidden = true;
     watchLive.title = `Watching ${watcher.handle.name} · click to stop`;
