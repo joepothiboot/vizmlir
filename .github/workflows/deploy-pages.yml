@@ -50,3 +50,21 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
+      # Deploying succeeds even when Pages is set to "Deploy from a branch",
+      # in which case the site serves the raw repo and main.js never runs.
+      # Fail unless the live page loads the bundle this build produced.
+      - name: Check the live site serves the build
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          for attempt in $(seq 1 12); do
+            html=$(curl -fsSL -H "Cache-Control: no-cache" "$PAGE_URL?check=$GITHUB_SHA") || html=""
+            if grep -q 'src="[^"]*/assets/index-[^"]*\.js"' <<<"$html"; then
+              echo "Live site serves the Vite bundle."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::$PAGE_URL is not serving the Vite build. Set Settings > Pages > Source to 'GitHub Actions'."
+          grep -n '<script' <<<"$html" || true
+          exit 1

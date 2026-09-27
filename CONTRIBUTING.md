@@ -39,4 +39,17 @@ cargo fmt --manifest-path wasm/Cargo.toml -- --check
 cargo check --manifest-path wasm/Cargo.toml --target wasm32-unknown-unknown
 ```
 
+## Deployment
+
+Pushes to `main` run `.github/workflows/deploy-pages.yml`, which builds `dist/` and publishes it to https://joepothiboot.github.io/vizmlir/. The repository's Pages source must be **GitHub Actions** (Settings → Pages → Build and deployment). If it is set to "Deploy from a branch", GitHub serves the raw repository instead: the page loads `./src/main.js` unbundled, it throws on `import.meta.env.BASE_URL`, and no JavaScript control works (only native ones such as the menu handle and Open…). The workflow's last step checks for this and fails.
+
+To check the setting and what the live site serves:
+
+```bash
+gh api repos/joepothiboot/vizmlir/pages --jq .build_type   # expect "workflow"
+curl -s https://joepothiboot.github.io/vizmlir/ | grep '<script'   # expect /vizmlir/assets/index-*.js
+```
+
+When a bug is reported against the live site but not reproducible with `npm run dev`, reproduce it on the live URL first; it may be a deployment problem rather than a code one.
+
 In a pull request, describe what changed, how you tested it, and include a small MLIR example when the behavior is parser- or rendering-related.

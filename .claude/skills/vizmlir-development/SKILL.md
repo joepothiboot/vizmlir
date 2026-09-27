@@ -15,6 +15,12 @@ Use this workflow for changes that cross the JavaScript frontend and the Rust WA
 4. Run `npm run build`.
 5. For parser or rendering changes, exercise a representative valid and invalid MLIR input in the app.
 
+## Bug reports
+
+1. Ask or check whether the bug is on the live site (https://joepothiboot.github.io/vizmlir/) or a local dev server, and reproduce it there before changing code.
+2. If it only fails live, check the deployment before the code: `gh api repos/joepothiboot/vizmlir/pages --jq .build_type` must be `workflow`, and the served `index.html` must load `/vizmlir/assets/index-*.js`, not `./src/main.js`. See "Deployment" in `CONTRIBUTING.md`.
+3. Another session may be editing this checkout or running a dev server. Start your own server on a free port with `--strictPort`, and leave changes you did not make alone.
+
 ## Boundaries
 
 - `wasm/src/` owns parsing and the Rust-side ABI.
