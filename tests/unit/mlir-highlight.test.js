@@ -76,10 +76,11 @@ describe("highlightMlir", () => {
 describe("bindHighlighting", () => {
   function setup(value) {
     const textarea = document.createElement("textarea");
-    const layer = document.createElement("pre");
+    const pre = document.createElement("pre");
+    const layer = pre.appendChild(document.createElement("code"));
     textarea.value = value;
     bindHighlighting(textarea, layer);
-    return { textarea, layer };
+    return { textarea, layer, pre };
   }
 
   it("renders immediately and again on input", () => {
@@ -91,7 +92,7 @@ describe("bindHighlighting", () => {
   });
 
   it("follows the textarea scroll position", () => {
-    const { textarea, layer } = setup("x\n".repeat(200));
+    const { textarea, pre } = setup("x\n".repeat(200));
     Object.defineProperty(textarea, "scrollTop", {
       value: 120,
       configurable: true,
@@ -101,8 +102,8 @@ describe("bindHighlighting", () => {
       configurable: true,
     });
     textarea.dispatchEvent(new Event("scroll"));
-    expect(layer.scrollTop).toBe(120);
-    expect(layer.scrollLeft).toBe(30);
+    expect(pre.scrollTop).toBe(120);
+    expect(pre.scrollLeft).toBe(30);
   });
 
   it("toggles the focused class", () => {

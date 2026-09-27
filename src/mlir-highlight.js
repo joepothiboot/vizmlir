@@ -54,10 +54,11 @@ export function highlightMlir(source) {
 }
 
 export function bindHighlighting(textarea, layer) {
+  const scroller = layer.parentElement;
   const sync = () => {
     layer.innerHTML = highlightMlir(textarea.value);
-    layer.scrollTop = textarea.scrollTop;
-    layer.scrollLeft = textarea.scrollLeft;
+    scroller.scrollTop = textarea.scrollTop;
+    scroller.scrollLeft = textarea.scrollLeft;
   };
   textarea.addEventListener("input", sync);
   textarea.addEventListener("scroll", sync);
