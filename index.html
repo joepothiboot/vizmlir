@@ -272,11 +272,46 @@
         min-height: 0;
       }
       #source-pane {
+        flex: 0 0 auto;
         width: 38%;
-        min-width: 260px;
-        resize: horizontal;
+        min-width: 180px;
         overflow: auto;
-        border-right: 1px solid var(--line);
+      }
+      /* Draggable divider between panes: a 1px line with a wider hit area. */
+      .splitter {
+        position: relative;
+        z-index: 2;
+        flex: 0 0 1px;
+        background: var(--line);
+        cursor: col-resize;
+        touch-action: none;
+        outline: none;
+      }
+      .splitter::before {
+        content: "";
+        position: absolute;
+        inset: 0 -4px;
+      }
+      .splitter::after {
+        content: "";
+        position: absolute;
+        inset: 0 -1px;
+        background: var(--accent);
+        opacity: 0;
+        transition: opacity 0.12s;
+      }
+      .splitter:hover::after,
+      .splitter:focus-visible::after,
+      .splitter.dragging::after {
+        opacity: 1;
+      }
+      body.resizing {
+        cursor: col-resize;
+        user-select: none;
+      }
+      body.resizing canvas,
+      body.resizing textarea {
+        pointer-events: none;
       }
       .pane {
         display: flex;
@@ -413,8 +448,9 @@
         min-width: 0;
       }
       #diff-pane {
+        flex: 0 0 auto;
         width: 300px;
-        border-left: 1px solid var(--line);
+        min-width: 180px;
         overflow: auto;
       }
       #diff-summary .added {
@@ -493,9 +529,11 @@
         }
         #source-pane,
         #diff-pane {
-          width: 100%;
+          width: 100% !important;
           min-width: 0;
-          resize: none;
+        }
+        .splitter {
+          display: none;
         }
         #source-pane {
           height: 42%;
@@ -681,6 +719,49 @@
       }
       #session-list button {
         padding: 2px 8px;
+        font-size: 11px;
+      }
+      #samples {
+        width: min(560px, calc(100vw - 32px));
+        padding: 18px 20px;
+      }
+      #samples h2 {
+        margin: 0 0 6px;
+        font-size: 14px;
+      }
+      #sample-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        max-height: 60vh;
+        margin: 0 0 14px;
+        padding: 0;
+        overflow: auto;
+        list-style: none;
+      }
+      #sample-list button {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 2px 10px;
+        width: 100%;
+        padding: 9px 12px;
+        text-align: left;
+        white-space: normal;
+      }
+      #sample-list button:hover,
+      #sample-list button:focus-visible {
+        border-color: var(--accent);
+      }
+      #sample-list .title {
+        font-weight: 700;
+      }
+      #sample-list .kind {
+        color: var(--dim);
+        font-size: 11px;
+      }
+      #sample-list .blurb {
+        grid-column: 1 / -1;
+        color: var(--dim);
         font-size: 11px;
       }
       .dialog-actions {
@@ -998,6 +1079,9 @@
         <button id="watch-live" class="live" hidden title="Stop watching">
           <span class="dot" aria-hidden="true"></span> live
         </button>
+        <button id="samples-open" title="Load an example diff or pass trace">
+          Samples
+        </button>
         <button id="sessions-open">Sessions</button>
         <button id="reparse">Compare</button>
         <button id="fit">Fit</button>
@@ -1100,6 +1184,12 @@
               ></textarea>
             </div>
           </section>
+          <div
+            id="source-splitter"
+            class="splitter"
+            aria-label="Resize source pane"
+            title="Drag to resize · double-click to reset"
+          ></div>
           <div id="stage">
             <canvas id="canvas"></canvas>
             <div id="diags"></div>
@@ -1126,6 +1216,12 @@
               <span><b class="removed">−</b> removed</span>
             </div>
           </div>
+          <div
+            id="diff-splitter"
+            class="splitter"
+            aria-label="Resize diff pane"
+            title="Drag to resize · double-click to reset"
+          ></div>
           <aside id="diff-pane" class="pane">
             <h2>
               <span id="diff-title">diff</span>
@@ -1176,6 +1272,20 @@
         <ul id="palette-list" role="listbox" aria-label="Results"></ul>
         <div class="palette-foot">
           <kbd>↑</kbd><kbd>↓</kbd> move <kbd>↵</kbd> open <kbd>esc</kbd> close
+        </div>
+      </dialog>
+
+      <dialog id="samples" aria-labelledby="samples-title">
+        <h2 id="samples-title">Samples</h2>
+        <p class="dialog-note">
+          Real <code>mlir-opt</code> output, to see how VizMLIR handles your own
+          pipeline before you bring your files. Loading one replaces the
+          workspace; save it first under Sessions if you want to keep it.
+        </p>
+        <ul id="sample-list" aria-label="Samples"></ul>
+        <div class="dialog-actions">
+          <span class="sp"></span>
+          <form method="dialog"><button>Close</button></form>
         </div>
       </dialog>
 
@@ -1294,6 +1404,7 @@
             </div>
             <div class="sample-actions">
               <button id="load-sample">Load in workspace</button>
+              <button id="docs-samples">More samples…</button>
               <span>Then change <code>linalg.fill</code> and compare.</span>
             </div>
           </div>
