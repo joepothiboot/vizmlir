@@ -31,4 +31,27 @@ run failed-only.txt input/tile-non-tileable.mlir \
   -pass-pipeline='builtin.module(cse,transform-interpreter)' \
   -mlir-print-ir-after-failure -mlir-print-ir-module-scope
 
+# -mlir-timing prints an execution time report on stderr after the last dump.
+run timing-after-all.txt input/two-funcs.mlir \
+  -pass-pipeline='builtin.module(symbol-dce,func.func(cse,canonicalize,cse))' \
+  -mlir-print-ir-after-all -mlir-timing
+run timing-list.txt input/two-funcs.mlir \
+  -pass-pipeline='builtin.module(func.func(cse,canonicalize))' \
+  -mlir-timing -mlir-timing-display=list
+run timing-json.txt input/two-funcs.mlir \
+  -pass-pipeline='builtin.module(func.func(cse,canonicalize))' \
+  -mlir-timing -mlir-output-format=json
+run timing-failed.txt input/tile-non-tileable.mlir \
+  -pass-pipeline='builtin.module(cse,transform-interpreter)' \
+  -mlir-print-ir-after-all -mlir-print-ir-module-scope -mlir-timing
+# With threading, reports add a user time column.
+"$MLIR_OPT" input/two-funcs.mlir \
+  -pass-pipeline='builtin.module(func.func(cse,canonicalize))' \
+  -mlir-timing -mlir-timing-display=list > timing-threaded-list.txt 2>&1 || true
+# Peak memory comes from the process, not mlir-opt: BSD time -l or GNU time -v.
+if [[ "$(uname)" == Darwin ]]; then TIME_FLAG=-l; else TIME_FLAG=-v; fi
+/usr/bin/time "$TIME_FLAG" "$MLIR_OPT" input/two-funcs.mlir "${COMMON[@]}" \
+  -pass-pipeline='builtin.module(func.func(cse,canonicalize))' \
+  -mlir-print-ir-after-all -mlir-timing > timed-run.txt 2>&1 || true
+
 "$MLIR_OPT" --version | head -1 > MLIR_VERSION

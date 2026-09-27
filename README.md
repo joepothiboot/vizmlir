@@ -24,6 +24,7 @@ Parsing complex MLIR by eye is a bottleneck. VizMLIR provides an interactive gra
 
 - **Interactive Graphs:** Visualize nodes and operations as they connect through your IR.
 - **Pass Traces:** Open `mlir-opt -mlir-print-ir-after-all` output and step through each pass with its before/after diff, failures, and diagnostics.
+- **Pass Timing:** Add `-mlir-timing` to see each pass's wall time and IR size in the timeline, and the full report with `p`. Run under `/usr/bin/time -l` / `-v` to add peak memory.
 - **Live Reload:** Watch a trace file (Chrome/Edge) and the view refreshes each time `mlir-opt` rewrites it.
 - **Save & Export:** The workspace autosaves locally (IndexedDB), named sessions can be saved and shared as `.json`, graphs export as PNG/SVG, and diffs as Markdown/JSON.
 - **Keyboard-First:** Jump to any pass, op, or `@symbol` with ⌘K / Ctrl K, step passes with `[` `]`, walk changes with `j` `k` (each change is linked to its graph node and source line), and press `?` for the full list.

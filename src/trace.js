@@ -3,7 +3,10 @@
 // Each event keeps the IR printed for one pass boundary. Compiler diagnostics
 // interleaved on stderr are kept as structured records instead of being mixed
 // into the IR, and anything printed after the last dump (usually the final
-// module from stdout) is kept as `output`.
+// module from stdout) is kept as `output`. `-mlir-timing` reports and
+// `/usr/bin/time` output are split out as `timing` and `memory`.
+
+import { extractReports } from "./timing.js";
 
 const HEADER_NEW = /^\/\/ -----\/\/ IR Dump (.*) \/\/----- \/\/\s*$/;
 const HEADER_OLD = /^\/\/ \*\*\* IR Dump (.*) \*\*\*\s*$/;
@@ -81,7 +84,8 @@ export function parseHeader(line) {
 }
 
 export function parsePassTrace(text) {
-  const lines = text.split(/\r?\n/);
+  const reports = extractReports(text);
+  const lines = reports.text.split(/\r?\n/);
   const events = [];
   const diagnostics = [];
   const preamble = [];
@@ -134,6 +138,8 @@ export function parsePassTrace(text) {
     diagnostics,
     preamble: trimBlankLines(preamble).join("\n"),
     output,
+    timing: reports.timing,
+    memory: reports.memory,
   };
 }
 

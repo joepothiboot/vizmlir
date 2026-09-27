@@ -22,6 +22,14 @@ import {
   isPassTrace,
   parsePassTrace,
 } from "./trace.js";
+import {
+  byteLength,
+  extractReports,
+  formatBytes,
+  formatSeconds,
+  matchTiming,
+  timingToJSON,
+} from "./timing.js";
 
 const DIFF_GLYPH = { added: "+", removed: "−", changed: "~" };
 
@@ -52,6 +60,7 @@ const sourceName = document.getElementById("source-name");
 const diffTitle = document.getElementById("diff-title");
 const helpDialog = document.getElementById("help");
 const zoomLevel = document.getElementById("zoom-level");
+const timingOpen = document.getElementById("timing-open");
 const TABS = [
   { tab: baselineTitle, textarea: baseline },
   { tab: currentTitle, textarea: input },
@@ -67,6 +76,9 @@ let diffAfter = null;
 let diffCursor = -1;
 let diffPicked = new Set();
 let traceDiffTitle = "";
+// Timing and peak memory from the loaded trace or pasted log; `matches` links
+// trace events to timing rows.
+let profile = { timing: null, memory: null, matches: [] };
 
 const renderer = new CanvasRenderer(canvas, {
   onSelect(index, snap) {
@@ -272,7 +284,16 @@ function run() {
     beforeCopy = copySnapshot(before.snapshot);
   }
 
-  const after = parse(input.value);
+  let current = input.value;
+  if (!trace) {
+    const reports = mayHaveReports(current)
+      ? extractReports(current)
+      : { text: current, timing: null, memory: null };
+    current = reports.text;
+    setProfile(reports.timing, reports.memory, []);
+  }
+
+  const after = parse(current);
   if (after.status !== STATUS.OK) {
     setStatus(`current error: ${engine.statusText}`, { error: true });
     renderer.setSnapshot(null);
@@ -302,6 +323,15 @@ function loadTrace(text, { keepIndex = false } = {}) {
     setStatus("no IR dumps found in trace", { error: true });
     return;
   }
+  setProfile(
+    trace.timing,
+    trace.memory,
+    matchTiming(trace.events, trace.timing),
+  );
+  const slowest = Math.max(
+    0,
+    ...profile.matches.map((match) => match?.row.wall.seconds ?? 0),
+  );
   const width = String(trace.events.length).length;
   passStrip.replaceChildren(
     ...trace.events.map((event) => {
@@ -314,8 +344,21 @@ function loadTrace(text, { keepIndex = false } = {}) {
       const name = document.createElement("span");
       name.className = "name";
       name.textContent = describeEvent(event);
-      button.append(number, name);
-      button.title = `${event.index + 1}. ${describeEvent(event)}${flags}`;
+      const match = profile.matches[event.index];
+      const meta = document.createElement("span");
+      meta.className = "meta";
+      meta.textContent =
+        (match ? `${formatSeconds(match.row.wall.seconds)} · ` : "") +
+        formatBytes(byteLength(event.ir));
+      button.append(number, name, meta);
+      if (match && slowest > 0)
+        button.style.setProperty(
+          "--time",
+          `${(100 * match.row.wall.seconds) / slowest}%`,
+        );
+      button.title =
+        `${event.index + 1}. ${describeEvent(event)}${flags}` +
+        (match ? `\n${describeMatch(match)}` : "");
       button.classList.toggle("failed", event.failed);
       button.addEventListener("click", () => selectEvent(event.index));
       return button;
@@ -355,7 +398,17 @@ function selectEvent(index) {
     : "Baseline · no earlier snapshot";
   currentTitle.textContent = `Current · #${index + 1} ${describeEvent(event)}`;
   traceDiffTitle = `diff ${base ? `#${base.event.index + 1}` : "∅"} → #${index + 1}`;
-  traceNote = `pass ${index + 1}/${trace.events.length}${event.failed ? " · ✗ FAILED" : ""} · trace line ${event.headerLine} · `;
+  const match = profile.matches[index];
+  const size = byteLength(event.ir);
+  const growth = base ? size - byteLength(base.ir) : 0;
+  traceNote =
+    `pass ${index + 1}/${trace.events.length}${event.failed ? " · ✗ FAILED" : ""}` +
+    (match ? ` · ${describeMatch(match)}` : "") +
+    ` · IR ${formatBytes(size)}` +
+    (base && growth
+      ? ` (${growth > 0 ? "+" : "−"}${formatBytes(Math.abs(growth))})`
+      : "") +
+    ` · trace line ${event.headerLine} · `;
   renderDiagnostics(
     event.index === trace.events.length - 1
       ? [
@@ -375,6 +428,7 @@ function clearTrace() {
   traceDiffTitle = "";
   passStrip.hidden = true;
   passStrip.replaceChildren();
+  setProfile(null, null, []);
   baselineTitle.textContent = "Baseline";
   currentTitle.textContent = "Current";
   renderDiagnostics([]);
@@ -614,6 +668,7 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
     ["Copy changes as patch", "c", copyChanges],
     ["Export diff as Markdown", "", () => exportDiff("md")],
     ["Export diff as JSON", "", () => exportDiff("json")],
+    ["Show pass timing and memory", "p", openTiming],
     ...(canWatchFiles
       ? [
           watcher.watching
@@ -682,6 +737,7 @@ const WORKSPACE_KEYS = {
   k: () => focusChange(diffCursor < 0 ? -1 : diffCursor - 1),
   t: toggleTab,
   s: toggleSplit,
+  p: openTiming,
   "[": () => trace && traceIndex > 0 && selectEvent(traceIndex - 1),
   "]": () =>
     trace &&
@@ -947,6 +1003,149 @@ document
 document
   .getElementById("session-download")
   .addEventListener("click", downloadSession);
+
+// ---- Timing and memory -----------------------------------------------------
+
+const timingDialog = document.getElementById("timing");
+const timingSummary = document.getElementById("timing-summary");
+const timingTable = document.getElementById("timing-table");
+const timingEmpty = document.getElementById("timing-empty");
+const timingExport = document.getElementById("timing-export");
+
+// Reports only ever appear in mlir-opt logs; skip the scan for ordinary IR.
+function mayHaveReports(text) {
+  return /Execution time report|resident set size|"duration":/.test(text);
+}
+
+function setProfile(timing, memory, matches) {
+  profile = { timing, memory, matches };
+  timingOpen.hidden = !timing && !memory;
+  timingOpen.textContent = timing?.total
+    ? `⏱ ${formatSeconds(timing.total)}`
+    : memory
+      ? `⏱ ${formatBytes(memory.peakBytes)}`
+      : "⏱";
+}
+
+function describeMatch(match) {
+  return (
+    `${formatSeconds(match.row.wall.seconds)} wall` +
+    (match.runs > 1 ? ` across ${match.runs} runs` : "")
+  );
+}
+
+function openTiming() {
+  goToWorkspace();
+  renderTiming();
+  timingDialog.showModal();
+}
+
+function renderTiming() {
+  const { timing, memory, matches } = profile;
+  timingEmpty.hidden = !!(timing || memory);
+  const facts = [];
+  if (timing?.total !== null && timing?.total !== undefined)
+    facts.push(["Total", formatSeconds(timing.total)]);
+  if (timing)
+    facts.push([
+      "Passes timed",
+      String(timing.rows.filter((row) => row.kind === "pass").length),
+    ]);
+  if (memory)
+    facts.push([
+      "Peak memory",
+      `${formatBytes(memory.peakBytes)} (whole process, ${memory.source})`,
+    ]);
+  timingSummary.replaceChildren(
+    ...facts.flatMap(([term, value]) => {
+      const dt = document.createElement("dt");
+      dt.textContent = term;
+      const dd = document.createElement("dd");
+      dd.textContent = value;
+      return [dt, dd];
+    }),
+  );
+
+  timingTable.parentElement.hidden = !timing;
+  timingExport.disabled = !timing && !memory;
+  if (!timing) return;
+  const withUser = timing.columns.includes("user");
+  const head = document.createElement("tr");
+  for (const label of ["Name", ...(withUser ? ["User"] : []), "Wall", "%"]) {
+    const th = document.createElement("th");
+    th.textContent = label;
+    head.append(th);
+  }
+  const firstEvent = new Map();
+  matches.forEach((match, i) => {
+    if (match && !firstEvent.has(match.row.index))
+      firstEvent.set(match.row.index, i);
+  });
+
+  const body = timing.rows.map((row) => {
+    const tr = document.createElement("tr");
+    tr.className = row.kind;
+    const name = document.createElement("td");
+    name.style.paddingLeft = `${8 + row.depth * 14}px`;
+    const eventIndex = firstEvent.get(row.index);
+    if (eventIndex !== undefined) {
+      const link = document.createElement("button");
+      link.className = "link-btn";
+      link.textContent = row.name;
+      link.title = `Go to pass #${eventIndex + 1}`;
+      link.addEventListener("click", () => {
+        timingDialog.close();
+        selectEvent(eventIndex);
+      });
+      name.append(link);
+    } else {
+      name.textContent = row.name;
+    }
+    const cells = [name];
+    if (withUser) cells.push(timeCell(row.user?.seconds));
+    cells.push(timeCell(row.wall.seconds));
+    const share = document.createElement("td");
+    share.className = "share";
+    share.style.setProperty("--share", `${row.wall.percent}%`);
+    share.textContent = `${row.wall.percent.toFixed(1)}%`;
+    cells.push(share);
+    tr.append(...cells);
+    return tr;
+  });
+  const thead = document.createElement("thead");
+  thead.append(head);
+  const tbody = document.createElement("tbody");
+  tbody.append(...body);
+  timingTable.replaceChildren(thead, tbody);
+}
+
+function timeCell(seconds) {
+  const td = document.createElement("td");
+  td.className = "num";
+  td.textContent = formatSeconds(seconds);
+  return td;
+}
+
+function exportTiming() {
+  const title = sourceName.textContent.replace(/ ●$/, "");
+  download(
+    `${slug(title)}-timing.json`,
+    timingToJSON(
+      title,
+      profile.timing,
+      profile.memory,
+      trace?.events ?? [],
+      profile.matches,
+    ),
+    "application/json",
+  );
+}
+
+timingOpen.addEventListener("click", openTiming);
+timingExport.addEventListener("click", exportTiming);
+timingDialog.addEventListener("click", (e) => {
+  if (e.target === timingDialog) timingDialog.close();
+});
 
 // ---- Export ----------------------------------------------------------------
 

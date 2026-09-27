@@ -47,7 +47,7 @@ export const SAMPLES = [
     id: "lowering",
     title: "Lowering pipeline trace",
     blurb:
-      "Seven passes, from linalg on tensors through bufferization to loops. Step with [ and ].",
+      "Seven passes, from linalg on tensors through bufferization to loops, with pass timing. Step with [ and ].",
     trace: "lowering.trace.txt",
   },
   {

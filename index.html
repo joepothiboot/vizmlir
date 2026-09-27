@@ -289,6 +289,10 @@
         text-overflow: ellipsis;
         white-space: nowrap;
       }
+      #pass-strip button .meta {
+        color: var(--faint);
+        font-variant-numeric: tabular-nums;
+      }
       #pass-strip button.failed .n {
         color: var(--err);
       }
@@ -299,6 +303,14 @@
       }
       #pass-strip button[aria-current="step"] .n {
         color: var(--accent);
+      }
+      /* A bar along the bottom edge, scaled to the slowest pass. Declared after
+         the current-step rule so its background shorthand keeps the bar. */
+      #pass-strip button[style*="--time"] {
+        background-image: linear-gradient(var(--accent), var(--accent));
+        background-position: left bottom;
+        background-repeat: no-repeat;
+        background-size: var(--time) 2px;
       }
       #workspace {
         display: flex;
@@ -962,6 +974,80 @@
         display: flex;
         justify-content: flex-end;
       }
+      #timing {
+        width: min(640px, calc(100vw - 32px));
+        padding: 18px 20px;
+      }
+      #timing h2 {
+        margin: 0 0 6px;
+        font-size: 14px;
+      }
+      #timing-summary {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 4px 16px;
+        margin: 0 0 14px;
+      }
+      #timing-summary dt {
+        color: var(--dim);
+      }
+      #timing-summary dd {
+        margin: 0;
+      }
+      .timing-scroll {
+        max-height: min(420px, 55vh);
+        margin: 0 0 14px;
+        overflow: auto;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+      }
+      #timing-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 11px;
+      }
+      #timing-table th {
+        position: sticky;
+        top: 0;
+        padding: 6px 8px;
+        background: var(--raised);
+        color: var(--dim);
+        font-weight: 600;
+        text-align: left;
+      }
+      #timing-table td {
+        padding: 4px 8px;
+        border-top: 1px solid var(--line);
+        white-space: nowrap;
+      }
+      #timing-table td.num,
+      #timing-table td.share {
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+      }
+      #timing-table td.share {
+        min-width: 90px;
+        background-image: linear-gradient(var(--accent-bg), var(--accent-bg));
+        background-repeat: no-repeat;
+        background-size: var(--share) 100%;
+      }
+      #timing-table tr.pipeline td:first-child,
+      #timing-table tr.analysis td,
+      #timing-table tr.other td {
+        color: var(--dim);
+      }
+      #timing-table .link-btn {
+        padding: 0;
+        color: var(--fg);
+        font: inherit;
+      }
+      #timing-table .link-btn:hover {
+        color: var(--accent);
+      }
+      .timing-scroll[hidden],
+      #timing-open[hidden] {
+        display: none;
+      }
       #canvas {
         display: block;
         width: 100%;
@@ -1333,6 +1419,14 @@
           <span id="mode">IR</span>
           <span id="status-text">—</span>
           <span class="sp"></span>
+          <button
+            id="timing-open"
+            class="link-btn"
+            title="Pass timing and memory (p)"
+            hidden
+          >
+            ⏱
+          </button>
           <span id="detail">—</span>
           <span id="abi"></span>
         </div>
@@ -1410,6 +1504,8 @@
           <dd>Switch baseline / current tab</dd>
           <dt><kbd>s</kbd></dt>
           <dd>Split: show both sources</dd>
+          <dt><kbd>p</kbd></dt>
+          <dd>Pass timing and memory</dd>
           <dt><kbd>m</kbd></dt>
           <dd>Show / hide the menu</dd>
           <dt><kbd>shift</kbd> <kbd>L</kbd></dt>
@@ -1420,6 +1516,30 @@
           <dd>This list</dd>
         </dl>
         <form method="dialog"><button>Close</button></form>
+      </dialog>
+
+      <dialog id="timing" aria-labelledby="timing-title">
+        <h2 id="timing-title">Pass timing and memory</h2>
+        <p class="dialog-note">
+          From the log's <code>-mlir-timing</code> report. Nested passes show
+          one total across every op they ran on. mlir-opt does not measure
+          memory per pass; peak memory is the whole process, read from
+          <code>/usr/bin/time</code> output when the log includes it.
+        </p>
+        <p id="timing-empty" class="dialog-note" hidden>
+          No timing report in this log. Add <code>-mlir-timing</code> to the
+          mlir-opt command, and wrap it in <code>/usr/bin/time -l</code> (macOS)
+          or <code>/usr/bin/time -v</code> (Linux) for peak memory.
+        </p>
+        <dl id="timing-summary"></dl>
+        <div class="timing-scroll">
+          <table id="timing-table"></table>
+        </div>
+        <div class="dialog-actions">
+          <button id="timing-export">Download .json</button>
+          <span class="sp"></span>
+          <form method="dialog"><button>Close</button></form>
+        </div>
       </dialog>
 
       <section id="docs-view" hidden aria-labelledby="docs-title">
@@ -1468,6 +1588,15 @@
             graph. Without <code>-mlir-print-ir-module-scope</code>, nested
             passes print only the function they ran on; VizMLIR rebuilds module
             baselines from those dumps.
+          </p>
+          <p>
+            Add <code>-mlir-timing</code> to see how long each pass took: the
+            timeline shows each pass's wall time and IR size, and
+            <kbd>p</kbd> opens the full report. mlir-opt does not measure memory
+            per pass, so for peak memory run it under
+            <code>/usr/bin/time -l</code> (macOS) or
+            <code>/usr/bin/time -v</code> (Linux) and keep that output in the
+            log.
           </p>
 
           <h3>Try a small example</h3>
