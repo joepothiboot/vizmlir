@@ -1,0 +1,66 @@
+// -----// IR Dump After CSEPass: cse ('func.func' operation: @f) //----- //
+module {
+  func.func @f(%arg0: i32) -> i32 {
+    %c0_i32 = arith.constant 0 : i32
+    %0 = arith.addi %arg0, %c0_i32 : i32
+    %1 = arith.muli %0, %0 : i32
+    return %1 : i32
+  }
+  func.func @g(%arg0: i32) -> i32 {
+    %c1_i32 = arith.constant 1 : i32
+    %0 = arith.muli %arg0, %c1_i32 : i32
+    return %0 : i32
+  }
+}
+
+
+// -----// IR Dump After CanonicalizerPass: canonicalize{cse-between-iterations=false    max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true} ('func.func' operation: @f) //----- //
+module {
+  func.func @f(%arg0: i32) -> i32 {
+    %0 = arith.muli %arg0, %arg0 : i32
+    return %0 : i32
+  }
+  func.func @g(%arg0: i32) -> i32 {
+    %c1_i32 = arith.constant 1 : i32
+    %0 = arith.muli %arg0, %c1_i32 : i32
+    return %0 : i32
+  }
+}
+
+
+// -----// IR Dump After CSEPass: cse ('func.func' operation: @g) //----- //
+module {
+  func.func @f(%arg0: i32) -> i32 {
+    %0 = arith.muli %arg0, %arg0 : i32
+    return %0 : i32
+  }
+  func.func @g(%arg0: i32) -> i32 {
+    %c1_i32 = arith.constant 1 : i32
+    %0 = arith.muli %arg0, %c1_i32 : i32
+    return %0 : i32
+  }
+}
+
+
+// -----// IR Dump After CanonicalizerPass: canonicalize{cse-between-iterations=false    max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true} ('func.func' operation: @g) //----- //
+module {
+  func.func @f(%arg0: i32) -> i32 {
+    %0 = arith.muli %arg0, %arg0 : i32
+    return %0 : i32
+  }
+  func.func @g(%arg0: i32) -> i32 {
+    return %arg0 : i32
+  }
+}
+
+
+module {
+  func.func @f(%arg0: i32) -> i32 {
+    %0 = arith.muli %arg0, %arg0 : i32
+    return %0 : i32
+  }
+  func.func @g(%arg0: i32) -> i32 {
+    return %arg0 : i32
+  }
+}
+
