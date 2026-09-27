@@ -761,6 +761,7 @@ async function openSample(sample) {
   goToWorkspace();
   try {
     applyState(await loadSampleState(sample, fetchSampleText));
+    statusEl.textContent = `loaded ${sample.title} · ${statusEl.textContent}`;
   } catch (error) {
     setStatus(`could not load sample: ${error.message}`, { error: true });
   }
@@ -1080,8 +1081,12 @@ window.addEventListener("hashchange", updateRoute);
 updateRoute();
 updateWatchUi();
 
+// An autosave of an emptied workspace would open blank forever; show the
+// sample instead.
 const saved = await kv.get("autosave");
-if (saved) applyState(saved);
+const hasContent = (state) =>
+  !!(state?.trace || state?.baseline?.trim() || state?.current?.trim());
+if (hasContent(saved)) applyState(saved);
 else applyState(await loadSampleState(SAMPLES[0]));
 restored = true;
 restoreWatch();
