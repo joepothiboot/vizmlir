@@ -511,3 +511,43 @@ describe("describeEvent", () => {
     ).toBe("Before Canonicalizer");
   });
 });
+
+// schema-opt (json-schema-mlir) is an out-of-tree MlirOptMain driver with its
+// own dialect; see generate.sh.
+describe("out-of-tree driver trace", () => {
+  const trace = parsePassTrace(fixture("schema-opt-pipeline"));
+
+  it("splits every pass of the pipeline", () => {
+    expect(trace.events.map((event) => event.argument)).toEqual([
+      "canonicalize",
+      "schema-canonicalize",
+      "lower-schema-to-std",
+      "reconcile-unrealized-casts",
+      "canonicalize",
+      "cse",
+      "symbol-dce",
+    ]);
+    expect(trace.diagnostics).toEqual([]);
+  });
+
+  it("keeps namespace-qualified pass names whole", () => {
+    expect(trace.events[1].pass).toBe(
+      "(anonymous namespace)::SchemaCanonicalizerPass",
+    );
+    expect(trace.events[1].argument).toBe("schema-canonicalize");
+  });
+
+  it("finds the root op of nested dumps of custom-dialect IR", () => {
+    expect(trace.events[1].root).toEqual({
+      op: "func.func",
+      symbol: "validate_person",
+    });
+    expect(trace.events[1].ir).toContain("schema.validate_number");
+    // The baseline is the function cut out of the module dump before it.
+    const baseline = baselineFor(trace.events, 1);
+    expect(baseline.event.index).toBe(0);
+    expect(baseline.ir).toMatch(/^func\.func @validate_person/);
+    expect(baseline.ir).toContain("arith.andi");
+    expect(trace.events[1].ir).not.toContain("arith.andi");
+  });
+});

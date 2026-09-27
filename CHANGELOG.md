@@ -11,6 +11,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Read `-mlir-timing` reports (tree, list, and JSON output) from pass traces and pasted logs. Each pass in the timeline shows its wall time and IR size, and **p** opens the full report with links back to each pass.
 - Show whole-process peak memory when the log includes `/usr/bin/time -l` (macOS) or `/usr/bin/time -v` (Linux) output. mlir-opt does not measure memory per pass.
 - Download the timing report, peak memory, and per-pass IR sizes as JSON.
+- Document the accepted trace format and the parsed structure in `docs/trace-format.md`.
+- Test traces from out-of-tree `MlirOptMain` drivers with custom dialects (a `schema-opt` fixture), including namespace-qualified pass names.
 
 ## [0.3.0] - 2026-09-26
 

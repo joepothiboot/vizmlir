@@ -1,0 +1,369 @@
+// -----// IR Dump After CanonicalizerPass: canonicalize{cse-between-iterations=false    max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true} //----- //
+module {
+  func.func @validate_person(%arg0: !schema.value, %arg1: !schema.value, %arg2: !schema.value) -> i1 {
+    %0 = schema.validate_string %arg1 {max_length = 64 : i64, min_length = 1 : i64} : !schema.value
+    %1 = schema.validate_number %arg2 {integral, minimum = 0.000000e+00 : f64} : !schema.value
+    %2 = schema.validate_number %arg2 {exclusive_maximum, maximum = 1.500000e+02 : f64} : !schema.value
+    %3 = schema.validate_number %arg2 {minimum = 1.800000e+01 : f64} : !schema.value
+    %4 = arith.andi %1, %2 : i1
+    %5 = arith.andi %4, %3 : i1
+    %6 = schema.struct %arg0 as "Person" fields ["name", "age"] required ["name"] validators(%0, %5) : (!schema.value, i1, i1) -> i1
+    return %6 : i1
+  }
+}
+
+
+// -----// IR Dump After (anonymous namespace)::SchemaCanonicalizerPass: schema-canonicalize{max-iterations=10 normalize-constraints=true} //----- //
+func.func @validate_person(%arg0: !schema.value, %arg1: !schema.value, %arg2: !schema.value) -> i1 {
+  %0 = schema.validate_string %arg1 {max_length = 64 : i64, min_length = 1 : i64} : !schema.value
+  %1 = schema.validate_number %arg2 {exclusive_maximum, integral, maximum = 1.500000e+02 : f64, minimum = 1.800000e+01 : f64} : !schema.value
+  %2 = schema.struct %arg0 as "Person" fields ["name", "age"] required ["name"] validators(%0, %1) : (!schema.value, i1, i1) -> i1
+  return %2 : i1
+}
+
+// -----// IR Dump After (anonymous namespace)::LowerSchemaToStandardPass: lower-schema-to-std //----- //
+module attributes {schema.string_pool = ["name"]} {
+  func.func private @__schema_rt_kind(i64) -> i32 attributes {llvm.readnone}
+  func.func private @__schema_rt_as_f64(i64) -> f64 attributes {llvm.readnone}
+  func.func private @__schema_rt_str_len(i64) -> i64 attributes {llvm.readnone}
+  func.func private @__schema_rt_str_matches(i64, i64) -> i1 attributes {llvm.readnone}
+  func.func private @__schema_rt_str_format(i64, i64) -> i1 attributes {llvm.readnone}
+  func.func private @__schema_rt_has_field(i64, i64) -> i1 attributes {llvm.readnone}
+  func.func @validate_person(%arg0: i64, %arg1: i64, %arg2: i64) -> i1 {
+    %0 = call @__schema_rt_kind(%arg1) : (i64) -> i32
+    %c3_i32 = arith.constant 3 : i32
+    %1 = arith.cmpi eq, %0, %c3_i32 : i32
+    %2 = scf.if %1 -> (i1) {
+      %9 = func.call @__schema_rt_str_len(%arg1) : (i64) -> i64
+      %c1_i64 = arith.constant 1 : i64
+      %10 = arith.cmpi sge, %9, %c1_i64 : i64
+      %c64_i64 = arith.constant 64 : i64
+      %11 = arith.cmpi sle, %9, %c64_i64 : i64
+      %12 = arith.andi %10, %11 : i1
+      scf.yield %12 : i1
+    } else {
+      %false = arith.constant false
+      scf.yield %false : i1
+    }
+    %3 = call @__schema_rt_kind(%arg2) : (i64) -> i32
+    %c2_i32 = arith.constant 2 : i32
+    %4 = arith.cmpi eq, %3, %c2_i32 : i32
+    %5 = scf.if %4 -> (i1) {
+      %9 = func.call @__schema_rt_as_f64(%arg2) : (i64) -> f64
+      %cst = arith.constant 1.800000e+01 : f64
+      %10 = arith.cmpf oge, %9, %cst : f64
+      %cst_0 = arith.constant 1.500000e+02 : f64
+      %11 = arith.cmpf olt, %9, %cst_0 : f64
+      %12 = arith.andi %10, %11 : i1
+      %13 = math.trunc %9 : f64
+      %14 = arith.cmpf oeq, %9, %13 : f64
+      %15 = arith.andi %12, %14 : i1
+      scf.yield %15 : i1
+    } else {
+      %false = arith.constant false
+      scf.yield %false : i1
+    }
+    %6 = call @__schema_rt_kind(%arg0) : (i64) -> i32
+    %c5_i32 = arith.constant 5 : i32
+    %7 = arith.cmpi eq, %6, %c5_i32 : i32
+    %8 = scf.if %7 -> (i1) {
+      %c0_i64 = arith.constant 0 : i64
+      %9 = func.call @__schema_rt_has_field(%arg0, %c0_i64) : (i64, i64) -> i1
+      %10 = arith.andi %9, %2 : i1
+      %11 = arith.andi %10, %5 : i1
+      scf.yield %11 : i1
+    } else {
+      %false = arith.constant false
+      scf.yield %false : i1
+    }
+    return %8 : i1
+  }
+}
+
+
+// -----// IR Dump After ReconcileUnrealizedCastsPass: reconcile-unrealized-casts //----- //
+module attributes {schema.string_pool = ["name"]} {
+  func.func private @__schema_rt_kind(i64) -> i32 attributes {llvm.readnone}
+  func.func private @__schema_rt_as_f64(i64) -> f64 attributes {llvm.readnone}
+  func.func private @__schema_rt_str_len(i64) -> i64 attributes {llvm.readnone}
+  func.func private @__schema_rt_str_matches(i64, i64) -> i1 attributes {llvm.readnone}
+  func.func private @__schema_rt_str_format(i64, i64) -> i1 attributes {llvm.readnone}
+  func.func private @__schema_rt_has_field(i64, i64) -> i1 attributes {llvm.readnone}
+  func.func @validate_person(%arg0: i64, %arg1: i64, %arg2: i64) -> i1 {
+    %0 = call @__schema_rt_kind(%arg1) : (i64) -> i32
+    %c3_i32 = arith.constant 3 : i32
+    %1 = arith.cmpi eq, %0, %c3_i32 : i32
+    %2 = scf.if %1 -> (i1) {
+      %9 = func.call @__schema_rt_str_len(%arg1) : (i64) -> i64
+      %c1_i64 = arith.constant 1 : i64
+      %10 = arith.cmpi sge, %9, %c1_i64 : i64
+      %c64_i64 = arith.constant 64 : i64
+      %11 = arith.cmpi sle, %9, %c64_i64 : i64
+      %12 = arith.andi %10, %11 : i1
+      scf.yield %12 : i1
+    } else {
+      %false = arith.constant false
+      scf.yield %false : i1
+    }
+    %3 = call @__schema_rt_kind(%arg2) : (i64) -> i32
+    %c2_i32 = arith.constant 2 : i32
+    %4 = arith.cmpi eq, %3, %c2_i32 : i32
+    %5 = scf.if %4 -> (i1) {
+      %9 = func.call @__schema_rt_as_f64(%arg2) : (i64) -> f64
+      %cst = arith.constant 1.800000e+01 : f64
+      %10 = arith.cmpf oge, %9, %cst : f64
+      %cst_0 = arith.constant 1.500000e+02 : f64
+      %11 = arith.cmpf olt, %9, %cst_0 : f64
+      %12 = arith.andi %10, %11 : i1
+      %13 = math.trunc %9 : f64
+      %14 = arith.cmpf oeq, %9, %13 : f64
+      %15 = arith.andi %12, %14 : i1
+      scf.yield %15 : i1
+    } else {
+      %false = arith.constant false
+      scf.yield %false : i1
+    }
+    %6 = call @__schema_rt_kind(%arg0) : (i64) -> i32
+    %c5_i32 = arith.constant 5 : i32
+    %7 = arith.cmpi eq, %6, %c5_i32 : i32
+    %8 = scf.if %7 -> (i1) {
+      %c0_i64 = arith.constant 0 : i64
+      %9 = func.call @__schema_rt_has_field(%arg0, %c0_i64) : (i64, i64) -> i1
+      %10 = arith.andi %9, %2 : i1
+      %11 = arith.andi %10, %5 : i1
+      scf.yield %11 : i1
+    } else {
+      %false = arith.constant false
+      scf.yield %false : i1
+    }
+    return %8 : i1
+  }
+}
+
+
+// -----// IR Dump After CanonicalizerPass: canonicalize{cse-between-iterations=false    max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true} //----- //
+module attributes {schema.string_pool = ["name"]} {
+  func.func private @__schema_rt_kind(i64) -> i32 attributes {llvm.readnone}
+  func.func private @__schema_rt_as_f64(i64) -> f64 attributes {llvm.readnone}
+  func.func private @__schema_rt_str_len(i64) -> i64 attributes {llvm.readnone}
+  func.func private @__schema_rt_str_matches(i64, i64) -> i1 attributes {llvm.readnone}
+  func.func private @__schema_rt_str_format(i64, i64) -> i1 attributes {llvm.readnone}
+  func.func private @__schema_rt_has_field(i64, i64) -> i1 attributes {llvm.readnone}
+  func.func @validate_person(%arg0: i64, %arg1: i64, %arg2: i64) -> i1 {
+    %c0_i64 = arith.constant 0 : i64
+    %c5_i32 = arith.constant 5 : i32
+    %cst = arith.constant 1.500000e+02 : f64
+    %cst_0 = arith.constant 1.800000e+01 : f64
+    %c2_i32 = arith.constant 2 : i32
+    %false = arith.constant false
+    %c64_i64 = arith.constant 64 : i64
+    %c1_i64 = arith.constant 1 : i64
+    %c3_i32 = arith.constant 3 : i32
+    %0 = call @__schema_rt_kind(%arg1) : (i64) -> i32
+    %1 = arith.cmpi eq, %0, %c3_i32 : i32
+    %2 = scf.if %1 -> (i1) {
+      %9 = func.call @__schema_rt_str_len(%arg1) : (i64) -> i64
+      %10 = arith.cmpi sge, %9, %c1_i64 : i64
+      %11 = arith.cmpi sle, %9, %c64_i64 : i64
+      %12 = arith.andi %10, %11 : i1
+      scf.yield %12 : i1
+    } else {
+      scf.yield %false : i1
+    }
+    %3 = call @__schema_rt_kind(%arg2) : (i64) -> i32
+    %4 = arith.cmpi eq, %3, %c2_i32 : i32
+    %5 = scf.if %4 -> (i1) {
+      %9 = func.call @__schema_rt_as_f64(%arg2) : (i64) -> f64
+      %10 = arith.cmpf oge, %9, %cst_0 : f64
+      %11 = arith.cmpf olt, %9, %cst : f64
+      %12 = arith.andi %10, %11 : i1
+      %13 = math.trunc %9 : f64
+      %14 = arith.cmpf oeq, %9, %13 : f64
+      %15 = arith.andi %12, %14 : i1
+      scf.yield %15 : i1
+    } else {
+      scf.yield %false : i1
+    }
+    %6 = call @__schema_rt_kind(%arg0) : (i64) -> i32
+    %7 = arith.cmpi eq, %6, %c5_i32 : i32
+    %8 = scf.if %7 -> (i1) {
+      %9 = func.call @__schema_rt_has_field(%arg0, %c0_i64) : (i64, i64) -> i1
+      %10 = arith.andi %9, %2 : i1
+      %11 = arith.andi %10, %5 : i1
+      scf.yield %11 : i1
+    } else {
+      scf.yield %false : i1
+    }
+    return %8 : i1
+  }
+}
+
+
+// -----// IR Dump After CSEPass: cse //----- //
+module attributes {schema.string_pool = ["name"]} {
+  func.func private @__schema_rt_kind(i64) -> i32 attributes {llvm.readnone}
+  func.func private @__schema_rt_as_f64(i64) -> f64 attributes {llvm.readnone}
+  func.func private @__schema_rt_str_len(i64) -> i64 attributes {llvm.readnone}
+  func.func private @__schema_rt_str_matches(i64, i64) -> i1 attributes {llvm.readnone}
+  func.func private @__schema_rt_str_format(i64, i64) -> i1 attributes {llvm.readnone}
+  func.func private @__schema_rt_has_field(i64, i64) -> i1 attributes {llvm.readnone}
+  func.func @validate_person(%arg0: i64, %arg1: i64, %arg2: i64) -> i1 {
+    %c0_i64 = arith.constant 0 : i64
+    %c5_i32 = arith.constant 5 : i32
+    %cst = arith.constant 1.500000e+02 : f64
+    %cst_0 = arith.constant 1.800000e+01 : f64
+    %c2_i32 = arith.constant 2 : i32
+    %false = arith.constant false
+    %c64_i64 = arith.constant 64 : i64
+    %c1_i64 = arith.constant 1 : i64
+    %c3_i32 = arith.constant 3 : i32
+    %0 = call @__schema_rt_kind(%arg1) : (i64) -> i32
+    %1 = arith.cmpi eq, %0, %c3_i32 : i32
+    %2 = scf.if %1 -> (i1) {
+      %9 = func.call @__schema_rt_str_len(%arg1) : (i64) -> i64
+      %10 = arith.cmpi sge, %9, %c1_i64 : i64
+      %11 = arith.cmpi sle, %9, %c64_i64 : i64
+      %12 = arith.andi %10, %11 : i1
+      scf.yield %12 : i1
+    } else {
+      scf.yield %false : i1
+    }
+    %3 = call @__schema_rt_kind(%arg2) : (i64) -> i32
+    %4 = arith.cmpi eq, %3, %c2_i32 : i32
+    %5 = scf.if %4 -> (i1) {
+      %9 = func.call @__schema_rt_as_f64(%arg2) : (i64) -> f64
+      %10 = arith.cmpf oge, %9, %cst_0 : f64
+      %11 = arith.cmpf olt, %9, %cst : f64
+      %12 = arith.andi %10, %11 : i1
+      %13 = math.trunc %9 : f64
+      %14 = arith.cmpf oeq, %9, %13 : f64
+      %15 = arith.andi %12, %14 : i1
+      scf.yield %15 : i1
+    } else {
+      scf.yield %false : i1
+    }
+    %6 = call @__schema_rt_kind(%arg0) : (i64) -> i32
+    %7 = arith.cmpi eq, %6, %c5_i32 : i32
+    %8 = scf.if %7 -> (i1) {
+      %9 = func.call @__schema_rt_has_field(%arg0, %c0_i64) : (i64, i64) -> i1
+      %10 = arith.andi %9, %2 : i1
+      %11 = arith.andi %10, %5 : i1
+      scf.yield %11 : i1
+    } else {
+      scf.yield %false : i1
+    }
+    return %8 : i1
+  }
+}
+
+
+// -----// IR Dump After SymbolDCEPass: symbol-dce //----- //
+module attributes {schema.string_pool = ["name"]} {
+  func.func private @__schema_rt_kind(i64) -> i32 attributes {llvm.readnone}
+  func.func private @__schema_rt_as_f64(i64) -> f64 attributes {llvm.readnone}
+  func.func private @__schema_rt_str_len(i64) -> i64 attributes {llvm.readnone}
+  func.func private @__schema_rt_has_field(i64, i64) -> i1 attributes {llvm.readnone}
+  func.func @validate_person(%arg0: i64, %arg1: i64, %arg2: i64) -> i1 {
+    %c0_i64 = arith.constant 0 : i64
+    %c5_i32 = arith.constant 5 : i32
+    %cst = arith.constant 1.500000e+02 : f64
+    %cst_0 = arith.constant 1.800000e+01 : f64
+    %c2_i32 = arith.constant 2 : i32
+    %false = arith.constant false
+    %c64_i64 = arith.constant 64 : i64
+    %c1_i64 = arith.constant 1 : i64
+    %c3_i32 = arith.constant 3 : i32
+    %0 = call @__schema_rt_kind(%arg1) : (i64) -> i32
+    %1 = arith.cmpi eq, %0, %c3_i32 : i32
+    %2 = scf.if %1 -> (i1) {
+      %9 = func.call @__schema_rt_str_len(%arg1) : (i64) -> i64
+      %10 = arith.cmpi sge, %9, %c1_i64 : i64
+      %11 = arith.cmpi sle, %9, %c64_i64 : i64
+      %12 = arith.andi %10, %11 : i1
+      scf.yield %12 : i1
+    } else {
+      scf.yield %false : i1
+    }
+    %3 = call @__schema_rt_kind(%arg2) : (i64) -> i32
+    %4 = arith.cmpi eq, %3, %c2_i32 : i32
+    %5 = scf.if %4 -> (i1) {
+      %9 = func.call @__schema_rt_as_f64(%arg2) : (i64) -> f64
+      %10 = arith.cmpf oge, %9, %cst_0 : f64
+      %11 = arith.cmpf olt, %9, %cst : f64
+      %12 = arith.andi %10, %11 : i1
+      %13 = math.trunc %9 : f64
+      %14 = arith.cmpf oeq, %9, %13 : f64
+      %15 = arith.andi %12, %14 : i1
+      scf.yield %15 : i1
+    } else {
+      scf.yield %false : i1
+    }
+    %6 = call @__schema_rt_kind(%arg0) : (i64) -> i32
+    %7 = arith.cmpi eq, %6, %c5_i32 : i32
+    %8 = scf.if %7 -> (i1) {
+      %9 = func.call @__schema_rt_has_field(%arg0, %c0_i64) : (i64, i64) -> i1
+      %10 = arith.andi %9, %2 : i1
+      %11 = arith.andi %10, %5 : i1
+      scf.yield %11 : i1
+    } else {
+      scf.yield %false : i1
+    }
+    return %8 : i1
+  }
+}
+
+
+module attributes {schema.string_pool = ["name"]} {
+  func.func private @__schema_rt_kind(i64) -> i32 attributes {llvm.readnone}
+  func.func private @__schema_rt_as_f64(i64) -> f64 attributes {llvm.readnone}
+  func.func private @__schema_rt_str_len(i64) -> i64 attributes {llvm.readnone}
+  func.func private @__schema_rt_has_field(i64, i64) -> i1 attributes {llvm.readnone}
+  func.func @validate_person(%arg0: i64, %arg1: i64, %arg2: i64) -> i1 {
+    %c0_i64 = arith.constant 0 : i64
+    %c5_i32 = arith.constant 5 : i32
+    %cst = arith.constant 1.500000e+02 : f64
+    %cst_0 = arith.constant 1.800000e+01 : f64
+    %c2_i32 = arith.constant 2 : i32
+    %false = arith.constant false
+    %c64_i64 = arith.constant 64 : i64
+    %c1_i64 = arith.constant 1 : i64
+    %c3_i32 = arith.constant 3 : i32
+    %0 = call @__schema_rt_kind(%arg1) : (i64) -> i32
+    %1 = arith.cmpi eq, %0, %c3_i32 : i32
+    %2 = scf.if %1 -> (i1) {
+      %9 = func.call @__schema_rt_str_len(%arg1) : (i64) -> i64
+      %10 = arith.cmpi sge, %9, %c1_i64 : i64
+      %11 = arith.cmpi sle, %9, %c64_i64 : i64
+      %12 = arith.andi %10, %11 : i1
+      scf.yield %12 : i1
+    } else {
+      scf.yield %false : i1
+    }
+    %3 = call @__schema_rt_kind(%arg2) : (i64) -> i32
+    %4 = arith.cmpi eq, %3, %c2_i32 : i32
+    %5 = scf.if %4 -> (i1) {
+      %9 = func.call @__schema_rt_as_f64(%arg2) : (i64) -> f64
+      %10 = arith.cmpf oge, %9, %cst_0 : f64
+      %11 = arith.cmpf olt, %9, %cst : f64
+      %12 = arith.andi %10, %11 : i1
+      %13 = math.trunc %9 : f64
+      %14 = arith.cmpf oeq, %9, %13 : f64
+      %15 = arith.andi %12, %14 : i1
+      scf.yield %15 : i1
+    } else {
+      scf.yield %false : i1
+    }
+    %6 = call @__schema_rt_kind(%arg0) : (i64) -> i32
+    %7 = arith.cmpi eq, %6, %c5_i32 : i32
+    %8 = scf.if %7 -> (i1) {
+      %9 = func.call @__schema_rt_has_field(%arg0, %c0_i64) : (i64, i64) -> i1
+      %10 = arith.andi %9, %2 : i1
+      %11 = arith.andi %10, %5 : i1
+      scf.yield %11 : i1
+    } else {
+      scf.yield %false : i1
+    }
+    return %8 : i1
+  }
+}
+

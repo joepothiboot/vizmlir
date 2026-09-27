@@ -54,4 +54,13 @@ if [[ "$(uname)" == Darwin ]]; then TIME_FLAG=-l; else TIME_FLAG=-v; fi
   -pass-pipeline='builtin.module(func.func(cse,canonicalize))' \
   -mlir-print-ir-after-all -mlir-timing > timed-run.txt 2>&1 || true
 
+# Out-of-tree drivers built on MlirOptMain print the same trace format. This
+# one uses schema-opt from json-schema-mlir, a custom dialect mlir-opt can't
+# parse; set SCHEMA_OPT to regenerate it.
+if [[ -n "${SCHEMA_OPT:-}" ]]; then
+  "$SCHEMA_OPT" input/schema-person.mlir "${COMMON[@]}" \
+    --schema-to-std-pipeline -mlir-print-ir-after-all \
+    > schema-opt-pipeline.txt 2>&1 || true
+fi
+
 "$MLIR_OPT" --version | head -1 > MLIR_VERSION
