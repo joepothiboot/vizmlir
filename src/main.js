@@ -4,6 +4,8 @@ import { ABI_VERSION, STATUS } from "./wasm/abi.js";
 import { copySnapshot, diffSnapshots } from "./diff.js";
 import { bindHighlighting } from "./mlir-highlight.js";
 import { CommandPalette } from "./palette.js";
+import { loadSampleState, RENAME_SAMPLE, SAMPLES } from "./samples.js";
+import { bindSplitters } from "./splitters.js";
 import { kv, sessionFromFile, sessions, sessionToFile } from "./storage.js";
 import { canWatchFiles, FileWatcher } from "./watch.js";
 import {
@@ -21,17 +23,6 @@ import {
 } from "./trace.js";
 
 const DIFF_GLYPH = { added: "+", removed: "−", changed: "~" };
-
-const SAMPLE = `module {
-  func.func @matmul(%A: tensor<128x256xf32>, %B: tensor<256x64xf32>) -> tensor<128x64xf32> {
-    %c0 = arith.constant 0.0 : f32
-    %init = tensor.empty() : tensor<128x64xf32>
-    %filled = linalg.fill ins(%c0 : f32) outs(%init : tensor<128x64xf32>) -> tensor<128x64xf32>
-    %out = linalg.matmul ins(%A, %B : tensor<128x256xf32>, tensor<256x64xf32>)
-                         outs(%filled : tensor<128x64xf32>) -> tensor<128x64xf32>
-    func.return %out : tensor<128x64xf32>
-  }
-}`;
 
 const canvas = document.getElementById("canvas");
 const input = document.getElementById("editor");
@@ -358,7 +349,7 @@ function updateRoute() {
 }
 
 let timer = 0;
-docsSample.value = SAMPLE;
+docsSample.value = RENAME_SAMPLE;
 bindHighlighting(baseline, baselineHighlight);
 bindHighlighting(input, editorHighlight);
 bindHighlighting(docsSample, docsSampleHighlight);
@@ -501,6 +492,21 @@ systemLight.addEventListener("change", (e) => {
 themeToggle.addEventListener("click", toggleTheme);
 applyTheme(document.documentElement.dataset.theme || "dark");
 
+// ---- Pane splitters -------------------------------------------------------
+
+bindSplitters(document.querySelector("#workspace main"), [
+  {
+    el: document.getElementById("source-splitter"),
+    pane: document.getElementById("source-pane"),
+    side: "left",
+  },
+  {
+    el: document.getElementById("diff-splitter"),
+    pane: document.getElementById("diff-pane"),
+    side: "right",
+  },
+]);
+
 // ---- Command palette -------------------------------------------------------
 
 function goToWorkspace() {
@@ -540,7 +546,7 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
     ["Fit graph", "f", fitGraph],
     ["Switch baseline / current", "t", toggleTab],
     ["Toggle split sources", "s", toggleSplit],
-    ["Load sample", "", loadSample],
+    ["Browse samples…", "", openSamples],
     ["Sessions: save, open, import", "", openSessions],
     ["Download session .json", "", downloadSession],
     ["Export graph as PNG", "", exportPNG],
@@ -560,6 +566,13 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
   ];
   for (const [text, hint, action] of actions)
     items.push({ group: "action", text, hint, run: action });
+  for (const sample of SAMPLES)
+    items.push({
+      group: "sample",
+      text: sample.title,
+      hint: sample.trace ? "trace" : "diff",
+      run: () => openSample(sample),
+    });
   return items;
 });
 
@@ -653,19 +666,55 @@ fileInput.addEventListener("change", async () => {
   run();
 });
 
-function loadSample() {
-  clearTrace();
-  sourceName.textContent = "sample.mlir";
-  baseline.value = SAMPLE;
-  input.value = SAMPLE.replace("linalg.fill", "linalg.fill_relu");
-  baseline.dispatchEvent(new Event("input"));
-  input.dispatchEvent(new Event("input"));
-  clearTimeout(timer);
-  run();
+// ---- Samples -----------------------------------------------------------------
+
+const samplesDialog = document.getElementById("samples");
+const sampleList = document.getElementById("sample-list");
+
+async function fetchSampleText(path) {
+  const response = await fetch(`${import.meta.env.BASE_URL}samples/${path}`);
+  if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`);
+  return response.text();
 }
+
+async function openSample(sample) {
+  samplesDialog.close();
+  goToWorkspace();
+  try {
+    applyState(await loadSampleState(sample, fetchSampleText));
+  } catch (error) {
+    setStatus(`could not load sample: ${error.message}`, { error: true });
+  }
+}
+
+sampleList.replaceChildren(
+  ...SAMPLES.map((sample) => {
+    const item = document.createElement("li");
+    const button = document.createElement("button");
+    const title = document.createElement("span");
+    title.className = "title";
+    title.textContent = sample.title;
+    const kind = document.createElement("span");
+    kind.className = "kind";
+    kind.textContent = sample.trace ? "pass trace" : "before / after";
+    const blurb = document.createElement("span");
+    blurb.className = "blurb";
+    blurb.textContent = sample.blurb;
+    button.append(title, kind, blurb);
+    button.addEventListener("click", () => openSample(sample));
+    item.append(button);
+    return item;
+  }),
+);
+
+function openSamples() {
+  samplesDialog.showModal();
+}
+
+document.getElementById("samples-open").addEventListener("click", openSamples);
+document.getElementById("docs-samples").addEventListener("click", openSamples);
 document.getElementById("load-sample")?.addEventListener("click", () => {
-  loadSample();
-  window.location.hash = "#/";
+  openSample(SAMPLES[0]);
 });
 
 // ---- Workspace state (autosave, sessions) --------------------------------
@@ -950,6 +999,6 @@ updateWatchUi();
 
 const saved = await kv.get("autosave");
 if (saved) applyState(saved);
-else loadSample();
+else applyState(await loadSampleState(SAMPLES[0]));
 restored = true;
 restoreWatch();
