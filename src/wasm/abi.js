@@ -50,9 +50,9 @@ export const KIND = Object.freeze({
 });
 
 export const KIND_STYLE = Object.freeze({
-  0: { fill: "#1a1a17", stroke: "#3a3833", text: "#ece9e1" },
-  1: { fill: "#2a1c10", stroke: "#ff7a1a", text: "#ffd9bd" },
-  2: { fill: "#1d1d1a", stroke: "#55524a", text: "#ece9e1" },
+  0: { fill: "#1c1c1c", stroke: "#3a3a3a", text: "#e8e8e8" },
+  1: { fill: "#262626", stroke: "#888888", text: "#f5f5f5" },
+  2: { fill: "#1f1f1f", stroke: "#555555", text: "#e8e8e8" },
   3: { fill: "#24200f", stroke: "#f2c94c", text: "#f5e6ad" },
   4: { fill: "#2a1614", stroke: "#ff6b5e", text: "#ffd3cc" },
 });
