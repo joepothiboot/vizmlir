@@ -12,6 +12,7 @@ import {
   diffRecords,
   diffToJSON,
   diffToMarkdown,
+  diffToPatch,
   download,
   slug,
 } from "./export.js";
@@ -32,6 +33,7 @@ const modeEl = document.getElementById("mode");
 const detailEl = document.getElementById("detail");
 const diffSummary = document.getElementById("diff-summary");
 const diffList = document.getElementById("diff-list");
+const diffCopy = document.getElementById("diff-copy");
 const workspace = document.getElementById("workspace");
 const docsView = document.getElementById("docs-view");
 const routeLinks = document.querySelectorAll("[data-route]");
@@ -63,6 +65,7 @@ let diffRows = [];
 let diffBefore = null;
 let diffAfter = null;
 let diffCursor = -1;
+let diffPicked = new Set();
 let traceDiffTitle = "";
 
 const renderer = new CanvasRenderer(canvas, {
@@ -135,6 +138,7 @@ function renderDiff(rows, before, after) {
   diffBefore = before;
   diffAfter = after;
   diffCursor = -1;
+  diffPicked = new Set();
   diffList.replaceChildren(
     ...rows.map((row, index) => {
       const item = document.createElement("li");
@@ -161,15 +165,71 @@ function renderDiff(rows, before, after) {
             : "top level";
       body.append(label, sub);
       item.append(glyph, body);
-      item.addEventListener("click", () => focusChange(index));
+      item.setAttribute("aria-checked", "false");
+      item.addEventListener("click", (e) => {
+        if (e.shiftKey && diffCursor >= 0) pickRange(diffCursor, index);
+        else if (e.metaKey || e.ctrlKey) togglePick(index);
+        focusChange(index);
+      });
       return item;
     }),
   );
+  syncPicks();
   renderer.setMarks(
     new Map(
       rows.filter((row) => row.after).map((row) => [row.after.index, row.type]),
     ),
   );
+}
+
+// Picked rows are what "copy" takes; with nothing picked it takes the cursor row.
+function togglePick(index) {
+  if (!diffPicked.delete(index)) diffPicked.add(index);
+  syncPicks();
+}
+
+function pickRange(from, to) {
+  for (let i = Math.min(from, to); i <= Math.max(from, to); i++)
+    diffPicked.add(i);
+  syncPicks();
+}
+
+function clearPicks() {
+  if (!diffPicked.size) return false;
+  diffPicked.clear();
+  syncPicks();
+  return true;
+}
+
+function syncPicks() {
+  [...diffList.children].forEach((item, i) =>
+    item.setAttribute("aria-checked", String(diffPicked.has(i))),
+  );
+  diffCopy.textContent = diffPicked.size ? `copy ${diffPicked.size}` : "copy";
+  diffCopy.disabled = !diffRows.length;
+}
+
+async function copyChanges() {
+  const indices = diffPicked.size
+    ? [...diffPicked].sort((a, b) => a - b)
+    : diffCursor >= 0
+      ? [diffCursor]
+      : diffRows.map((_, i) => i);
+  if (!indices.length) return;
+  const rows = indices.map((i) => diffRows[i]);
+  const records = diffRecords(rows, (row, parent) =>
+    parentLabel(row.after ? diffAfter : diffBefore, parent),
+  );
+  try {
+    await navigator.clipboard.writeText(
+      diffToPatch(diffTitle.textContent, records),
+    );
+    setStatus(
+      `copied ${rows.length} change${rows.length === 1 ? "" : "s"} as a patch`,
+    );
+  } catch {
+    setStatus("clipboard unavailable", { error: true });
+  }
 }
 
 function syncDiffSelection(nodeIndex) {
@@ -551,6 +611,7 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
     ["Download session .json", "", downloadSession],
     ["Export graph as PNG", "", exportPNG],
     ["Export graph as SVG", "", exportSVG],
+    ["Copy changes as patch", "c", copyChanges],
     ["Export diff as Markdown", "", () => exportDiff("md")],
     ["Export diff as JSON", "", () => exportDiff("json")],
     ...(canWatchFiles
@@ -602,6 +663,8 @@ const WORKSPACE_KEYS = {
   "+": () => renderer.zoomBy(1.25),
   "=": () => renderer.zoomBy(1.25),
   "-": () => renderer.zoomBy(0.8),
+  x: () => diffCursor >= 0 && togglePick(diffCursor),
+  c: copyChanges,
   j: () => focusChange(diffCursor + 1),
   k: () => focusChange(diffCursor < 0 ? -1 : diffCursor - 1),
   t: toggleTab,
@@ -627,6 +690,7 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (isTyping(e.target)) return;
+  if (e.key === "Escape" && !workspace.hidden && clearPicks()) return;
   if (e.key === "/") {
     e.preventDefault();
     palette.open();
@@ -908,6 +972,7 @@ function exportDiff(format) {
 
 document.getElementById("export-png").addEventListener("click", exportPNG);
 document.getElementById("export-svg").addEventListener("click", exportSVG);
+diffCopy.addEventListener("click", copyChanges);
 document
   .getElementById("export-md")
   .addEventListener("click", () => exportDiff("md"));
