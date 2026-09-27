@@ -131,15 +131,58 @@
         flex-direction: column;
         height: 100%;
       }
-      header {
+      /* The top bar lives in a popover so the workspace gets the full height. */
+      #menu-handle {
+        position: fixed;
+        top: 0;
+        left: 50%;
+        z-index: 20;
         display: flex;
         align-items: center;
+        gap: 6px;
+        height: 22px;
+        padding: 0 10px;
+        transform: translateX(-50%);
+        background: var(--overlay);
+        border-top: 0;
+        border-radius: 0 0 8px 8px;
+        color: var(--dim);
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+      #menu-handle span {
+        color: var(--accent);
+      }
+      #menu-handle .chev {
+        color: var(--faint);
+        font-weight: 400;
+      }
+      #menu-handle.watching::after {
+        content: "";
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--good);
+      }
+      header:popover-open {
+        display: flex;
+      }
+      header {
+        position: fixed;
+        inset: 8px 8px auto;
+        flex-wrap: wrap;
+        align-items: center;
         gap: 10px;
-        height: 48px;
-        padding: 0 14px;
+        width: auto;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 8px 14px;
         background: var(--bg);
-        border-bottom: 1px solid var(--line);
-        flex: 0 0 auto;
+        color: var(--fg);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        box-shadow: 0 12px 32px var(--shadow);
       }
       header h1 {
         margin: 0 6px 0 0;
@@ -215,7 +258,8 @@
         display: flex;
         flex: 0 0 auto;
         gap: 6px;
-        padding: 8px 14px;
+        /* Leave room for the menu handle above the passes. */
+        padding: 26px 14px 8px;
         overflow-x: auto;
         border-bottom: 1px solid var(--line);
         scrollbar-width: thin;
@@ -1078,7 +1122,15 @@
   </head>
   <body>
     <div id="app">
-      <header>
+      <button
+        id="menu-handle"
+        popovertarget="topbar"
+        aria-label="Show menu"
+        title="Menu (m)"
+      >
+        viz<span>mlir</span><span class="chev" aria-hidden="true">▾</span>
+      </button>
+      <header id="topbar" popover aria-label="Menu">
         <h1>viz<span>mlir</span></h1>
         <span id="source-name" title="Loaded source">sample.mlir</span>
         <label class="btn" for="file">Open…</label>
@@ -1358,6 +1410,8 @@
           <dd>Switch baseline / current tab</dd>
           <dt><kbd>s</kbd></dt>
           <dd>Split: show both sources</dd>
+          <dt><kbd>m</kbd></dt>
+          <dd>Show / hide the menu</dd>
           <dt><kbd>shift</kbd> <kbd>L</kbd></dt>
           <dd>Switch light / dark theme</dd>
           <dt><kbd>esc</kbd></dt>
@@ -1407,7 +1461,7 @@
             >
           </p>
           <p>
-            Pick a pass from the timeline under the header (or press
+            Pick a pass from the timeline at the top (or press
             <kbd>[</kbd> / <kbd>]</kbd>) to compare its IR with the IR it
             received. Passes that failed are marked with ✗, and compiler errors,
             warnings, notes, and remarks printed around a dump appear over the
