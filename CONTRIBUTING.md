@@ -41,7 +41,7 @@ cargo check --manifest-path wasm/Cargo.toml --target wasm32-unknown-unknown
 
 ## Deployment
 
-Pushes to `main` run `.github/workflows/deploy-pages.yml`, which builds `dist/` and publishes it to https://joepothiboot.github.io/vizmlir/. The repository's Pages source must be **GitHub Actions** (Settings → Pages → Build and deployment). If it is set to "Deploy from a branch", GitHub serves the raw repository instead: the page loads `./src/main.js` unbundled, it throws on `import.meta.env.BASE_URL`, and no JavaScript control works (only native ones such as the menu handle and Open…). The workflow's last step checks for this and fails.
+Pushes to `main` run `.github/workflows/deploy-pages.yml`, which builds `dist/` and publishes it to https://joepothiboot.github.io/vizmlir/. The repository's Pages source must be **GitHub Actions** (Settings → Pages → Build and deployment). If it is set to "Deploy from a branch", GitHub serves the raw repository instead: the page loads `./src/main.js` unbundled, it throws on `import.meta.env.BASE_URL`, and no JavaScript control works (only native ones such as Open…). The workflow's last step checks for this and fails.
 
 To check the setting and what the live site serves:
 

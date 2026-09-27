@@ -679,7 +679,7 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
     [
       "Show / hide menu",
       "m",
-      () => topbar.togglePopover(),
+      () => toggleMenu(),
     ],
     ["Switch light / dark theme", "shift L", toggleTheme],
     ["Open docs", "", () => (window.location.hash = "#/docs")],
@@ -708,13 +708,31 @@ document
   .getElementById("help-open")
   .addEventListener("click", () => helpDialog.showModal());
 
-// The menu is an overlay: close it once an action runs, but keep it open while
-// switching themes so the change is easy to compare.
+// The menu is docked above the workspace; the strip under it hides and shows
+// it, and the choice is remembered.
+const MENU_KEY = "vizmlir-menu";
 const topbar = document.getElementById("topbar");
-topbar.addEventListener("click", (e) => {
-  const control = e.target.closest("a, button");
-  if (control && control.id !== "theme-toggle") topbar.hidePopover();
-});
+const menuHandle = document.getElementById("menu-handle");
+
+function setMenuHidden(hidden) {
+  topbar.hidden = hidden;
+  const verb = hidden ? "Show" : "Hide";
+  menuHandle.setAttribute("aria-expanded", String(!hidden));
+  menuHandle.setAttribute("aria-label", `${verb} menu`);
+  menuHandle.title = `${verb} menu (m)`;
+}
+
+function toggleMenu() {
+  setMenuHidden(!topbar.hidden);
+  try {
+    localStorage.setItem(MENU_KEY, topbar.hidden ? "hidden" : "shown");
+  } catch {}
+}
+
+menuHandle.addEventListener("click", toggleMenu);
+try {
+  setMenuHidden(localStorage.getItem(MENU_KEY) === "hidden");
+} catch {}
 
 // ---- Keyboard --------------------------------------------------------------
 
@@ -768,7 +786,7 @@ window.addEventListener("keydown", (e) => {
   } else if (e.key === "L") {
     toggleTheme();
   } else if (e.key === "m") {
-    topbar.togglePopover();
+    toggleMenu();
   } else if (!workspace.hidden && WORKSPACE_KEYS[e.key]) {
     e.preventDefault();
     WORKSPACE_KEYS[e.key]();
