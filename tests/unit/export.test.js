@@ -3,6 +3,7 @@ import {
   diffRecords,
   diffToJSON,
   diffToMarkdown,
+  diffToPatch,
   slug,
 } from "../../src/export.js";
 import { sessionFromFile, sessionToFile } from "../../src/storage.js";
@@ -41,6 +42,22 @@ describe("diff export", () => {
     expect(md).toContain("| ~ | `linalg.fill_relu` | was `linalg.fill` |");
     expect(md).toContain("| − | `tensor.empty` | top level |");
     expect(md).toContain("`a\\|b`");
+  });
+
+  it("writes a patch snippet grouped by parent", () => {
+    expect(diffToPatch("t", diffRecords(rows, parentOf))).toBe(
+      [
+        "--- baseline",
+        "+++ current  (t)",
+        "@@ func.func @matmul @@",
+        "+ memref.alloc",
+        "- linalg.fill",
+        "+ linalg.fill_relu",
+        "@@ top level @@",
+        "- tensor.empty",
+        "",
+      ].join("\n"),
+    );
   });
 
   it("says when there is nothing to report", () => {

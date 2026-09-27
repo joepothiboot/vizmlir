@@ -483,6 +483,14 @@
         background: var(--raised);
         box-shadow: inset 0 0 0 1px var(--line);
       }
+      #diff-list li[aria-checked="true"] {
+        box-shadow: inset 3px 0 0 var(--accent);
+      }
+      #diff-list li[aria-checked="true"][aria-selected="true"] {
+        box-shadow:
+          inset 3px 0 0 var(--accent),
+          inset 0 0 0 1px var(--line);
+      }
       #diff-list .glyph {
         flex: 0 0 auto;
         font-weight: 800;
@@ -517,6 +525,9 @@
         padding: 4px 12px 12px;
         color: var(--dim);
         font-size: 11px;
+      }
+      .diff-hint > * {
+        white-space: nowrap;
       }
       @media (max-width: 900px) {
         #diff-pane {
@@ -653,6 +664,10 @@
       }
       .link-btn:hover {
         color: var(--accent);
+      }
+      .link-btn:disabled {
+        opacity: 0.4;
+        pointer-events: none;
       }
       #sessions {
         width: min(560px, calc(100vw - 32px));
@@ -1227,10 +1242,23 @@
               <span id="diff-title">diff</span>
               <span id="diff-summary">no comparison yet</span>
             </h2>
-            <ul id="diff-list" role="listbox" aria-label="Changes"></ul>
+            <ul
+              id="diff-list"
+              role="listbox"
+              aria-label="Changes"
+              aria-multiselectable="true"
+            ></ul>
             <div class="diff-hint">
-              <span><kbd>j</kbd> <kbd>k</kbd> step through changes</span>
+              <span><kbd>j</kbd> <kbd>k</kbd> step · <kbd>x</kbd> pick</span>
               <span class="sp"></span>
+              <button
+                id="diff-copy"
+                class="link-btn"
+                title="Copy picked changes (or the current one) as a patch · c"
+                disabled
+              >
+                copy
+              </button>
               <button
                 id="export-md"
                 class="link-btn"
@@ -1318,6 +1346,10 @@
           <dd>Previous / next pass in a trace</dd>
           <dt><kbd>j</kbd> <kbd>k</kbd></dt>
           <dd>Next / previous change</dd>
+          <dt><kbd>x</kbd> · <kbd>shift</kbd>/<kbd>⌘</kbd> click</dt>
+          <dd>Pick changes (esc clears)</dd>
+          <dt><kbd>c</kbd></dt>
+          <dd>Copy picked changes (or the current one) as a patch</dd>
           <dt><kbd>f</kbd></dt>
           <dd>Fit graph to view</dd>
           <dt><kbd>+</kbd> <kbd>-</kbd></dt>
@@ -1425,7 +1457,9 @@
             </li>
             <li>
               Export the whole graph as PNG or SVG from the toolbar over the
-              graph, and the diff as Markdown or JSON from the diff pane.
+              graph, and the diff as Markdown or JSON from the diff pane. Pick
+              changes with <kbd>x</kbd> or shift/⌘-click and press
+              <kbd>c</kbd> to copy them as a patch snippet.
             </li>
           </ul>
 

@@ -43,6 +43,26 @@ export function diffToJSON(title, records) {
   return JSON.stringify({ title, changes: records }, null, 2);
 }
 
+/**
+ * A unified-diff style snippet for pasting into a PR or bug report. Consecutive
+ * records with the same parent share one "@@ parent @@" context line.
+ */
+export function diffToPatch(title, records) {
+  const lines = [`--- baseline`, `+++ current  (${title})`];
+  let context;
+  for (const record of records) {
+    const parent = record.parent ?? "top level";
+    if (parent !== context) {
+      lines.push(`@@ ${parent} @@`);
+      context = parent;
+    }
+    if (record.type === "added") lines.push(`+ ${record.op}`);
+    else if (record.type === "removed") lines.push(`- ${record.op}`);
+    else lines.push(`- ${record.was}`, `+ ${record.op}`);
+  }
+  return [...lines, ""].join("\n");
+}
+
 export function diffToMarkdown(title, records) {
   const cell = (text) => (text ?? "").replace(/\|/g, "\\|");
   const lines = [`## ${title}`, ""];
