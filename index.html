@@ -24,40 +24,40 @@
     />
     <style>
       :root {
-        --bg: #0f0f0d;
-        --panel: #171714;
-        --raised: #1f1e1b;
-        --line: #2a2925;
-        --fg: #ece9e1;
-        --dim: #8e8a80;
-        --faint: #4a4842;
-        --accent: #ff7a1a;
-        --accent-bg: #2a1c10;
+        --bg: #161616;
+        --panel: #1c1c1c;
+        --raised: #242424;
+        --line: #2e2e2e;
+        --fg: #e8e8e8;
+        --dim: #9b9b9b;
+        --faint: #5c5c5c;
+        --accent: #e8e8e8;
+        --accent-bg: #2a2a2a;
         --err: #ff6b5e;
         --good: #9be564;
         --warn: #f2c94c;
-        --edge: rgba(142, 138, 128, 0.45);
-        --grid-dot: #26251f;
-        --selection: rgba(255, 122, 26, 0.25);
+        --edge: rgba(155, 155, 155, 0.45);
+        --grid-dot: #262626;
+        --selection: rgba(255, 255, 255, 0.18);
         --line-mark: rgba(155, 229, 100, 0.1);
-        --overlay: rgba(23, 23, 20, 0.94);
+        --overlay: rgba(22, 22, 22, 0.94);
         --shadow: rgba(0, 0, 0, 0.55);
         --backdrop: rgba(0, 0, 0, 0.45);
-        --syn-comment: #5e5b54;
+        --syn-comment: #5f5f5f;
         --syn-literal: #b3b89a;
         --syn-ssa: #d4c49c;
-        --syn-symbol: #d9a577;
+        --syn-symbol: #b7a8e0;
         --syn-operation: #a4bfcc;
         /* Graph node kinds: module, function, operation, block, terminator. */
-        --node-0-fill: #1a1a17;
-        --node-0-stroke: #3a3833;
-        --node-0-text: #ece9e1;
-        --node-1-fill: #2a1c10;
-        --node-1-stroke: #ff7a1a;
-        --node-1-text: #ffd9bd;
-        --node-2-fill: #1d1d1a;
-        --node-2-stroke: #55524a;
-        --node-2-text: #ece9e1;
+        --node-0-fill: #1c1c1c;
+        --node-0-stroke: #3a3a3a;
+        --node-0-text: #e8e8e8;
+        --node-1-fill: #262626;
+        --node-1-stroke: #888888;
+        --node-1-text: #f5f5f5;
+        --node-2-fill: #1f1f1f;
+        --node-2-stroke: #555555;
+        --node-2-text: #e8e8e8;
         --node-3-fill: #24200f;
         --node-3-stroke: #f2c94c;
         --node-3-text: #f5e6ad;
@@ -70,39 +70,39 @@
           "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
       }
       :root[data-theme="light"] {
-        --bg: #f7f5ef;
-        --panel: #efece4;
-        --raised: #e6e2d8;
-        --line: #dcd7cb;
-        --fg: #1f1d19;
-        --dim: #625d53;
-        --faint: #a39e92;
-        --accent: #b34d0b;
-        --accent-bg: #fbe6d4;
+        --bg: #ffffff;
+        --panel: #f6f6f6;
+        --raised: #eeeeee;
+        --line: #e3e3e3;
+        --fg: #1a1a1a;
+        --dim: #6b6b6b;
+        --faint: #a8a8a8;
+        --accent: #1a1a1a;
+        --accent-bg: #f0f0f0;
         --err: #b8321f;
         --good: #3b7d1f;
         --warn: #8f6200;
-        --edge: rgba(98, 93, 83, 0.5);
-        --grid-dot: #dcd7cb;
-        --selection: rgba(179, 77, 11, 0.18);
+        --edge: rgba(107, 107, 107, 0.5);
+        --grid-dot: #e3e3e3;
+        --selection: rgba(0, 0, 0, 0.12);
         --line-mark: rgba(59, 125, 31, 0.1);
-        --overlay: rgba(247, 245, 239, 0.96);
-        --shadow: rgba(31, 29, 25, 0.18);
-        --backdrop: rgba(31, 29, 25, 0.25);
-        --syn-comment: #9a958a;
+        --overlay: rgba(255, 255, 255, 0.96);
+        --shadow: rgba(0, 0, 0, 0.15);
+        --backdrop: rgba(0, 0, 0, 0.2);
+        --syn-comment: #9a9a9a;
         --syn-literal: #5f6b2e;
         --syn-ssa: #85640c;
-        --syn-symbol: #a9521a;
+        --syn-symbol: #5b4a9a;
         --syn-operation: #2f5f7a;
-        --node-0-fill: #efece4;
-        --node-0-stroke: #c9c3b5;
-        --node-0-text: #1f1d19;
-        --node-1-fill: #fbe6d4;
-        --node-1-stroke: #b34d0b;
-        --node-1-text: #5a2a08;
+        --node-0-fill: #f6f6f6;
+        --node-0-stroke: #cfcfcf;
+        --node-0-text: #1a1a1a;
+        --node-1-fill: #ffffff;
+        --node-1-stroke: #6b6b6b;
+        --node-1-text: #1a1a1a;
         --node-2-fill: #ffffff;
-        --node-2-stroke: #b5afa1;
-        --node-2-text: #1f1d19;
+        --node-2-stroke: #bdbdbd;
+        --node-2-text: #1a1a1a;
         --node-3-fill: #fbf1d0;
         --node-3-stroke: #a67a00;
         --node-3-text: #5a4300;
@@ -307,7 +307,7 @@
       /* A bar along the bottom edge, scaled to the slowest pass. Declared after
          the current-step rule so its background shorthand keeps the bar. */
       #pass-strip button[style*="--time"] {
-        background-image: linear-gradient(var(--accent), var(--accent));
+        background-image: linear-gradient(var(--dim), var(--dim));
         background-position: left bottom;
         background-repeat: no-repeat;
         background-size: var(--time) 2px;
@@ -1081,12 +1081,13 @@
       }
       #mode {
         padding: 0 10px;
-        background: var(--accent);
-        color: var(--bg);
-        font-weight: 800;
+        background: var(--raised);
+        color: var(--fg);
+        font-weight: 600;
       }
       #mode.bad {
         background: var(--err);
+        color: var(--bg);
       }
       #diags {
         position: absolute;
@@ -1122,6 +1123,8 @@
         flex: 1 1 auto;
         overflow: auto;
         padding: 36px min(8vw, 96px) 56px;
+        font-size: 14px;
+        line-height: 1.6;
       }
       .docs-content {
         max-width: 760px;
@@ -1129,12 +1132,14 @@
       .docs-content h2 {
         margin: 0 0 8px;
         font-size: 24px;
+        font-weight: 600;
         color: var(--fg);
       }
       .docs-content h3 {
         margin: 30px 0 8px;
         color: var(--fg);
-        font-size: 14px;
+        font-size: 16px;
+        font-weight: 600;
       }
       .docs-content p,
       .docs-content li {
@@ -1145,13 +1150,15 @@
         padding-left: 20px;
       }
       .docs-content a {
-        color: var(--accent);
+        color: var(--fg);
+        text-underline-offset: 2px;
+      }
+      .docs-content code {
+        font: 0.9em var(--code);
       }
       .docs-kicker {
-        color: var(--accent);
-        font-size: 11px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
+        color: var(--dim);
+        font-size: 13px;
       }
       .sample-editor {
         margin: 14px 0 0;
@@ -1177,7 +1184,7 @@
       }
       .sample-actions span {
         color: var(--dim);
-        font-size: 11px;
+        font-size: 12px;
       }
       .legend {
         display: flex;
@@ -1185,7 +1192,7 @@
         gap: 8px 14px;
         margin: 12px 0 0;
         color: var(--dim);
-        font-size: 11px;
+        font-size: 12px;
       }
       .legend-item::before {
         content: "";
@@ -1212,37 +1219,17 @@
           padding: 24px 18px 40px;
         }
       }
-      /* App chrome (menu, dialogs) uses a plain neutral theme and a sans font,
-         so it reads apart from the editor, graph, and diff list. Overriding the
-         tokens on these roots re-themes everything inside them. */
+      /* App chrome (menu, passes, status, dialogs) uses the plain sans font;
+         the editor, graph, and diff list keep the monospace one. */
       #menu-handle,
       #topbar,
+      #pass-strip,
+      #status,
+      #docs-view,
       dialog {
-        --bg: #161616;
-        --panel: #1c1c1c;
-        --raised: #242424;
-        --line: #2e2e2e;
-        --fg: #e8e8e8;
-        --dim: #9b9b9b;
-        --faint: #5c5c5c;
-        --accent: #e8e8e8;
-        --accent-bg: #2a2a2a;
-        --overlay: rgba(22, 22, 22, 0.94);
         --mono: var(--ui);
         font-family: var(--ui);
         letter-spacing: normal;
-      }
-      :root[data-theme="light"] :is(#menu-handle, #topbar, dialog) {
-        --bg: #ffffff;
-        --panel: #f6f6f6;
-        --raised: #eeeeee;
-        --line: #e3e3e3;
-        --fg: #1a1a1a;
-        --dim: #6b6b6b;
-        --faint: #a8a8a8;
-        --accent: #1a1a1a;
-        --accent-bg: #f0f0f0;
-        --overlay: rgba(255, 255, 255, 0.94);
       }
       :root {
         --ui:

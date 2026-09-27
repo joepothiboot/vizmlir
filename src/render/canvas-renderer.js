@@ -8,11 +8,11 @@ function readTheme() {
   const css = getComputedStyle(document.documentElement);
   const v = (name, fallback) => css.getPropertyValue(name).trim() || fallback;
   return {
-    background: v("--bg", "#0f0f0d"),
-    gridDot: v("--grid-dot", "#26251f"),
-    edge: v("--edge", "rgba(142,138,128,0.45)"),
-    dim: v("--dim", "#8e8a80"),
-    selected: v("--accent", "#ff7a1a"),
+    background: v("--bg", "#161616"),
+    gridDot: v("--grid-dot", "#262626"),
+    edge: v("--edge", "rgba(155,155,155,0.45)"),
+    dim: v("--dim", "#9b9b9b"),
+    selected: v("--accent", "#e8e8e8"),
     added: v("--good", "#9be564"),
     changed: v("--warn", "#f2c94c"),
     kinds: Object.fromEntries(
