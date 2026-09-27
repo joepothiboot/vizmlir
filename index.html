@@ -626,7 +626,8 @@
       }
       .palette-trigger {
         display: flex;
-        flex: 1 1 auto;
+        /* Shrink before the bar wraps onto a second row. */
+        flex: 1 1 180px;
         align-items: center;
         gap: 10px;
         max-width: 460px;
@@ -637,6 +638,14 @@
         color: var(--dim);
         white-space: nowrap;
         border-radius: 8px;
+      }
+      .palette-trigger kbd {
+        flex: 0 0 auto;
+      }
+      .palette-trigger span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       .icon-btn {
         width: 26px;
