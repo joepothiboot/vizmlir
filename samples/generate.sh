@@ -23,10 +23,13 @@ opt tiling.after.mlir matmul.mlir \
   -transform-preload-library='transform-library-paths=tile-matmul.transform.mlir' \
   -transform-interpreter -canonicalize
 
-# Pass traces.
-opt lowering.trace.txt matmul.mlir \
+# Pass traces. The lowering trace also carries a -mlir-timing report and, from
+# /usr/bin/time (BSD -l or GNU -v), the process's peak memory.
+if [[ "$(uname)" == Darwin ]]; then TIME_FLAG=-l; else TIME_FLAG=-v; fi
+/usr/bin/time "$TIME_FLAG" "$MLIR_OPT" matmul.mlir "${COMMON[@]}" \
   -pass-pipeline='builtin.module(func.func(linalg-generalize-named-ops,linalg-fuse-elementwise-ops,canonicalize),one-shot-bufferize{bufferize-function-boundaries},func.func(convert-linalg-to-loops,canonicalize,cse))' \
-  -mlir-print-ir-after-all -mlir-print-ir-module-scope
+  -mlir-print-ir-after-all -mlir-print-ir-module-scope -mlir-timing \
+  > "$OUT/lowering.trace.txt" 2>&1 || true
 opt failed-transform.trace.txt matmul.mlir \
   -pass-pipeline='builtin.module(transform-preload-library{transform-library-paths=tile-wrong-op.transform.mlir},canonicalize,cse,transform-interpreter)' \
   -mlir-print-ir-after-all -mlir-print-ir-module-scope

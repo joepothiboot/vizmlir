@@ -247,6 +247,26 @@ module {
 }
 
 
+===-------------------------------------------------------------------------===
+                         ... Execution time report ...
+===-------------------------------------------------------------------------===
+  Total Execution Time: 0.0193 seconds
+
+  ----Wall Time----  ----Name----
+    0.0009 (  4.6%)  Parser
+    0.0103 ( 53.1%)  'func.func' Pipeline
+    0.0003 (  1.7%)    LinalgGeneralizeNamedOpsPass
+    0.0015 (  7.7%)    LinalgElementwiseOpFusionPass
+    0.0001 (  0.3%)    CanonicalizerPass
+    0.0014 (  7.4%)  OneShotBufferizePass
+    0.0047 ( 24.5%)  'func.func' Pipeline
+    0.0009 (  4.6%)    ConvertLinalgToLoopsPass
+    0.0003 (  1.6%)    CanonicalizerPass
+    0.0000 (  0.1%)    CSEPass
+    0.0000 (  0.0%)      (A) DominanceInfo
+    0.0000 (  0.1%)  Output
+    0.0019 ( 10.0%)  Rest
+    0.0193 (100.0%)  Total
 module {
   func.func @dense(%arg0: memref<128x256xf32, strided<[?, ?], offset: ?>>, %arg1: memref<256x64xf32, strided<[?, ?], offset: ?>>, %arg2: memref<64xf32, strided<[?], offset: ?>>) -> memref<128x64xf32> {
     %c256 = arith.constant 256 : index
@@ -286,3 +306,21 @@ module {
   }
 }
 
+        0.05 real         0.03 user         0.01 sys
+            41074688  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                3393  page reclaims
+                 127  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   0  voluntary context switches
+                 263  involuntary context switches
+           580593611  instructions retired
+           160377968  cycles elapsed
+             5866168  peak memory footprint

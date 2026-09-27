@@ -1,0 +1,81 @@
+// -----// IR Dump After SymbolDCEPass: symbol-dce //----- //
+module {
+  func.func @f(%arg0: i32) -> i32 {
+    %c0_i32 = arith.constant 0 : i32
+    %0 = arith.addi %arg0, %c0_i32 : i32
+    %1 = arith.addi %arg0, %c0_i32 : i32
+    %2 = arith.muli %0, %1 : i32
+    return %2 : i32
+  }
+  func.func @g(%arg0: i32) -> i32 {
+    %c1_i32 = arith.constant 1 : i32
+    %0 = arith.muli %arg0, %c1_i32 : i32
+    return %0 : i32
+  }
+}
+
+
+// -----// IR Dump After CSEPass: cse //----- //
+func.func @f(%arg0: i32) -> i32 {
+  %c0_i32 = arith.constant 0 : i32
+  %0 = arith.addi %arg0, %c0_i32 : i32
+  %1 = arith.muli %0, %0 : i32
+  return %1 : i32
+}
+
+// -----// IR Dump After CanonicalizerPass: canonicalize{cse-between-iterations=false    max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true} //----- //
+func.func @f(%arg0: i32) -> i32 {
+  %0 = arith.muli %arg0, %arg0 : i32
+  return %0 : i32
+}
+
+// -----// IR Dump After CSEPass: cse //----- //
+func.func @f(%arg0: i32) -> i32 {
+  %0 = arith.muli %arg0, %arg0 : i32
+  return %0 : i32
+}
+
+// -----// IR Dump After CSEPass: cse //----- //
+func.func @g(%arg0: i32) -> i32 {
+  %c1_i32 = arith.constant 1 : i32
+  %0 = arith.muli %arg0, %c1_i32 : i32
+  return %0 : i32
+}
+
+// -----// IR Dump After CanonicalizerPass: canonicalize{cse-between-iterations=false    max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true} //----- //
+func.func @g(%arg0: i32) -> i32 {
+  return %arg0 : i32
+}
+
+// -----// IR Dump After CSEPass: cse //----- //
+func.func @g(%arg0: i32) -> i32 {
+  return %arg0 : i32
+}
+
+===-------------------------------------------------------------------------===
+                         ... Execution time report ...
+===-------------------------------------------------------------------------===
+  Total Execution Time: 0.0021 seconds
+
+  ----Wall Time----  ----Name----
+    0.0002 ( 11.5%)  Parser
+    0.0000 (  1.0%)  SymbolDCEPass
+    0.0010 ( 49.6%)  'func.func' Pipeline
+    0.0000 (  0.8%)    CSEPass
+    0.0000 (  0.0%)      (A) DominanceInfo
+    0.0000 (  1.5%)    CanonicalizerPass
+    0.0000 (  0.1%)    CSEPass
+    0.0000 (  0.0%)      (A) DominanceInfo
+    0.0000 (  0.7%)  Output
+    0.0008 ( 36.9%)  Rest
+    0.0021 (100.0%)  Total
+module {
+  func.func @f(%arg0: i32) -> i32 {
+    %0 = arith.muli %arg0, %arg0 : i32
+    return %0 : i32
+  }
+  func.func @g(%arg0: i32) -> i32 {
+    return %arg0 : i32
+  }
+}
+

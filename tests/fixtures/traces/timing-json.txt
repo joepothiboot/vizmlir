@@ -1,0 +1,26 @@
+[
+{"wall": {"duration":   0.0002, "percentage":  57.6}, "name": "Parser", "passes": [
+{}]},
+{"wall": {"duration":   0.0000, "percentage":  10.9}, "name": "'func.func' Pipeline", "passes": [
+  {"wall": {"duration":   0.0000, "percentage":   3.9}, "name": "CSEPass", "passes": [
+    {"wall": {"duration":   0.0000, "percentage":   0.1}, "name": "(A) DominanceInfo", "passes": [
+    {}]},
+  {}]},
+  {"wall": {"duration":   0.0000, "percentage":   6.8}, "name": "CanonicalizerPass", "passes": [
+  {}]},
+{}]},
+{"wall": {"duration":   0.0000, "percentage":   6.9}, "name": "Output", "passes": [
+{}]},
+{"wall": {"duration":   0.0001, "percentage":  23.2}, "name": "Rest"},
+{"wall": {"duration":   0.0004, "percentage": 100.0}, "name": "Total"}
+]
+module {
+  func.func @f(%arg0: i32) -> i32 {
+    %0 = arith.muli %arg0, %arg0 : i32
+    return %0 : i32
+  }
+  func.func @g(%arg0: i32) -> i32 {
+    return %arg0 : i32
+  }
+}
+
