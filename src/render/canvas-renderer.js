@@ -29,11 +29,12 @@ function readTheme() {
 }
 
 export class CanvasRenderer {
-  constructor(canvas, { onSelect = null } = {}) {
+  constructor(canvas, { onSelect = null, onViewChange = null } = {}) {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d", { alpha: false, desynchronized: true });
     this.theme = readTheme();
     this.onSelect = onSelect;
+    this.onViewChange = onViewChange;
 
     this.camera = { x: 0, y: 0, scale: 1 };
     this.snapshot = null;
@@ -109,6 +110,108 @@ export class CanvasRenderer {
     this.camera.y = this.height / 2 - ((minY + maxY) / 2) * this.camera.scale;
   }
 
+  /** Zoom by `factor` around a point in canvas pixels (default: centre). */
+  zoomBy(factor, mx = this.width / 2, my = this.height / 2) {
+    const next = Math.min(4, Math.max(0.05, this.camera.scale * factor));
+    const k = next / this.camera.scale;
+    this.camera.x = mx - (mx - this.camera.x) * k;
+    this.camera.y = my - (my - this.camera.y) * k;
+    this.camera.scale = next;
+    this.requestDraw();
+  }
+
+  /** Render the whole graph (not just the view) to a PNG blob. */
+  exportPNG({ scale = 2, padding = 32 } = {}) {
+    const s = this.snapshot;
+    if (!s || s.nodeCount === 0) return Promise.resolve(null);
+    const [minX, minY, maxX, maxY] = s.bounds;
+    const width = maxX - minX + padding * 2;
+    const height = maxY - minY + padding * 2;
+    // Browsers cap canvas size; shrink very large graphs instead of failing.
+    const pixelScale = Math.min(scale, 8000 / width, 8000 / height);
+    const out = document.createElement("canvas");
+    out.width = Math.max(1, Math.round(width * pixelScale));
+    out.height = Math.max(1, Math.round(height * pixelScale));
+
+    const saved = {
+      ctx: this.ctx,
+      width: this.width,
+      height: this.height,
+      dpr: this.dpr,
+      camera: this.camera,
+      selected: this.selected,
+    };
+    Object.assign(this, {
+      ctx: out.getContext("2d"),
+      width,
+      height,
+      dpr: pixelScale,
+      camera: { x: padding - minX, y: padding - minY, scale: 1 },
+      selected: -1,
+      exporting: true,
+    });
+    try {
+      this.draw();
+    } finally {
+      Object.assign(this, saved, { exporting: false });
+      this.requestDraw();
+    }
+    return new Promise((resolve) => out.toBlob(resolve, "image/png"));
+  }
+
+  /** The whole graph as a standalone SVG document string. */
+  exportSVG({ padding = 32 } = {}) {
+    const s = this.snapshot;
+    if (!s || s.nodeCount === 0) return null;
+    const { xywh, edges } = s;
+    const t = this.theme;
+    const [minX, minY, maxX, maxY] = s.bounds;
+    const w = maxX - minX + padding * 2;
+    const h = maxY - minY + padding * 2;
+    const esc = (text) =>
+      text.replace(
+        /[&<>"]/g,
+        (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c],
+      );
+    const out = [
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX - padding} ${minY - padding} ${w} ${h}" width="${w}" height="${h}" font-family='${MONO}' font-size="12">`,
+      `<rect x="${minX - padding}" y="${minY - padding}" width="${w}" height="${h}" fill="${t.background}"/>`,
+      `<g fill="none" stroke="${t.edge}" stroke-width="1">`,
+    ];
+    for (let i = 0; i < s.edgeCount; i++) {
+      const a = edges[i * STRIDE.EDGE] * STRIDE.NODE_XYWH;
+      const b = edges[i * STRIDE.EDGE + 1] * STRIDE.NODE_XYWH;
+      const x1 = xywh[a] + xywh[a + 2];
+      const y1 = xywh[a + 1] + xywh[a + 3] / 2;
+      const x2 = xywh[b];
+      const y2 = xywh[b + 1] + xywh[b + 3] / 2;
+      const mid = (x1 + x2) / 2;
+      out.push(
+        `<path d="M${x1} ${y1}C${mid} ${y1} ${mid} ${y2} ${x2} ${y2}"/>`,
+      );
+    }
+    out.push("</g>");
+    for (let i = 0; i < s.nodeCount; i++) {
+      const o = i * STRIDE.NODE_XYWH;
+      const [x, y, nw, nh] = [xywh[o], xywh[o + 1], xywh[o + 2], xywh[o + 3]];
+      const style = t.kinds[s.kindOf(i)] ?? t.kinds[2];
+      const mark = this.marks.get(i);
+      const r = Math.min(6, nh / 2);
+      out.push(
+        `<rect x="${x}" y="${y}" width="${nw}" height="${nh}" rx="${r}" fill="${style.fill}" stroke="${mark ? t[mark] : style.stroke}" stroke-width="${mark ? 2 : 1.25}"/>`,
+        // A nested <svg> clips long labels to the node, like the canvas does.
+        `<svg x="${x + 6}" y="${y}" width="${Math.max(0, nw - 12)}" height="${nh}" overflow="hidden"><text x="4" y="${nh / 2}" dominant-baseline="central" fill="${style.text}">${esc(s.labelOf(i))}</text></svg>`,
+      );
+      if (mark)
+        out.push(
+          `<circle cx="${x + nw}" cy="${y}" r="7" fill="${t[mark]}"/>`,
+          `<text x="${x + nw}" y="${y}" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="800" fill="${t.background}">${BADGE[mark]}</text>`,
+        );
+    }
+    out.push("</svg>");
+    return out.join("\n");
+  }
+
   requestDraw() {
     if (this._raf) return;
     this._raf = requestAnimationFrame(() => {
@@ -122,7 +225,10 @@ export class CanvasRenderer {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = this.theme.background;
     ctx.fillRect(0, 0, this.width, this.height);
-    this.#drawGrid();
+    if (!this.exporting) {
+      this.#drawGrid();
+      this.onViewChange?.(this.camera.scale);
+    }
 
     const s = this.snapshot;
     if (!s || s.nodeCount === 0) {
@@ -313,13 +419,7 @@ export class CanvasRenderer {
         const rect = c.getBoundingClientRect();
         const mx = e.clientX - rect.left;
         const my = e.clientY - rect.top;
-        const factor = Math.exp(-e.deltaY * 0.0015);
-        const next = Math.min(4, Math.max(0.05, this.camera.scale * factor));
-        const k = next / this.camera.scale;
-        this.camera.x = mx - (mx - this.camera.x) * k;
-        this.camera.y = my - (my - this.camera.y) * k;
-        this.camera.scale = next;
-        this.requestDraw();
+        this.zoomBy(Math.exp(-e.deltaY * 0.0015), mx, my);
       },
       { passive: false },
     );

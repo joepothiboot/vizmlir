@@ -4,6 +4,15 @@ import { ABI_VERSION, STATUS } from "./wasm/abi.js";
 import { copySnapshot, diffSnapshots } from "./diff.js";
 import { bindHighlighting } from "./mlir-highlight.js";
 import { CommandPalette } from "./palette.js";
+import { kv, sessionFromFile, sessions, sessionToFile } from "./storage.js";
+import { canWatchFiles, FileWatcher } from "./watch.js";
+import {
+  diffRecords,
+  diffToJSON,
+  diffToMarkdown,
+  download,
+  slug,
+} from "./export.js";
 import {
   baselineFor,
   describeEvent,
@@ -49,15 +58,19 @@ const splitToggle = document.getElementById("split-toggle");
 const sourceName = document.getElementById("source-name");
 const diffTitle = document.getElementById("diff-title");
 const helpDialog = document.getElementById("help");
+const zoomLevel = document.getElementById("zoom-level");
 const TABS = [
   { tab: baselineTitle, textarea: baseline },
   { tab: currentTitle, textarea: input },
 ];
 
 let trace = null;
+let traceText = "";
 let traceNote = "";
 let traceIndex = -1;
 let diffRows = [];
+let diffBefore = null;
+let diffAfter = null;
 let diffCursor = -1;
 let traceDiffTitle = "";
 
@@ -71,6 +84,9 @@ const renderer = new CanvasRenderer(canvas, {
           (parent < 0 ? "" : ` · parent ${snap.labelOf(parent)}`);
     syncDiffSelection(index);
     markSourceLine(index);
+  },
+  onViewChange(scale) {
+    zoomLevel.textContent = `${Math.round(scale * 100)}%`;
   },
 });
 
@@ -125,6 +141,8 @@ function renderDiff(rows, before, after) {
   }
 
   diffRows = rows;
+  diffBefore = before;
+  diffAfter = after;
   diffCursor = -1;
   diffList.replaceChildren(
     ...rows.map((row, index) => {
@@ -184,7 +202,11 @@ function focusChange(index) {
 }
 
 function run() {
+  scheduleAutosave();
   if (isPassTrace(input.value)) {
+    // Files and watched files load traces directly; this path is a paste.
+    sourceName.textContent = "pasted trace";
+    sourceName.title = sourceName.textContent;
     loadTrace(input.value);
     return;
   }
@@ -220,7 +242,9 @@ function run() {
   );
 }
 
-function loadTrace(text) {
+function loadTrace(text, { keepIndex = false } = {}) {
+  const previousIndex = traceIndex;
+  traceText = text;
   trace = parsePassTrace(text);
   if (!trace.events.length) {
     clearTrace();
@@ -248,7 +272,13 @@ function loadTrace(text) {
   );
   passStrip.hidden = false;
   const firstFailure = trace.events.findIndex((event) => event.failed);
-  selectEvent(firstFailure >= 0 ? firstFailure : 0);
+  selectEvent(
+    keepIndex && previousIndex >= 0
+      ? Math.min(previousIndex, trace.events.length - 1)
+      : firstFailure >= 0
+        ? firstFailure
+        : 0,
+  );
 }
 
 function selectEvent(index) {
@@ -288,6 +318,7 @@ function selectEvent(index) {
 
 function clearTrace() {
   trace = null;
+  traceText = "";
   traceNote = "";
   traceIndex = -1;
   traceDiffTitle = "";
@@ -327,8 +358,6 @@ function updateRoute() {
 }
 
 let timer = 0;
-baseline.value = SAMPLE;
-input.value = SAMPLE.replace("linalg.fill", "linalg.fill_relu");
 docsSample.value = SAMPLE;
 bindHighlighting(baseline, baselineHighlight);
 bindHighlighting(input, editorHighlight);
@@ -346,6 +375,13 @@ function fitGraph() {
   renderer.requestDraw();
 }
 document.getElementById("fit")?.addEventListener("click", fitGraph);
+document.getElementById("zoom-fit").addEventListener("click", fitGraph);
+document
+  .getElementById("zoom-in")
+  .addEventListener("click", () => renderer.zoomBy(1.25));
+document
+  .getElementById("zoom-out")
+  .addEventListener("click", () => renderer.zoomBy(0.8));
 
 // ---- Source tabs -----------------------------------------------------------
 
@@ -505,6 +541,19 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
     ["Switch baseline / current", "t", toggleTab],
     ["Toggle split sources", "s", toggleSplit],
     ["Load sample", "", loadSample],
+    ["Sessions: save, open, import", "", openSessions],
+    ["Download session .json", "", downloadSession],
+    ["Export graph as PNG", "", exportPNG],
+    ["Export graph as SVG", "", exportSVG],
+    ["Export diff as Markdown", "", () => exportDiff("md")],
+    ["Export diff as JSON", "", () => exportDiff("json")],
+    ...(canWatchFiles
+      ? [
+          watcher.watching
+            ? ["Stop watching file", "", stopWatching]
+            : ["Watch a file for changes…", "", pickWatch],
+        ]
+      : []),
     ["Switch light / dark theme", "shift L", toggleTheme],
     ["Open docs", "", () => (window.location.hash = "#/docs")],
     ["Keyboard shortcuts", "?", () => helpDialog.showModal()],
@@ -537,6 +586,9 @@ function isTyping(target) {
 
 const WORKSPACE_KEYS = {
   f: fitGraph,
+  "+": () => renderer.zoomBy(1.25),
+  "=": () => renderer.zoomBy(1.25),
+  "-": () => renderer.zoomBy(0.8),
   j: () => focusChange(diffCursor + 1),
   k: () => focusChange(diffCursor < 0 ? -1 : diffCursor - 1),
   t: toggleTab,
@@ -582,9 +634,15 @@ fileInput.addEventListener("change", async () => {
   fileInput.value = "";
   if (!file) return;
   const text = await file.text();
+  window.location.hash = "#/";
+  const session = file.name.endsWith(".json") ? sessionFromFile(text) : null;
+  if (session) {
+    sessionsDialog.close();
+    applyState(session.state);
+    return;
+  }
   sourceName.textContent = file.name;
   sourceName.title = file.name;
-  window.location.hash = "#/";
   if (isPassTrace(text)) {
     loadTrace(text);
     return;
@@ -602,13 +660,296 @@ function loadSample() {
   input.value = SAMPLE.replace("linalg.fill", "linalg.fill_relu");
   baseline.dispatchEvent(new Event("input"));
   input.dispatchEvent(new Event("input"));
-  window.location.hash = "#/";
+  clearTimeout(timer);
   run();
 }
-document.getElementById("load-sample")?.addEventListener("click", loadSample);
+document.getElementById("load-sample")?.addEventListener("click", () => {
+  loadSample();
+  window.location.hash = "#/";
+});
+
+// ---- Workspace state (autosave, sessions) --------------------------------
+
+function getState() {
+  return {
+    sourceName: sourceName.textContent,
+    trace: traceText || null,
+    traceIndex,
+    baseline: traceText ? "" : baseline.value,
+    current: traceText ? "" : input.value,
+    tab:
+      currentTitle.getAttribute("aria-selected") === "true"
+        ? "current"
+        : "baseline",
+    split: sourcePane.classList.contains("split"),
+  };
+}
+
+function applyState(state) {
+  clearTrace();
+  sourceName.textContent = state.sourceName || "untitled";
+  sourceName.title = sourceName.textContent;
+  sourcePane.classList.toggle("split", !!state.split);
+  splitToggle.setAttribute("aria-pressed", String(!!state.split));
+  if (state.trace && isPassTrace(state.trace)) {
+    traceIndex = state.traceIndex ?? -1;
+    loadTrace(state.trace, { keepIndex: true });
+  } else {
+    baseline.value = state.baseline ?? "";
+    input.value = state.current ?? "";
+    baseline.dispatchEvent(new Event("input"));
+    input.dispatchEvent(new Event("input"));
+    clearTimeout(timer);
+    run();
+  }
+  showTab(state.tab === "baseline" ? baseline : input);
+}
+
+let autosaveTimer = 0;
+let restored = false;
+function scheduleAutosave() {
+  if (!restored) return;
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(() => kv.set("autosave", getState()), 800);
+}
+
+const sessionsDialog = document.getElementById("sessions");
+const sessionList = document.getElementById("session-list");
+const sessionName = document.getElementById("session-name");
+
+async function renderSessions() {
+  const list = await sessions.list();
+  if (!list.length) {
+    const empty = document.createElement("li");
+    empty.className = "empty";
+    empty.textContent = "No saved sessions yet.";
+    sessionList.replaceChildren(empty);
+    return;
+  }
+  sessionList.replaceChildren(
+    ...list.map((session) => {
+      const item = document.createElement("li");
+      const meta = document.createElement("span");
+      meta.className = "meta";
+      const name = document.createElement("span");
+      name.className = "name";
+      name.textContent = session.name;
+      const when = document.createElement("span");
+      when.className = "when";
+      when.textContent =
+        new Date(session.savedAt).toLocaleString() +
+        (session.state.trace ? " · trace" : "");
+      meta.append(name, when);
+      const actions = [
+        [
+          "Open",
+          () => {
+            sessionsDialog.close();
+            goToWorkspace();
+            applyState(session.state);
+          },
+        ],
+        [
+          "Download",
+          () =>
+            download(
+              `${slug(session.name)}.vizmlir.json`,
+              sessionToFile(session.name, session.state),
+              "application/json",
+            ),
+        ],
+        [
+          "Delete",
+          async () => {
+            await sessions.delete(session.id);
+            renderSessions();
+          },
+        ],
+      ].map(([label, action]) => {
+        const button = document.createElement("button");
+        button.textContent = label;
+        button.setAttribute("aria-label", `${label} ${session.name}`);
+        button.addEventListener("click", action);
+        return button;
+      });
+      item.append(meta, ...actions);
+      return item;
+    }),
+  );
+}
+
+function openSessions() {
+  sessionName.value = sourceName.textContent.replace(/ ●$/, "");
+  renderSessions();
+  sessionsDialog.showModal();
+  sessionName.select();
+}
+
+document
+  .getElementById("session-save")
+  .addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const name = sessionName.value.trim();
+    if (!name) return;
+    await sessions.put({
+      id: crypto.randomUUID(),
+      name,
+      savedAt: Date.now(),
+      state: getState(),
+    });
+    renderSessions();
+  });
+
+function downloadSession() {
+  const name = sourceName.textContent.replace(/ ●$/, "");
+  download(
+    `${slug(name)}.vizmlir.json`,
+    sessionToFile(name, getState()),
+    "application/json",
+  );
+}
+
+document
+  .getElementById("sessions-open")
+  .addEventListener("click", openSessions);
+document
+  .getElementById("session-import")
+  .addEventListener("click", () => fileInput.click());
+document
+  .getElementById("session-download")
+  .addEventListener("click", downloadSession);
+
+// ---- Export ----------------------------------------------------------------
+
+function exportStem() {
+  const name = sourceName.textContent
+    .replace(/ ●$/, "")
+    .replace(/\.[^.]+$/, "");
+  return slug(trace ? `${name}-pass-${traceIndex + 1}` : name);
+}
+
+async function exportPNG() {
+  const blob = await renderer.exportPNG();
+  if (blob) download(`${exportStem()}.png`, blob);
+}
+
+function exportSVG() {
+  const svg = renderer.exportSVG();
+  if (svg) download(`${exportStem()}.svg`, svg, "image/svg+xml");
+}
+
+function exportDiff(format) {
+  const title = `${sourceName.textContent.replace(/ ●$/, "")} · ${diffTitle.textContent}`;
+  const records = diffRecords(diffRows, (row, parent) =>
+    parentLabel(row.after ? diffAfter : diffBefore, parent),
+  );
+  if (format === "md")
+    download(
+      `${exportStem()}-diff.md`,
+      diffToMarkdown(title, records),
+      "text/markdown",
+    );
+  else
+    download(
+      `${exportStem()}-diff.json`,
+      diffToJSON(title, records),
+      "application/json",
+    );
+}
+
+document.getElementById("export-png").addEventListener("click", exportPNG);
+document.getElementById("export-svg").addEventListener("click", exportSVG);
+document
+  .getElementById("export-md")
+  .addEventListener("click", () => exportDiff("md"));
+document
+  .getElementById("export-json")
+  .addEventListener("click", () => exportDiff("json"));
+
+// ---- Watch a file ------------------------------------------------------------
+
+const watchButton = document.getElementById("watch");
+const watchLive = document.getElementById("watch-live");
+const watchResume = document.getElementById("watch-resume");
+
+const watcher = new FileWatcher((change, error) => {
+  if (!change) {
+    updateWatchUi();
+    setStatus(`stopped watching: ${error?.message ?? "file unavailable"}`, {
+      error: true,
+    });
+    return;
+  }
+  sourceName.textContent = change.name;
+  sourceName.title = `${change.name} · watching`;
+  goToWorkspace();
+  if (isPassTrace(change.text)) {
+    loadTrace(change.text, { keepIndex: !!trace });
+  } else {
+    clearTrace();
+    input.value = change.text;
+    input.dispatchEvent(new Event("input"));
+    clearTimeout(timer);
+    run();
+  }
+  statusEl.textContent = `reloaded ${new Date().toLocaleTimeString()} · ${statusEl.textContent}`;
+});
+
+function updateWatchUi() {
+  watchButton.hidden = !canWatchFiles || watcher.watching;
+  watchLive.hidden = !watcher.watching;
+  if (watcher.watching) {
+    watchResume.hidden = true;
+    watchLive.title = `Watching ${watcher.handle.name} · click to stop`;
+  }
+}
+
+async function pickWatch() {
+  const handle = await watcher.pick();
+  if (handle) await kv.set("watch-handle", handle);
+  updateWatchUi();
+}
+
+function stopWatching() {
+  watcher.stop();
+  kv.delete("watch-handle");
+  updateWatchUi();
+}
+
+watchButton.addEventListener("click", pickWatch);
+watchLive.addEventListener("click", stopWatching);
+
+// Browsers forget file permission on reload; offer a one-click resume.
+async function restoreWatch() {
+  if (!canWatchFiles) return;
+  const handle = await kv.get("watch-handle");
+  if (!handle) return;
+  if (!(await FileWatcher.needsPermission(handle))) {
+    await watcher.start(handle);
+    updateWatchUi();
+    return;
+  }
+  watchResume.textContent = `Resume watching ${handle.name}`;
+  watchResume.hidden = false;
+  watchButton.hidden = true;
+  watchResume.onclick = async () => {
+    if (await FileWatcher.requestPermission(handle))
+      await watcher.start(handle);
+    else watchResume.hidden = true;
+    updateWatchUi();
+  };
+}
+
+// ---- Startup -------------------------------------------------------------------
 
 document.getElementById("abi").textContent = `wasm abi v${ABI_VERSION}`;
 showTab(input);
 window.addEventListener("hashchange", updateRoute);
 updateRoute();
-run();
+updateWatchUi();
+
+const saved = await kv.get("autosave");
+if (saved) applyState(saved);
+else loadSample();
+restored = true;
+restoreWatch();

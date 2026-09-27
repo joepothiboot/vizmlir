@@ -114,6 +114,10 @@
       * {
         box-sizing: border-box;
       }
+      /* Component display rules must never un-hide [hidden] elements. */
+      [hidden] {
+        display: none !important;
+      }
       html,
       body {
         margin: 0;
@@ -331,7 +335,7 @@
         display: none;
       }
       #source-pane.split .code-editor[hidden] {
-        display: block;
+        display: block !important;
       }
       #source-pane.split #baseline-panel {
         border-bottom: 1px solid var(--line);
@@ -471,6 +475,9 @@
         text-decoration: line-through;
       }
       .diff-hint {
+        display: flex;
+        align-items: center;
+        gap: 4px;
         padding: 4px 12px 12px;
         color: var(--dim);
         font-size: 11px;
@@ -541,6 +548,145 @@
       :root[data-theme="dark"] .icon-moon,
       :root[data-theme="light"] .icon-sun {
         display: none;
+      }
+      .live {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        border-color: var(--good);
+        color: var(--good);
+      }
+      .live .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--good);
+        animation: pulse 1.6s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        50% {
+          opacity: 0.3;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .live .dot {
+          animation: none;
+        }
+      }
+      #watch-resume {
+        border-color: var(--accent);
+      }
+      .graph-tools {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px;
+        background: var(--overlay);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        font-size: 11px;
+      }
+      .graph-tools button {
+        min-width: 26px;
+        height: 24px;
+        padding: 0 7px;
+        font-size: 11px;
+      }
+      #zoom-level {
+        min-width: 40px;
+        color: var(--dim);
+        text-align: center;
+      }
+      .tools-sep {
+        width: 1px;
+        height: 16px;
+        margin: 0 4px;
+        background: var(--line);
+      }
+      .link-btn {
+        padding: 0 4px;
+        border: 0;
+        background: transparent;
+        color: var(--dim);
+        font-size: 11px;
+      }
+      .link-btn:hover {
+        color: var(--accent);
+      }
+      #sessions {
+        width: min(560px, calc(100vw - 32px));
+        padding: 18px 20px;
+      }
+      #sessions h2 {
+        margin: 0 0 6px;
+        font-size: 14px;
+      }
+      .dialog-note {
+        margin: 0 0 14px;
+        color: var(--dim);
+        font-size: 11px;
+      }
+      .session-save {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .session-save input {
+        flex: 1;
+        min-width: 0;
+        padding: 5px 8px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--bg);
+        color: var(--fg);
+        font: inherit;
+      }
+      .session-save input:focus {
+        border-color: var(--accent);
+        outline: none;
+      }
+      #session-list {
+        max-height: 40vh;
+        margin: 12px 0;
+        padding: 0;
+        overflow: auto;
+        list-style: none;
+        border-top: 1px solid var(--line);
+      }
+      #session-list li {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      #session-list .meta {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        min-width: 0;
+      }
+      #session-list .name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #session-list .when,
+      #session-list .empty {
+        color: var(--dim);
+        font-size: 11px;
+      }
+      #session-list button {
+        padding: 2px 8px;
+        font-size: 11px;
+      }
+      .dialog-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
       }
       .line-mark {
         position: absolute;
@@ -840,7 +986,19 @@
         <h1>viz<span>mlir</span></h1>
         <span id="source-name" title="Loaded source">sample.mlir</span>
         <label class="btn" for="file">Open…</label>
-        <input id="file" type="file" accept=".mlir,.txt,.log" />
+        <input id="file" type="file" accept=".mlir,.txt,.log,.json" />
+        <button
+          id="watch"
+          hidden
+          title="Reload a file whenever it changes on disk"
+        >
+          Watch…
+        </button>
+        <button id="watch-resume" hidden></button>
+        <button id="watch-live" class="live" hidden title="Stop watching">
+          <span class="dot" aria-hidden="true"></span> live
+        </button>
+        <button id="sessions-open">Sessions</button>
         <button id="reparse">Compare</button>
         <button id="fit">Fit</button>
         <button id="palette-open" class="palette-trigger">
@@ -945,6 +1103,23 @@
           <div id="stage">
             <canvas id="canvas"></canvas>
             <div id="diags"></div>
+            <div class="graph-tools" role="toolbar" aria-label="Graph">
+              <button id="zoom-out" aria-label="Zoom out" title="Zoom out (-)">
+                −
+              </button>
+              <span id="zoom-level" aria-live="polite">100%</span>
+              <button id="zoom-in" aria-label="Zoom in" title="Zoom in (+)">
+                +
+              </button>
+              <button id="zoom-fit" title="Fit graph (f)">fit</button>
+              <span class="tools-sep" aria-hidden="true"></span>
+              <button id="export-png" title="Download the whole graph as PNG">
+                PNG
+              </button>
+              <button id="export-svg" title="Download the whole graph as SVG">
+                SVG
+              </button>
+            </div>
             <div class="graph-legend" aria-hidden="true">
               <span><b class="added">+</b> added</span>
               <span><b class="changed">~</b> modified</span>
@@ -958,7 +1133,22 @@
             </h2>
             <ul id="diff-list" role="listbox" aria-label="Changes"></ul>
             <div class="diff-hint">
-              <kbd>j</kbd> <kbd>k</kbd> step through changes
+              <span><kbd>j</kbd> <kbd>k</kbd> step through changes</span>
+              <span class="sp"></span>
+              <button
+                id="export-md"
+                class="link-btn"
+                title="Download diff as Markdown"
+              >
+                .md
+              </button>
+              <button
+                id="export-json"
+                class="link-btn"
+                title="Download diff as JSON"
+              >
+                .json
+              </button>
             </div>
           </aside>
         </main>
@@ -989,6 +1179,26 @@
         </div>
       </dialog>
 
+      <dialog id="sessions" aria-labelledby="sessions-title">
+        <h2 id="sessions-title">Sessions</h2>
+        <p class="dialog-note">
+          Saved in this browser only (IndexedDB). Nothing is uploaded. Your
+          workspace also autosaves and comes back after a reload.
+        </p>
+        <form id="session-save" class="session-save">
+          <label for="session-name">Name</label>
+          <input id="session-name" required maxlength="80" autocomplete="off" />
+          <button type="submit">Save current</button>
+        </form>
+        <ul id="session-list" aria-label="Saved sessions"></ul>
+        <div class="dialog-actions">
+          <button id="session-import">Import .json…</button>
+          <button id="session-download">Download current .json</button>
+          <span class="sp"></span>
+          <form method="dialog"><button>Close</button></form>
+        </div>
+      </dialog>
+
       <dialog id="help" aria-labelledby="help-title">
         <h2 id="help-title">Keyboard shortcuts</h2>
         <dl>
@@ -1000,6 +1210,8 @@
           <dd>Next / previous change</dd>
           <dt><kbd>f</kbd></dt>
           <dd>Fit graph to view</dd>
+          <dt><kbd>+</kbd> <kbd>-</kbd></dt>
+          <dd>Zoom graph in / out</dd>
           <dt><kbd>t</kbd></dt>
           <dd>Switch baseline / current tab</dd>
           <dt><kbd>s</kbd></dt>
@@ -1085,6 +1297,26 @@
               <span>Then change <code>linalg.fill</code> and compare.</span>
             </div>
           </div>
+
+          <h3>Keep it live, save it, share it</h3>
+          <ul>
+            <li>
+              <strong>Watch…</strong> (Chrome and Edge) reloads a file every
+              time it changes. Point it at <code>trace.txt</code>, re-run
+              <code>mlir-opt</code> in your terminal, and VizMLIR updates on the
+              same pass.
+            </li>
+            <li>
+              Your workspace autosaves in this browser.
+              <strong>Sessions</strong>
+              keeps named snapshots and imports or downloads them as
+              <code>.json</code> files. Nothing is uploaded.
+            </li>
+            <li>
+              Export the whole graph as PNG or SVG from the toolbar over the
+              graph, and the diff as Markdown or JSON from the diff pane.
+            </li>
+          </ul>
 
           <h3>How to read the visual</h3>
           <p>
