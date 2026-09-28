@@ -87,7 +87,12 @@ pub fn parse(src: &str, interner: &mut Interner, ast: &mut Ast) {
                 }
                 i += 1;
                 
-                if toks.get(i).is_some_and(|t| t.kind == Tok::Ident && text(t) == "loc") {
+                // `} loc(...)` and the trailing types of a region op (`} -> tensor<..>`,
+                // `} : (..) -> ..`) belong to the op that owns the region.
+                if toks
+                    .get(i)
+                    .is_some_and(|t| matches!(t.kind, Tok::Arrow | Tok::Colon) || (t.kind == Tok::Ident && text(t) == "loc"))
+                {
                     while i < toks.len() && !matches!(toks[i].kind, Tok::Newline | Tok::Eof) {
                         i += 1;
                     }
@@ -149,6 +154,13 @@ pub fn parse(src: &str, interner: &mut Interner, ast: &mut Ast) {
             }
         }
 
+        // Only `%a, %b:2 =` names results (and `#alias =` defines one); an `=`
+        // after anything else is inside the op, as in `scf.for %i = %c0 to ..`
+        // or `op {key = value}`.
+        let eq_at = eq_at.filter(|&n| {
+            (n == 1 && matches!(stmt[0].kind, Tok::Attr | Tok::Type))
+                || stmt[..n].iter().all(|t| matches!(t.kind, Tok::Ssa | Tok::Comma | Tok::Colon | Tok::Number))
+        });
         let (lhs, rhs) = match eq_at {
             Some(n) => (&stmt[..n], &stmt[n + 1..]),
             None => (&stmt[..0], &stmt[..]),
@@ -199,9 +211,12 @@ pub fn parse(src: &str, interner: &mut Interner, ast: &mut Ast) {
             line: head.line,
         });
 
+        // `%i = ..` inside an op (`scf.for %i = ..`, `iter_args(%acc = ..)`)
+        // defines a region argument rather than using a value.
+        let binds = |k: usize| rhs[k].kind == Tok::Ssa && rhs.get(k + 1).is_some_and(|t| t.kind == Tok::Equal);
         let operand_start = if kind == KIND_BLOCK { 0 } else { 1 };
-        for t in &rhs[operand_start.min(rhs.len())..] {
-            if t.kind != Tok::Ssa {
+        for (k, t) in rhs.iter().enumerate().skip(operand_start) {
+            if t.kind != Tok::Ssa || binds(k) {
                 continue;
             }
             let sym = interner.intern(text(t));
@@ -219,7 +234,8 @@ pub fn parse(src: &str, interner: &mut Interner, ast: &mut Ast) {
             }
         }
 
-        for t in lhs.iter().filter(|t| t.kind == Tok::Ssa) {
+        let bound = (0..rhs.len()).filter(|&k| binds(k)).map(|k| &rhs[k]);
+        for t in lhs.iter().filter(|t| t.kind == Tok::Ssa).chain(bound) {
             let sym = interner.intern(text(t));
             defs.insert(sym, node_idx);
         }
