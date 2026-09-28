@@ -125,7 +125,7 @@ let traceBuffers = null;
 // computed when first shown.
 let traceSymbols = null;
 // Imported kernel benchmark results, a baseline and a current run, each
-// { name, text, result } or null. Kept with the trace (and its live reloads)
+// { name, text, mock, result } or null; `mock` marks a sample's invented data. Kept with the trace (and its live reloads)
 // and saved with the session.
 let benchmarks = { baseline: null, current: null };
 
@@ -917,6 +917,7 @@ async function openSample(sample) {
   try {
     applyState(await loadSampleState(sample, fetchSampleText));
     statusEl.textContent = `loaded ${sample.title} · ${statusEl.textContent}`;
+    if (sample.benchmarks) openSymbols();
   } catch (error) {
     setStatus(`could not load sample: ${error.message}`, { error: true });
   }
@@ -931,7 +932,11 @@ sampleList.replaceChildren(
     title.textContent = sample.title;
     const kind = document.createElement("span");
     kind.className = "kind";
-    kind.textContent = sample.trace ? "pass trace" : "before / after";
+    kind.textContent = sample.benchmarks
+      ? "trace + mock benchmarks"
+      : sample.trace
+        ? "pass trace"
+        : "before / after";
     const blurb = document.createElement("span");
     blurb.className = "blurb";
     blurb.textContent = sample.blurb;
@@ -970,7 +975,7 @@ function getState() {
       ? Object.fromEntries(
           Object.entries(benchmarks).map(([slot, bench]) => [
             slot,
-            bench && { name: bench.name, text: bench.text },
+            bench && { name: bench.name, text: bench.text, mock: bench.mock },
           ]),
         )
       : null,
@@ -993,7 +998,7 @@ function applyState(state) {
     for (const slot of ["baseline", "current"]) {
       if (!trace || !saved?.[slot]) continue;
       try {
-        setBenchmarks(slot, saved[slot].name, saved[slot].text);
+        setBenchmarks(slot, saved[slot].name, saved[slot].text, saved[slot].mock);
       } catch {}
     }
   } else {
@@ -1607,6 +1612,7 @@ const symbolsUnmatched = document.getElementById("symbols-unmatched");
 const symbolsBenchError = document.getElementById("symbols-bench-error");
 const symbolsBenchClear = document.getElementById("symbols-bench-clear");
 const symbolsBenchFile = document.getElementById("symbols-bench-file");
+const symbolsMock = document.getElementById("symbols-mock");
 const symbolsMinChange = document.getElementById("symbols-min-change");
 const symbolsMinChangeOn = document.getElementById("symbols-min-change-on");
 const BENCH_DOCS =
@@ -1633,9 +1639,9 @@ function openSymbols() {
 }
 
 // Parses benchmark results into `slot` (baseline or current); throws on input
-// it cannot read.
-function setBenchmarks(slot, name, text) {
-  benchmarks[slot] = { name, text, result: parseBenchmarks(text) };
+// it cannot read. `mock` marks invented sample data.
+function setBenchmarks(slot, name, text, mock = false) {
+  benchmarks[slot] = { name, text, mock, result: parseBenchmarks(text) };
 }
 
 // Each imported run matched to symbols, and the per-symbol comparison, or
@@ -1716,7 +1722,7 @@ function renderSymbolsSummary() {
     const matched = entries.length - view.runs[slot].unmatched.length;
     facts.push([
       slot === "baseline" ? "Baseline benchmarks" : "Current benchmarks",
-      `${bench.name} (${format}, ${timeColumn}) · ` +
+      `${bench.name}${bench.mock ? " (mock data)" : ""} (${format}, ${timeColumn}) · ` +
         `${matched} of ${entries.length} kernels matched` +
         (skipped ? ` · ${skipped} row(s) without a name or time skipped` : ""),
     ]);
@@ -1748,6 +1754,7 @@ function renderSymbols() {
   const comparison = view?.comparison;
   const slots = ["baseline", "current"].filter((slot) => view?.runs[slot]);
   symbolsBenchClear.hidden = !view;
+  symbolsMock.hidden = !slots.some((slot) => benchmarks[slot].mock);
   symbolsMinChangeOn.parentElement.hidden = !view?.both;
   const unmatched = slots.flatMap((slot) =>
     view.runs[slot].unmatched.map((match) => ({ ...match, slot })),

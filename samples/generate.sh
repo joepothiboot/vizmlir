@@ -30,6 +30,13 @@ if [[ "$(uname)" == Darwin ]]; then TIME_FLAG=-l; else TIME_FLAG=-v; fi
   -pass-pipeline='builtin.module(func.func(linalg-generalize-named-ops,linalg-fuse-elementwise-ops,canonicalize),one-shot-bufferize{bufferize-function-boundaries},func.func(convert-linalg-to-loops,canonicalize,cse))' \
   -mlir-print-ir-after-all -mlir-print-ir-module-scope -mlir-timing \
   > "$OUT/lowering.trace.txt" 2>&1 || true
+# Two GPU kernels from outlining to PTX. The dump before outlining lets the
+# symbol history credit gpu-kernel-outlining with creating each kernel. Needs
+# an MLIR built with the NVPTX target. The benchmark CSVs that go with it
+# (gpu-kernels.*.mock.csv) are hand-written mock data, not generated here.
+opt gpu-kernels.trace.txt gpu-kernels.mlir \
+  -pass-pipeline='builtin.module(gpu-kernel-outlining,canonicalize,nvvm-attach-target{chip=sm_80},gpu.module(convert-gpu-to-nvvm),gpu-module-to-binary{format=isa})' \
+  -mlir-print-ir-before=gpu-kernel-outlining -mlir-print-ir-after-all -mlir-print-ir-module-scope
 opt failed-transform.trace.txt matmul.mlir \
   -pass-pipeline='builtin.module(transform-preload-library{transform-library-paths=tile-wrong-op.transform.mlir},canonicalize,cse,transform-interpreter)' \
   -mlir-print-ir-after-all -mlir-print-ir-module-scope
