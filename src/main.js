@@ -473,13 +473,11 @@ function scheduleRun() {
 }
 baseline.addEventListener("input", scheduleRun);
 input.addEventListener("input", scheduleRun);
-document.getElementById("reparse")?.addEventListener("click", run);
 
 function fitGraph() {
   renderer.fit();
   renderer.requestDraw();
 }
-document.getElementById("fit")?.addEventListener("click", fitGraph);
 document.getElementById("zoom-fit").addEventListener("click", fitGraph);
 document
   .getElementById("zoom-in")
@@ -656,7 +654,6 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
   }
   const actions = [
     ["Open file…", "", () => fileInput.click()],
-    ["Compare", "", run],
     ["Fit graph", "f", fitGraph],
     ["Switch baseline / current", "t", toggleTab],
     ["Toggle split sources", "s", toggleSplit],

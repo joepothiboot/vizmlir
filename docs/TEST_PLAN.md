@@ -80,7 +80,6 @@ the WASM fetch behave as they do on GitHub Pages.
 | V-44 | Rename SSA values only (`%0` → `%x`) | No changes reported                                                                                     | P0  |
 | V-45 | Status line                          | `N nodes · M edges · t ms`; a use of an undefined value adds `· 1 warning(s): undefined SSA value "%x"` | P1  |
 | V-46 | Typing debounce                      | Parsing runs about 140 ms after the last keystroke, not on every key                                    | P2  |
-| V-47 | **Compare** button                   | Re-runs immediately                                                                                     | P1  |
 
 ### 1.5 Error states
 
