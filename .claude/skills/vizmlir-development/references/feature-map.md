@@ -20,6 +20,7 @@ Where each user-facing feature lives. User-facing descriptions are in `README.md
 | Change ↔ source-line marker | main.js › Source line marker: `markSourceLine`, `positionLineMark` | — |
 | Pass traces (`-mlir-print-ir-*-all`) | `src/trace.js` (`isPassTrace`, `parsePassTrace`, `baselineFor`, `extractSymbolOp`); main.js: `loadTrace`, `selectEvent`, `clearTrace`, `renderDiagnostics` | `tests/unit/trace.test.js`, `tests/fixtures/traces/`, `docs/trace-format.md`, TEST_PLAN 1.6, 4.3 |
 | Pass timing and peak memory (`p`) | `src/timing.js` (`extractReports`, `matchTiming`, `timingToJSON`); main.js › Timing and memory: `setProfile`, `openTiming`, `renderTiming`, `exportTiming` | `tests/unit/timing.test.js`, `tests/fixtures/traces/timing-*.txt`, `timed-run.txt` |
+| Op counts per pass (`o`) | `src/opcount.js` (`countOps`, `opCountTable`, `opCountsToCSV`); `moduleStateAt` in `src/trace.js`; main.js › Op counts: `setViewCounts`, `computeTraceCounts`, `openOpCounts`, `renderOpCountTable`, `exportOpCounts` | `tests/unit/opcount.test.js` |
 | Live reload of a watched trace file | `src/watch.js` (`FileWatcher`, `canWatchFiles`, Chromium only); main.js › Watch a file: `pickWatch`, `stopWatching`, `restoreWatch` | — |
 | Command palette (⌘K, `/`) | `src/palette.js` (`CommandPalette`, `fuzzyScore`); items built in main.js › Command palette | `tests/unit/palette.test.js` |
 | Keyboard shortcuts and `?` help | main.js › Keyboard: `WORKSPACE_KEYS` and the global `keydown` handler; help dialog markup in `index.html` | — |

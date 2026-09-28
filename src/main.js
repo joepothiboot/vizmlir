@@ -2,6 +2,12 @@ import { MlirEngine } from "./wasm/bridge.js";
 import { CanvasRenderer } from "./render/canvas-renderer.js";
 import { ABI_VERSION, STATUS } from "./wasm/abi.js";
 import { copySnapshot, diffSnapshots } from "./diff.js";
+import {
+  countOps,
+  opCountsToCSV,
+  opCountTable,
+  totalOps,
+} from "./opcount.js";
 import { bindHighlighting } from "./mlir-highlight.js";
 import { CommandPalette } from "./palette.js";
 import { loadSampleState, RENAME_SAMPLE, SAMPLES } from "./samples.js";
@@ -20,6 +26,7 @@ import {
   baselineFor,
   describeEvent,
   isPassTrace,
+  moduleStateAt,
   parsePassTrace,
 } from "./trace.js";
 import {
@@ -61,6 +68,7 @@ const diffTitle = document.getElementById("diff-title");
 const helpDialog = document.getElementById("help");
 const zoomLevel = document.getElementById("zoom-level");
 const timingOpen = document.getElementById("timing-open");
+const opCountOpen = document.getElementById("opcount-open");
 const TABS = [
   { tab: baselineTitle, textarea: baseline },
   { tab: currentTitle, textarea: input },
@@ -79,6 +87,12 @@ let traceDiffTitle = "";
 // Timing and peak memory from the loaded trace or pasted log; `matches` links
 // trace events to timing rows.
 let profile = { timing: null, memory: null, matches: [] };
+// Op counts of the rendered baseline and current IR, and the text the graph
+// was parsed from (so its snapshot can be restored after other parses).
+let viewCounts = null;
+let renderedText = "";
+// Whole-module op counts for each trace event, computed when first shown.
+let traceCounts = null;
 
 const renderer = new CanvasRenderer(canvas, {
   onSelect(index, snap) {
@@ -279,6 +293,7 @@ function run() {
     const before = parse(baseline.value);
     if (before.status !== STATUS.OK) {
       setStatus(`baseline error: ${engine.statusText}`, { error: true });
+      setViewCounts(null);
       return;
     }
     beforeCopy = copySnapshot(before.snapshot);
@@ -297,11 +312,17 @@ function run() {
   if (after.status !== STATUS.OK) {
     setStatus(`current error: ${engine.statusText}`, { error: true });
     renderer.setSnapshot(null);
+    setViewCounts(null);
     return;
   }
 
   const snap = after.snapshot;
+  renderedText = current;
   renderer.setSnapshot(snap);
+  setViewCounts({
+    before: beforeCopy ? countOps(beforeCopy) : null,
+    after: countOps(snap),
+  });
   const diags = snap.diagnostics();
   const rows = diffSnapshots(beforeCopy, snap);
   renderDiff(rows, beforeCopy, snap);
@@ -318,6 +339,7 @@ function loadTrace(text, { keepIndex = false } = {}) {
   const previousIndex = traceIndex;
   traceText = text;
   trace = parsePassTrace(text);
+  traceCounts = null;
   if (!trace.events.length) {
     clearTrace();
     setStatus("no IR dumps found in trace", { error: true });
@@ -422,6 +444,7 @@ function selectEvent(index) {
 
 function clearTrace() {
   trace = null;
+  traceCounts = null;
   traceText = "";
   traceNote = "";
   traceIndex = -1;
@@ -666,6 +689,7 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
     ["Export diff as Markdown", "", () => exportDiff("md")],
     ["Export diff as JSON", "", () => exportDiff("json")],
     ["Show pass timing and memory", "p", openTiming],
+    ["Show op counts per pass", "o", openOpCounts],
     ...(canWatchFiles
       ? [
           watcher.watching
@@ -753,6 +777,7 @@ const WORKSPACE_KEYS = {
   t: toggleTab,
   s: toggleSplit,
   p: openTiming,
+  o: openOpCounts,
   "[": () => trace && traceIndex > 0 && selectEvent(traceIndex - 1),
   "]": () =>
     trace &&
@@ -1160,6 +1185,237 @@ timingOpen.addEventListener("click", openTiming);
 timingExport.addEventListener("click", exportTiming);
 timingDialog.addEventListener("click", (e) => {
   if (e.target === timingDialog) timingDialog.close();
+});
+
+// ---- Op counts -------------------------------------------------------------
+
+const opCountDialog = document.getElementById("opcount");
+const opCountNote = document.getElementById("opcount-note");
+const opCountSummary = document.getElementById("opcount-summary");
+const opCountTableEl = document.getElementById("opcount-table");
+const opCountFilter = document.getElementById("opcount-filter");
+const opCountChangedOps = document.getElementById("opcount-changed-ops");
+const opCountChangedPasses = document.getElementById("opcount-changed-passes");
+const opCountShown = document.getElementById("opcount-shown");
+let opCountModel = null;
+
+function signed(n) {
+  return n > 0 ? `+${n}` : n < 0 ? `−${-n}` : "±0";
+}
+
+function setViewCounts(counts) {
+  viewCounts = counts;
+  opCountOpen.hidden = !counts;
+  if (!counts) return;
+  const total = totalOps(counts.after);
+  const delta = counts.before ? total - totalOps(counts.before) : 0;
+  opCountOpen.textContent =
+    `${total} ops` + (counts.before && delta ? ` (${signed(delta)})` : "");
+}
+
+// Parses the whole-module state at every event. The engine has one arena, so
+// the graph's snapshot is re-parsed afterwards to keep drawing valid data.
+function computeTraceCounts() {
+  const columns = trace.events.map((_, i) => {
+    const result = parse(moduleStateAt(trace.events, i));
+    return result.status === STATUS.OK ? countOps(result.snapshot) : null;
+  });
+  if (renderedText) {
+    const restored = parse(renderedText).snapshot;
+    renderer.snapshot = restored;
+    diffAfter = restored;
+    renderer.requestDraw();
+  }
+  return columns;
+}
+
+function buildOpCountModel() {
+  if (trace) {
+    traceCounts ??= computeTraceCounts();
+    const failed = traceCounts.filter((column) => !column).length;
+    return {
+      table: opCountTable(traceCounts.map((column) => column ?? new Map())),
+      headers: trace.events.map((event) => `#${event.index + 1}`),
+      titles: trace.events.map(
+        (event) => `${event.index + 1}. ${describeEvent(event)}`,
+      ),
+      events: trace.events.map((event) => event.index),
+      current: traceIndex,
+      note:
+        "Operations in the whole module at each dump, by op name. Nested " +
+        "dumps are spliced into the last module dump, as for the baseline." +
+        (failed ? ` ${failed} dump(s) could not be parsed and count as empty.` : ""),
+    };
+  }
+  const columns = viewCounts.before
+    ? [viewCounts.before, viewCounts.after]
+    : [viewCounts.after];
+  return {
+    table: opCountTable(columns),
+    headers: viewCounts.before ? ["Baseline", "Current"] : ["Current"],
+    titles: [],
+    events: [],
+    current: -1,
+    note: "Operations in the baseline and current IR, by op name.",
+  };
+}
+
+function openOpCounts() {
+  goToWorkspace();
+  if (!viewCounts && !trace) {
+    setStatus("no parsed IR to count", { error: true });
+    return;
+  }
+  opCountModel = buildOpCountModel();
+  opCountNote.textContent = opCountModel.note;
+  renderOpCountSummary();
+  renderOpCountTable();
+  opCountDialog.showModal();
+}
+
+function renderOpCountSummary() {
+  const { table, headers } = opCountModel;
+  const first = table.totals[0] ?? 0;
+  const last = table.totals.at(-1) ?? 0;
+  const facts = [
+    [
+      "Total ops",
+      headers.length > 1
+        ? `${first} → ${last} (${signed(last - first)})`
+        : String(last),
+    ],
+    ["Distinct ops", String(table.rows.length)],
+  ];
+  if (trace)
+    facts.push([
+      "Passes that change counts",
+      `${table.changedColumns.length} of ${headers.length}`,
+    ]);
+  opCountSummary.replaceChildren(
+    ...facts.flatMap(([term, value]) => {
+      const dt = document.createElement("dt");
+      dt.textContent = term;
+      const dd = document.createElement("dd");
+      dd.textContent = value;
+      return [dt, dd];
+    }),
+  );
+}
+
+function renderOpCountTable() {
+  const { table, headers, titles, events, current } = opCountModel;
+  const many = headers.length > 2;
+  opCountChangedOps.parentElement.hidden = headers.length < 2;
+  opCountChangedPasses.parentElement.hidden = !trace;
+
+  // Always keep the first column (the starting point) and the current pass.
+  const keep = new Set([0, current, ...table.changedColumns]);
+  const shownColumns = headers
+    .map((_, i) => i)
+    .filter((i) => !trace || !opCountChangedPasses.checked || keep.has(i));
+  const needle = opCountFilter.value.trim().toLowerCase();
+  const rows = table.rows.filter(
+    (row) =>
+      (!opCountChangedOps.checked || headers.length < 2 || row.changed) &&
+      (!needle || row.op.toLowerCase().includes(needle)),
+  );
+  opCountShown.textContent =
+    `${rows.length} of ${table.rows.length} ops` +
+    (trace ? ` · ${shownColumns.length} of ${headers.length} dumps` : "");
+
+  const head = document.createElement("tr");
+  head.append(cell("th", "Op", "op"));
+  for (const i of shownColumns) {
+    const th = cell("th", "", i === current ? "current" : "");
+    if (events.length) {
+      const link = document.createElement("button");
+      link.className = "link-btn";
+      link.textContent = headers[i];
+      link.title = `${titles[i]}\nGo to this pass`;
+      link.addEventListener("click", () => {
+        opCountDialog.close();
+        selectEvent(events[i]);
+      });
+      th.append(link);
+    } else {
+      th.textContent = headers[i];
+    }
+    head.append(th);
+  }
+  if (headers.length > 1) head.append(cell("th", "Δ", "delta"));
+
+  const bodyRow = (label, counts, delta, className) => {
+    const tr = document.createElement("tr");
+    if (className) tr.className = className;
+    const name = cell("td", label, "op");
+    name.title = label;
+    tr.append(name);
+    shownColumns.forEach((i, k) => {
+      // Compare with the previous dump, not the previous shown column, so a
+      // cell is marked only where that pass changed the count.
+      const previous = i > 0 ? counts[i - 1] : counts[i];
+      const change = counts[i] - previous;
+      const trend =
+        k === 0 ? "" : change > 0 ? "up" : change < 0 ? "down" : many ? "same" : "";
+      const td = cell(
+        "td",
+        String(counts[i]),
+        [trend, i === current ? "current" : ""].filter(Boolean).join(" "),
+      );
+      if (k > 0 && change) td.title = `${signed(change)} in this pass`;
+      tr.append(td);
+    });
+    if (headers.length > 1)
+      tr.append(
+        cell(
+          "td",
+          signed(delta),
+          `delta ${delta > 0 ? "up" : delta < 0 ? "down" : "same"}`,
+        ),
+      );
+    return tr;
+  };
+
+  const thead = document.createElement("thead");
+  thead.append(head);
+  const tbody = document.createElement("tbody");
+  tbody.append(
+    bodyRow(
+      "(all ops)",
+      table.totals,
+      (table.totals.at(-1) ?? 0) - (table.totals[0] ?? 0),
+      "total",
+    ),
+    ...rows.map((row) => bodyRow(row.op, row.counts, row.delta)),
+  );
+  opCountTableEl.replaceChildren(thead, tbody);
+}
+
+function cell(tag, text, className) {
+  const element = document.createElement(tag);
+  element.textContent = text;
+  if (className) element.className = className;
+  return element;
+}
+
+function exportOpCounts() {
+  if (!opCountModel) return;
+  download(
+    `${slug(sourceName.textContent.replace(/ ●$/, ""))}-op-counts.csv`,
+    opCountsToCSV(opCountModel.headers, opCountModel.table),
+    "text/csv",
+  );
+}
+
+opCountOpen.addEventListener("click", openOpCounts);
+opCountFilter.addEventListener("input", renderOpCountTable);
+opCountChangedOps.addEventListener("change", renderOpCountTable);
+opCountChangedPasses.addEventListener("change", renderOpCountTable);
+document
+  .getElementById("opcount-export")
+  .addEventListener("click", exportOpCounts);
+opCountDialog.addEventListener("click", (e) => {
+  if (e.target === opCountDialog) opCountDialog.close();
 });
 
 // ---- Export ----------------------------------------------------------------

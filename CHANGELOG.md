@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Download the timing report, peak memory, and per-pass IR sizes as JSON.
 - Document the accepted trace format and the parsed structure in `docs/trace-format.md`.
 - Test traces from out-of-tree `MlirOptMain` drivers with custom dialects (a `schema-opt` fixture), including namespace-qualified pass names.
+- Count operations by name. The status bar shows the current op count and its change from the baseline, and **o** opens a table of counts at every dump of a trace (whole module, with nested dumps spliced in). Filter by op name, hide ops or passes that change nothing, jump to a pass from its column, and download the table as CSV.
 
 ### Fixed
 
