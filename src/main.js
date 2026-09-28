@@ -21,7 +21,16 @@ import {
   signedBytes,
 } from "./buffers-view.js";
 import { historyToJSON, symbolHistory } from "./provenance.js";
-import { formatDuration, matchBenchmarks, parseBenchmarks } from "./bench.js";
+import {
+  changedBeyond,
+  compareBenchmarks,
+  comparisonOrder,
+  comparisonToJSON,
+  formatChange,
+  formatDuration,
+  parseBenchmarks,
+  symbolTimes,
+} from "./bench.js";
 import { bindHighlighting } from "./mlir-highlight.js";
 import { CommandPalette } from "./palette.js";
 import { loadSampleState, RENAME_SAMPLE, SAMPLES } from "./samples.js";
@@ -115,9 +124,10 @@ let traceBuffers = null;
 // Created / changed / lowered / removed passes for every symbol in the trace,
 // computed when first shown.
 let traceSymbols = null;
-// Imported kernel benchmark results ({ name, text, result }), kept with the
-// trace (and its live reloads) and saved with the session.
-let benchmarks = null;
+// Imported kernel benchmark results, a baseline and a current run, each
+// { name, text, result } or null. Kept with the trace (and its live reloads)
+// and saved with the session.
+let benchmarks = { baseline: null, current: null };
 
 const renderer = new CanvasRenderer(canvas, {
   onSelect(index, snap) {
@@ -480,7 +490,7 @@ function clearTrace() {
   traceCounts = null;
   traceBuffers = null;
   traceSymbols = null;
-  benchmarks = null;
+  benchmarks = { baseline: null, current: null };
   traceText = "";
   traceNote = "";
   traceIndex = -1;
@@ -734,7 +744,8 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
     ["Show op counts per pass", "o", openOpCounts],
     ["Show buffers and peak memory", "b", openBuffers],
     ["Show symbol history (which pass made each kernel)", "h", openSymbols],
-    ["Import kernel benchmarks…", "", importBenchmarks],
+    ["Import current kernel benchmarks…", "", () => importBenchmarks("current")],
+    ["Import baseline kernel benchmarks…", "", () => importBenchmarks("baseline")],
     ...(canWatchFiles
       ? [
           watcher.watching
@@ -879,7 +890,7 @@ fileInput.addEventListener("change", async () => {
   sourceName.textContent = file.name;
   sourceName.title = file.name;
   if (isPassTrace(text)) {
-    benchmarks = null;
+    benchmarks = { baseline: null, current: null };
     loadTrace(text);
     return;
   }
@@ -955,10 +966,14 @@ function getState() {
         ? "current"
         : "baseline",
     split: sourcePane.classList.contains("split"),
-    benchmarks:
-      traceText && benchmarks
-        ? { name: benchmarks.name, text: benchmarks.text }
-        : null,
+    benchmarks: traceText
+      ? Object.fromEntries(
+          Object.entries(benchmarks).map(([slot, bench]) => [
+            slot,
+            bench && { name: bench.name, text: bench.text },
+          ]),
+        )
+      : null,
   };
 }
 
@@ -971,9 +986,14 @@ function applyState(state) {
   if (state.trace && isPassTrace(state.trace)) {
     traceIndex = state.traceIndex ?? -1;
     loadTrace(state.trace, { keepIndex: true });
-    if (trace && state.benchmarks) {
+    // Sessions from before baseline benchmarks held one run, as `current`.
+    const saved = state.benchmarks?.text
+      ? { current: state.benchmarks }
+      : state.benchmarks;
+    for (const slot of ["baseline", "current"]) {
+      if (!trace || !saved?.[slot]) continue;
       try {
-        setBenchmarks(state.benchmarks.name, state.benchmarks.text);
+        setBenchmarks(slot, saved[slot].name, saved[slot].text);
       } catch {}
     }
   } else {
@@ -1587,6 +1607,12 @@ const symbolsUnmatched = document.getElementById("symbols-unmatched");
 const symbolsBenchError = document.getElementById("symbols-bench-error");
 const symbolsBenchClear = document.getElementById("symbols-bench-clear");
 const symbolsBenchFile = document.getElementById("symbols-bench-file");
+const symbolsMinChange = document.getElementById("symbols-min-change");
+const symbolsMinChangeOn = document.getElementById("symbols-min-change-on");
+const BENCH_DOCS =
+  "https://github.com/joepothiboot/vizmlir/blob/main/docs/benchmark-format.md";
+// The slot the file picker is importing into.
+let benchSlot = "current";
 const STEP_TEXT = {
   created: "created",
   changed: "changed",
@@ -1606,47 +1632,36 @@ function openSymbols() {
   symbolsDialog.showModal();
 }
 
-// Parses benchmark results and keeps them with the trace; throws on input it
-// cannot read.
-function setBenchmarks(name, text) {
-  benchmarks = { name, text, result: parseBenchmarks(text) };
+// Parses benchmark results into `slot` (baseline or current); throws on input
+// it cannot read.
+function setBenchmarks(slot, name, text) {
+  benchmarks[slot] = { name, text, result: parseBenchmarks(text) };
 }
 
-// Benchmark entries matched to symbols: { times: Map(path → { timeNs, calls,
-// totalNs, kernels, how }), unmatched: [match] }. Several entries for one
-// symbol are combined.
-function benchmarkTimes() {
-  if (!benchmarks) return null;
+// Each imported run matched to symbols, and the per-symbol comparison, or
+// null when nothing is imported.
+function benchmarkView() {
+  if (!benchmarks.baseline && !benchmarks.current) return null;
   traceSymbols ??= symbolHistory(trace.events);
-  const times = new Map();
-  const unmatched = [];
-  for (const match of matchBenchmarks(benchmarks.result.entries, traceSymbols)) {
-    if (!match.path) {
-      unmatched.push(match);
-      continue;
-    }
-    const time = times.get(match.path) ?? {
-      calls: 0,
-      totalNs: 0,
-      kernels: [],
-      how: [],
-    };
-    time.calls += match.entry.calls;
-    time.totalNs += match.entry.totalNs;
-    time.timeNs = time.calls ? time.totalNs / time.calls : time.totalNs;
-    time.kernels.push(match.entry.kernel);
-    time.how.push(match.how);
-    times.set(match.path, time);
-  }
-  return { times, unmatched };
+  const runs = {};
+  for (const slot of ["baseline", "current"])
+    runs[slot] =
+      benchmarks[slot] &&
+      symbolTimes(benchmarks[slot].result.entries, traceSymbols);
+  return {
+    runs,
+    both: !!(runs.baseline && runs.current),
+    comparison: compareBenchmarks(runs.baseline?.times, runs.current?.times),
+  };
 }
 
-function importBenchmarks() {
+function importBenchmarks(slot) {
   goToWorkspace();
   if (!trace) {
     setStatus("open a pass trace before importing benchmarks", { error: true });
     return;
   }
+  benchSlot = slot;
   symbolsBenchFile.click();
 }
 
@@ -1657,11 +1672,20 @@ symbolsBenchFile.addEventListener("change", async () => {
   const text = await file.text();
   if (!symbolsDialog.open) openSymbols();
   try {
-    setBenchmarks(file.name, text);
+    setBenchmarks(benchSlot, file.name, text);
     symbolsBenchError.hidden = true;
     scheduleAutosave();
   } catch (error) {
-    symbolsBenchError.textContent = `Could not read ${file.name}: ${error.message}. See docs/benchmark-format.md.`;
+    symbolsBenchError.replaceChildren(
+      `Could not read ${file.name} as ${benchSlot} benchmarks: ${error.message}. See the `,
+      Object.assign(document.createElement("a"), {
+        href: BENCH_DOCS,
+        target: "_blank",
+        rel: "noopener",
+        textContent: "benchmark format",
+      }),
+      ".",
+    );
     symbolsBenchError.hidden = false;
   }
   renderSymbolsSummary();
@@ -1669,7 +1693,7 @@ symbolsBenchFile.addEventListener("change", async () => {
 });
 
 symbolsBenchClear.addEventListener("click", () => {
-  benchmarks = null;
+  benchmarks = { baseline: null, current: null };
   scheduleAutosave();
   renderSymbolsSummary();
   renderSymbols();
@@ -1684,17 +1708,28 @@ function renderSymbolsSummary() {
     ["Lowered to another op", String(count((r) => r.ops.length > 1))],
     ["Removed", String(count((r) => r.removed))],
   ];
-  const bench = benchmarkTimes();
-  if (bench) {
-    const { entries } = benchmarks.result;
-    const matched = entries.length - bench.unmatched.length;
+  const view = benchmarkView();
+  for (const slot of ["baseline", "current"]) {
+    const bench = benchmarks[slot];
+    if (!bench) continue;
+    const { entries, format, timeColumn, skipped } = bench.result;
+    const matched = entries.length - view.runs[slot].unmatched.length;
     facts.push([
-      "Benchmarks",
-      `${benchmarks.name} (${benchmarks.result.format}, ${benchmarks.result.timeColumn}) · ` +
+      slot === "baseline" ? "Baseline benchmarks" : "Current benchmarks",
+      `${bench.name} (${format}, ${timeColumn}) · ` +
         `${matched} of ${entries.length} kernels matched` +
-        (benchmarks.result.skipped
-          ? ` · ${benchmarks.result.skipped} row(s) without a name or time skipped`
-          : ""),
+        (skipped ? ` · ${skipped} row(s) without a name or time skipped` : ""),
+    ]);
+  }
+  if (view?.both) {
+    const rows = [...view.comparison.values()].filter((row) => row.change !== null);
+    const threshold = Number(symbolsMinChange.value) || 0;
+    const slower = rows.filter((row) => row.change * 100 > threshold).length;
+    const faster = rows.filter((row) => row.change * 100 < -threshold).length;
+    facts.push([
+      "Compared",
+      `${rows.length} symbol(s) measured in both · ${slower} slower and ` +
+        `${faster} faster by more than ${threshold}%`,
     ]);
   }
   symbolsSummary.replaceChildren(
@@ -1709,11 +1744,16 @@ function renderSymbolsSummary() {
 }
 
 function renderSymbols() {
-  const bench = benchmarkTimes();
-  const times = bench?.times;
-  symbolsBenchClear.hidden = !bench;
-  symbolsBench.hidden = !bench?.unmatched.length;
-  if (bench) renderUnmatched(bench.unmatched);
+  const view = benchmarkView();
+  const comparison = view?.comparison;
+  const slots = ["baseline", "current"].filter((slot) => view?.runs[slot]);
+  symbolsBenchClear.hidden = !view;
+  symbolsMinChangeOn.parentElement.hidden = !view?.both;
+  const unmatched = slots.flatMap((slot) =>
+    view.runs[slot].unmatched.map((match) => ({ ...match, slot })),
+  );
+  symbolsBench.hidden = !unmatched.length;
+  if (view) renderUnmatched(unmatched, view.both);
 
   const needle = symbolsFilter.value.trim().toLowerCase();
   const rows = traceSymbols.filter(
@@ -1723,19 +1763,29 @@ function renderSymbols() {
         record.changes.some((change) => change.index === traceIndex)) &&
       (!needle ||
         record.path.toLowerCase().includes(needle) ||
-        record.ops.some((op) => op.toLowerCase().includes(needle))),
+        record.ops.some((op) => op.toLowerCase().includes(needle))) &&
+      (!view?.both ||
+        !symbolsMinChangeOn.checked ||
+        changedBeyond(
+          comparison.get(record.path),
+          Number(symbolsMinChange.value) || 0,
+        )),
   );
-  // Slowest measured symbols first; the rest keep trace order.
-  if (times)
-    rows.sort(
-      (a, b) =>
-        (times.get(b.path)?.timeNs ?? -1) - (times.get(a.path)?.timeNs ?? -1),
+  // Largest slowdown (or slowest) first; unmeasured symbols keep trace order.
+  if (comparison)
+    rows.sort((a, b) =>
+      comparisonOrder(comparison.get(a.path), comparison.get(b.path)),
     );
   symbolsShown.textContent = `${rows.length} of ${traceSymbols.length} symbols`;
 
   const head = document.createElement("tr");
   head.append(cell("th", "Symbol"), cell("th", "Defined by"));
-  if (times) head.append(cell("th", "Time / call", "time"));
+  // One run reads as "Time / call" (or "Baseline / call"); two as columns.
+  for (const slot of slots) {
+    const title = slot === "baseline" ? "Baseline" : view.both ? "Current" : "Time";
+    head.append(cell("th", view.both ? title : `${title} / call`, "time"));
+  }
+  if (view?.both) head.append(cell("th", "Δ", "time"));
   head.append(cell("th", "Passes that touched it"));
   const thead = document.createElement("thead");
   thead.append(head);
@@ -1777,8 +1827,9 @@ function renderSymbols() {
     const stepsCell = document.createElement("td");
     stepsCell.append(steps);
     tr.append(sym, cell("td", record.ops.join(" → "), "ops"));
-    if (times) {
-      const time = times.get(record.path);
+    const row = comparison?.get(record.path);
+    for (const slot of slots) {
+      const time = row?.[slot];
       const td = cell("td", time ? formatDuration(time.timeNs) : "", "time");
       if (time)
         td.title =
@@ -1788,15 +1839,30 @@ function renderSymbols() {
             .join("\n");
       tr.append(td);
     }
+    if (view?.both) {
+      const delta = row?.change ?? null;
+      const td = cell(
+        "td",
+        delta === null ? "" : formatChange(delta),
+        `time ${delta > 0 ? "up" : delta < 0 ? "down" : ""}`.trim(),
+      );
+      if (delta !== null)
+        td.title =
+          `${row.deltaNs > 0 ? "+" : row.deltaNs < 0 ? "−" : "±"}` +
+          `${formatDuration(Math.abs(row.deltaNs))} per call`;
+      else if (row)
+        td.title = `Measured in the ${row.baseline ? "baseline" : "current"} run only`;
+      tr.append(td);
+    }
     tr.append(stepsCell);
     tbody.append(tr);
   }
   symbolsTable.replaceChildren(thead, tbody);
 }
 
-function renderUnmatched(unmatched) {
+function renderUnmatched(unmatched, labelSlots) {
   symbolsUnmatched.replaceChildren(
-    ...unmatched.map(({ entry, candidates }) => {
+    ...unmatched.map(({ entry, candidates, slot }) => {
       const item = document.createElement("li");
       const name = document.createElement("code");
       name.textContent = entry.kernel;
@@ -1805,7 +1871,11 @@ function renderUnmatched(unmatched) {
         : candidates.length
           ? ` · ambiguous: ${candidates.join(", ")}; add a symbol column`
           : " · no symbol with this name";
-      item.append(name, ` ${formatDuration(entry.timeNs)}${reason}`);
+      item.append(
+        labelSlots ? `${slot}: ` : "",
+        name,
+        ` ${formatDuration(entry.timeNs)}${reason}`,
+      );
       return item;
     }),
   );
@@ -1820,7 +1890,10 @@ function exportSymbols() {
       trace.events,
       traceSymbols,
       describeEvent,
-      benchmarkTimes()?.times,
+      (() => {
+        const view = benchmarkView();
+        return view && comparisonToJSON(view.comparison);
+      })(),
     ),
     "application/json",
   );
@@ -1833,8 +1906,17 @@ document
   .getElementById("symbols-export")
   .addEventListener("click", exportSymbols);
 document
-  .getElementById("symbols-bench-import")
-  .addEventListener("click", importBenchmarks);
+  .getElementById("symbols-bench-current")
+  .addEventListener("click", () => importBenchmarks("current"));
+document
+  .getElementById("symbols-bench-baseline")
+  .addEventListener("click", () => importBenchmarks("baseline"));
+symbolsMinChange.addEventListener("input", () => {
+  symbolsMinChangeOn.checked = true;
+  renderSymbolsSummary();
+  renderSymbols();
+});
+symbolsMinChangeOn.addEventListener("change", renderSymbols);
 symbolsDialog.addEventListener("click", (e) => {
   if (e.target === symbolsDialog) symbolsDialog.close();
 });

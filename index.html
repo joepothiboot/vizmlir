@@ -1462,6 +1462,15 @@
         text-align: right;
         white-space: nowrap;
       }
+      #symbols-table td.up {
+        color: var(--warn);
+      }
+      #symbols-table td.down {
+        color: var(--good);
+      }
+      #symbols-min-change {
+        width: 48px;
+      }
       #symbols h3 {
         margin: 0 0 6px;
         font-size: 12px;
@@ -2164,6 +2173,18 @@
             ><input id="symbols-at-pass" type="checkbox" /> Only the current
             pass</label
           >
+          <label hidden
+            ><input id="symbols-min-change-on" type="checkbox" /> Only kernels
+            that changed by more than
+            <input
+              id="symbols-min-change"
+              type="number"
+              value="5"
+              min="0"
+              step="1"
+              aria-label="Minimum change in percent"
+            />%</label
+          >
           <span id="symbols-shown" class="dialog-note"></span>
         </div>
         <p id="symbols-bench-error" class="dialog-note" role="alert" hidden></p>
@@ -2176,7 +2197,8 @@
         </div>
         <div class="dialog-actions">
           <button id="symbols-export">Download .json</button>
-          <button id="symbols-bench-import">Import benchmarks…</button>
+          <button id="symbols-bench-current">Import current…</button>
+          <button id="symbols-bench-baseline">Import baseline…</button>
           <button id="symbols-bench-clear" hidden>Clear benchmarks</button>
           <input
             id="symbols-bench-file"

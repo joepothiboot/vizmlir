@@ -337,6 +337,95 @@ export function matchBenchmarks(entries, history) {
   });
 }
 
+// Combines matchBenchmarks() results per symbol: { times: Map(path → {
+// timeNs, totalNs, calls, kernels, how }), unmatched: [match] }. Several
+// kernels that match one symbol are weighted by calls.
+export function symbolTimes(entries, history) {
+  const times = new Map();
+  const unmatched = [];
+  for (const match of matchBenchmarks(entries, history)) {
+    if (!match.path) {
+      unmatched.push(match);
+      continue;
+    }
+    const time = times.get(match.path) ?? {
+      calls: 0,
+      totalNs: 0,
+      kernels: [],
+      how: [],
+    };
+    time.calls += match.entry.calls;
+    time.totalNs += match.entry.totalNs;
+    time.timeNs = time.calls ? time.totalNs / time.calls : time.totalNs;
+    time.kernels.push(match.entry.kernel);
+    time.how.push(match.how);
+    times.set(match.path, time);
+  }
+  return { times, unmatched };
+}
+
+// Joins two symbolTimes() maps (either may be null) by symbol path. Each value
+// is { baseline, current, deltaNs, change }, with `change` the relative change
+// ((current − baseline) / baseline) and both null unless both sides measured
+// the symbol.
+export function compareBenchmarks(baseline, current) {
+  const paths = new Set([...(baseline?.keys() ?? []), ...(current?.keys() ?? [])]);
+  const comparison = new Map();
+  for (const path of paths) {
+    const before = baseline?.get(path) ?? null;
+    const after = current?.get(path) ?? null;
+    const both = before && after;
+    comparison.set(path, {
+      baseline: before,
+      current: after,
+      deltaNs: both ? after.timeNs - before.timeNs : null,
+      change: both && before.timeNs ? (after.timeNs - before.timeNs) / before.timeNs : null,
+    });
+  }
+  return comparison;
+}
+
+// True when `row` should stay under a "changed by more than `percent`%"
+// filter. A symbol measured on one side only counts as changed.
+export function changedBeyond(row, percent) {
+  if (!row) return false;
+  if (!row.baseline || !row.current) return true;
+  return row.change !== null && Math.abs(row.change) * 100 > percent;
+}
+
+// Orders compared symbols for reading: largest slowdown first, then symbols
+// measured on one side only, slowest first.
+export function comparisonOrder(a, b) {
+  if (!a || !b) return (b ? 1 : 0) - (a ? 1 : 0);
+  if (a.change !== null || b.change !== null)
+    return (b.change ?? -Infinity) - (a.change ?? -Infinity);
+  const time = (row) => (row.current ?? row.baseline).timeNs;
+  return time(b) - time(a);
+}
+
+// Map(path → JSON object) for historyToJSON(), in nanoseconds per call.
+export function comparisonToJSON(comparison) {
+  const side = (time) =>
+    time && { time_ns: time.timeNs, calls: time.calls, kernels: time.kernels };
+  return new Map(
+    [...comparison].map(([path, row]) => [
+      path,
+      {
+        ...(row.baseline ? { baseline: side(row.baseline) } : {}),
+        ...(row.current ? { current: side(row.current) } : {}),
+        ...(row.change !== null ? { delta_ns: row.deltaNs, change: row.change } : {}),
+      },
+    ]),
+  );
+}
+
+export function formatChange(change) {
+  if (change === null || change === undefined) return "";
+  const percent = change * 100;
+  const text = Math.abs(percent) < 10 ? Math.abs(percent).toFixed(1) : Math.abs(percent).toFixed(0);
+  return `${percent > 0 ? "+" : percent < 0 ? "−" : "±"}${text}%`;
+}
+
 export function formatDuration(ns) {
   if (ns === null || ns === undefined) return "—";
   if (ns < 1e3) return `${ns.toFixed(0)} ns`;

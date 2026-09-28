@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
+  changedBeyond,
   cleanKernelName,
+  compareBenchmarks,
+  comparisonOrder,
+  comparisonToJSON,
+  formatChange,
   formatDuration,
   matchBenchmarks,
   parseBenchmarks,
   parseCSV,
+  symbolTimes,
 } from "../../src/bench.js";
 
 const summarize = (result) =>
@@ -180,5 +186,101 @@ describe("formatDuration", () => {
     [2.5e9, "2.50 s"],
   ])("%d ns -> %s", (ns, text) => {
     expect(formatDuration(ns)).toBe(text);
+  });
+});
+
+describe("symbolTimes", () => {
+  const history = [
+    { path: "@k", symbol: "k", ops: ["func.func"] },
+    { path: "@m::@g", symbol: "g", ops: ["gpu.func"] },
+  ];
+
+  it("combines kernels that match one symbol, weighted by calls", () => {
+    const { times, unmatched } = symbolTimes(
+      [
+        { kernel: "k", symbol: null, calls: 1, totalNs: 10, timeNs: 10 },
+        { kernel: "_Z1kv", symbol: null, calls: 3, totalNs: 90, timeNs: 30 },
+        { kernel: "cublas", symbol: null, calls: 1, totalNs: 5, timeNs: 5 },
+      ],
+      history,
+    );
+    expect(times.get("@k")).toMatchObject({
+      calls: 4,
+      totalNs: 100,
+      timeNs: 25,
+      kernels: ["k", "_Z1kv"],
+      how: ["exact", "mangled"],
+    });
+    expect(unmatched.map((m) => m.entry.kernel)).toEqual(["cublas"]);
+  });
+});
+
+describe("compareBenchmarks", () => {
+  const time = (timeNs) => ({ timeNs, totalNs: timeNs, calls: 1, kernels: ["x"] });
+  const baseline = new Map([
+    ["@a", time(100)],
+    ["@b", time(200)],
+    ["@gone", time(50)],
+  ]);
+  const current = new Map([
+    ["@a", time(150)],
+    ["@b", time(190)],
+    ["@new", time(70)],
+  ]);
+  const comparison = compareBenchmarks(baseline, current);
+
+  it("joins both runs by symbol with the relative change", () => {
+    expect(comparison.get("@a")).toMatchObject({ deltaNs: 50, change: 0.5 });
+    expect(comparison.get("@b").change).toBeCloseTo(-0.05);
+    expect(comparison.get("@gone")).toMatchObject({ current: null, change: null });
+    expect(comparison.get("@new")).toMatchObject({ baseline: null, change: null });
+  });
+
+  it("works with one run", () => {
+    expect(compareBenchmarks(null, current).get("@a")).toMatchObject({
+      baseline: null,
+      change: null,
+    });
+  });
+
+  it("filters by change, keeping one-sided symbols", () => {
+    const kept = [...comparison]
+      .filter(([, row]) => changedBeyond(row, 5))
+      .map(([path]) => path);
+    expect(kept).toEqual(["@a", "@gone", "@new"]);
+    expect(changedBeyond(comparison.get("@b"), 4)).toBe(true);
+    expect(changedBeyond(undefined, 0)).toBe(false);
+  });
+
+  it("orders by largest slowdown, then one-sided by time, then unmeasured", () => {
+    const paths = ["@b", undefined, "@new", "@a", "@gone"];
+    const sorted = paths.sort((x, y) =>
+      comparisonOrder(comparison.get(x), comparison.get(y)),
+    );
+    expect(sorted).toEqual(["@a", "@b", "@new", "@gone", undefined]);
+  });
+
+  it("exports per-side times and the change", () => {
+    const json = comparisonToJSON(comparison);
+    expect(json.get("@a")).toEqual({
+      baseline: { time_ns: 100, calls: 1, kernels: ["x"] },
+      current: { time_ns: 150, calls: 1, kernels: ["x"] },
+      delta_ns: 50,
+      change: 0.5,
+    });
+    expect(json.get("@new")).toEqual({
+      current: { time_ns: 70, calls: 1, kernels: ["x"] },
+    });
+  });
+});
+
+describe("formatChange", () => {
+  it.each([
+    [0.5, "+50%"],
+    [-0.053, "−5.3%"],
+    [0, "±0.0%"],
+    [null, ""],
+  ])("%s -> %s", (change, text) => {
+    expect(formatChange(change)).toBe(text);
   });
 });

@@ -9,9 +9,23 @@ accepts and how it matches a kernel to a symbol.
 ## Importing
 
 Open a pass trace, press **h** (Symbol history), and choose **Import
-benchmarks…**, or run "Import kernel benchmarks…" from ⌘K. The results are
-kept while the trace is open (including live reloads of a watched file) and
-are saved with the session. Opening a different trace file clears them.
+current…**, or run "Import current kernel benchmarks…" from ⌘K. The results
+are kept while the trace is open (including live reloads of a watched file)
+and are saved with the session. Opening a different trace file clears them.
+
+## Comparing two runs
+
+Import a second file with **Import baseline…** to compare two runs of the same
+pipeline, for example before and after a driver, GPU, or launch-parameter
+change. The two files can come from different tools. The table then shows the
+baseline and current time per call and the change for every symbol measured in
+either run, largest slowdown first; symbols measured in one run only follow.
+**Only kernels that changed by more than N%** (5% by default) hides the rest;
+a symbol measured in one run only always counts as changed.
+
+Both runs are matched against the one trace that is open. To compare two
+different pipelines (with and without a pass), open each trace in turn; a
+side-by-side view of two traces is not supported yet.
 
 ## Accepted input
 
@@ -106,6 +120,8 @@ call, weighted by calls.
 
 ## Export
 
-**Download .json** in the Symbol history dialog adds a `benchmark` object
-(`time_ns` per call, `calls`, and the matched `kernels`) to every measured
-symbol.
+**Download .json** in the Symbol history dialog adds a `benchmark` object to
+every measured symbol, with a `baseline` and `current` entry for each run that
+measured it (`time_ns` per call, `calls`, and the matched `kernels`), and, when
+both did, `delta_ns` and `change` (the relative change, `0.14` for 14%
+slower).
