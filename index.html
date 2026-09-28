@@ -432,6 +432,128 @@
       #source-pane.split .code-editor[hidden] {
         display: block !important;
       }
+      .line-explain {
+        flex: 0 0 auto;
+        max-height: 46%;
+        overflow: auto;
+        padding: 8px 12px 12px;
+        border-top: 1px solid var(--line);
+        background: var(--bg);
+        font-family: var(--ui);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      .line-explain[hidden],
+      #le-docs[hidden] {
+        display: none;
+      }
+      .le-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0 0 4px;
+      }
+      .le-head a {
+        color: var(--dim);
+        font-size: 11px;
+      }
+      #le-close {
+        padding: 0 4px;
+        font-size: 15px;
+      }
+      .le-summary {
+        margin: 0 0 8px;
+      }
+      .le-hint {
+        margin: 0;
+        color: var(--dim);
+      }
+      .le-line {
+        margin: 0 0 8px;
+        padding: 6px 8px;
+        overflow-x: auto;
+        border-radius: 4px;
+        background: var(--panel);
+        font-family: var(--code);
+        font-size: 11px;
+        white-space: pre;
+      }
+      .le-line mark {
+        padding: 0 1px;
+        border-bottom: 2px solid var(--k);
+        background: none;
+        color: inherit;
+      }
+      .le-parts {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 4px 12px;
+        margin: 0;
+      }
+      .le-parts dt {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        color: var(--fg);
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .le-parts dt::before {
+        content: "";
+        flex: 0 0 8px;
+        height: 8px;
+        border-radius: 2px;
+        background: var(--k);
+      }
+      .le-parts dd {
+        margin: 0;
+        color: var(--dim);
+      }
+      .le-parts code,
+      .le-gpu code {
+        color: var(--fg);
+        font-family: var(--code);
+        font-size: 11px;
+      }
+      .le-parts .link-btn {
+        padding: 0;
+        color: var(--fg);
+        font: inherit;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+      .k-result,
+      .k-binding {
+        --k: var(--syn-ssa);
+      }
+      .k-op {
+        --k: var(--syn-operation);
+      }
+      .k-input {
+        --k: var(--good);
+      }
+      .k-position {
+        --k: var(--warn);
+      }
+      .k-symbol {
+        --k: var(--syn-symbol);
+      }
+      .k-attributes,
+      .k-region {
+        --k: var(--faint);
+      }
+      .k-type {
+        --k: var(--syn-literal);
+      }
+      .le-gpu {
+        margin: 10px 0 0;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+      }
+      .le-gpu p {
+        margin: 0 0 6px;
+      }
       #source-pane.split #baseline-panel {
         border-bottom: 1px solid var(--line);
       }
@@ -2300,6 +2422,30 @@
                 placeholder="Paste current MLIR here…"
               ></textarea>
             </div>
+            <aside
+              id="line-explain"
+              class="line-explain"
+              aria-label="What's this line?"
+              aria-live="polite"
+              hidden
+            >
+              <div class="le-head">
+                <strong id="le-title">What's this line?</strong>
+                <span class="sp"></span>
+                <a id="le-docs" target="_blank" rel="noreferrer" hidden
+                  >MLIR docs ↗</a
+                >
+                <button
+                  id="le-close"
+                  class="link-btn"
+                  aria-label="Hide the line explainer"
+                  title="Hide (w)"
+                >
+                  ×
+                </button>
+              </div>
+              <div id="le-body"></div>
+            </aside>
           </section>
           <div
             id="source-splitter"
@@ -2510,6 +2656,8 @@
           <dd>Symbol history: which pass made each function or kernel</dd>
           <dt><kbd>g</kbd></dt>
           <dd>Switch the canvas between the op graph and the GPU view</dd>
+          <dt><kbd>w</kbd></dt>
+          <dd>What's this line? Explain the line of code you click</dd>
           <dt><kbd>m</kbd></dt>
           <dd>Show / hide the menu</dd>
           <dt><kbd>shift</kbd> <kbd>L</kbd></dt>
@@ -2758,6 +2906,12 @@
               Press <kbd>]</kbd> a few times to step through the compiler's
               work. The code on the left changes, and the picture follows.
             </li>
+            <li>
+              Click any line of code on the left. The panel under it,
+              <strong>What's this line?</strong>, names each part of that line
+              in plain words and links every value back to the line that made
+              it.
+            </li>
           </ol>
           <div class="sample-actions">
             <button id="docs-gpu-sample">Open the transpose sample</button>
@@ -2851,6 +3005,38 @@
             Click a row to see the warp's 32 threads as colored squares (the
             same color means the same chunk of memory, or the same counter) and
             to highlight that line in the code on the left.
+          </p>
+
+          <h3>Reading a line of MLIR</h3>
+          <p>
+            Most lines of MLIR have the same shape. Take this one:
+            <code>%4 = memref.load %arg0[%3, %1] : memref&lt;1024x1024xf32&gt;</code>
+          </p>
+          <dl class="docs-terms">
+            <dt><code>%4 =</code></dt>
+            <dd>The name of the value the line produces. Later lines use it.</dd>
+            <dt><code>memref.load</code></dt>
+            <dd>
+              What the line does: <em>load</em> (read one item) from the
+              <em>memref</em> family of operations, which work on arrays in
+              memory.
+            </dd>
+            <dt><code>%arg0[%3, %1]</code></dt>
+            <dd>
+              The inputs: which array, and which item in it (row
+              <code>%3</code>, column <code>%1</code>).
+            </dd>
+            <dt><code>: memref&lt;…&gt;</code></dt>
+            <dd>
+              The type: a 1024 × 1024 table of 32-bit decimal numbers.
+            </dd>
+          </dl>
+          <p>
+            You don't have to decode this yourself: click a line and
+            <strong>What's this line?</strong> does it for you, with a short
+            description of the operation and a link to the MLIR documentation.
+            For loads and stores it also tells you how the GPU handles them.
+            Press <kbd>w</kbd> to hide or show the panel.
           </p>
 
           <h3>Watch a kernel being built</h3>

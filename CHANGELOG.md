@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - VizMLIR is now framed as a tool for seeing how MLIR runs on the GPU. The canvas opens on the GPU view whenever the IR launches kernels, and remembers when you switch to the op graph instead (IR without GPU code always shows the graph). A first visit opens the transpose sample, the GPU samples come first in the Samples list, and the field guide, README, and page title lead with the GPU view. The op graph, pass diff, and trace tools are unchanged.
+- Add "What's this line?", a panel under the code that explains the line you click (or the line picked in the graph or the GPU view) in plain words: its result, operation (with a one-sentence description for about 70 common operations and a link to its dialect's MLIR docs), inputs linked to the lines that define them, position, settings, and type (for example "a 1024 × 1024 array of 32-bit decimal numbers in memory (4.0 MB)"). For loads and stores it adds the GPU verdict, example elements for the first threads, and a button that opens that access in the GPU view. `w` hides or shows it, and the choice is remembered.
 - Rewrite the field guide and README for newcomers: a one-minute tour, "the GPU in four ideas" (threads, blocks and the grid, warps, memory) with everyday comparisons, what each memory verdict means and why it matters, and the `mlir-opt` flags explained in plain words.
 
 ### Added

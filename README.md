@@ -32,6 +32,7 @@ One honest limit: VizMLIR only reads your code; it never runs it. It can spot th
 
 - **The GPU view.** Whenever your code starts work on the GPU, the middle panel shows it as a grid of blocks, with one block opened up into its warps of 32 threads, and lists every array the kernel uses as global, shared, or private memory. Press `g` to switch to a diagram of the code instead.
 - **Memory checks.** Every read and write is checked for the first warp: are the threads reading neighbors (_coalesced_), far-apart places (_strided_), or the same item (_broadcast_)? In shared memory, are they queueing at the same bank (_bank conflict_)? Click one to see the 32 threads, the items they touch, and how people usually fix it.
+- **What's this line?** Click any line of code to see it taken apart in plain words: what it produces, what it does, which values it uses (each linked back to the line that made it), and what kind of data it works on. For reads and writes, it also says how the GPU handles them, with a real example like "thread (1, 0, 0) uses `%arg1[1, 0]`". Press `w` to hide it.
 - **A kernel's life story.** Press `h` to see which compiler step created, changed, or finished each kernel, then follow one kernel step by step, all the way to the GPU assembly (PTX) at the end.
 - **Your measured timings.** Bring in results from Nsight Systems, Nsight Compute, Google Benchmark, or your own CSV, and compare two runs to see which kernels got faster or slower ([docs/benchmark-format.md](docs/benchmark-format.md)).
 

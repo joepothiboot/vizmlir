@@ -27,8 +27,11 @@ import {
   symbolTimeline,
 } from "./provenance.js";
 import { diffStats, lineDiff } from "./linediff.js";
-import { analyzeGpu } from "./gpu.js";
+import { analyzeGpu, memorySpace } from "./gpu.js";
 import { renderGpuView } from "./gpu-view.js";
+import { warpAccess } from "./gpu-access.js";
+import { parseMemref } from "./buffers.js";
+import { explainLine } from "./anatomy.js";
 import {
   changedBeyond,
   compareBenchmarks,
@@ -108,6 +111,10 @@ const viewToggle = document.getElementById("view-toggle");
 const viewSep = document.getElementById("view-sep");
 const viewGraph = document.getElementById("view-graph");
 const viewGpu = document.getElementById("view-gpu");
+const lineExplain = document.getElementById("line-explain");
+const leTitle = document.getElementById("le-title");
+const leBody = document.getElementById("le-body");
+const leDocs = document.getElementById("le-docs");
 const TABS = [
   { tab: baselineTitle, textarea: baseline },
   { tab: currentTitle, textarea: input },
@@ -656,6 +663,7 @@ function showSourceLine(line) {
     const y = markedLine * lineHeight;
     if (y < input.scrollTop || y > input.scrollTop + input.clientHeight - 40)
       input.scrollTop = Math.max(0, y - input.clientHeight / 3);
+    renderExplain(markedLine);
   }
   positionLineMark();
 }
@@ -783,6 +791,11 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
           ],
         ]
       : []),
+    [
+      explainOn ? "Hide “What's this line?”" : "Show “What's this line?”: explain the clicked line",
+      "w",
+      () => setExplainOn(!explainOn),
+    ],
     ["Import current kernel benchmarks…", "", () => importBenchmarks("current")],
     ["Import baseline kernel benchmarks…", "", () => importBenchmarks("baseline")],
     ...(canWatchFiles
@@ -876,6 +889,7 @@ const WORKSPACE_KEYS = {
   b: openBuffers,
   h: openSymbols,
   g: () => gpuModel && setCanvasView(canvasView === "gpu" ? "graph" : "gpu"),
+  w: () => setExplainOn(!explainOn),
   "[": () => trace && traceIndex > 0 && selectEvent(traceIndex - 1),
   "]": () =>
     trace &&
@@ -2053,6 +2067,185 @@ function setCanvasView(view, { remember = true } = {}) {
 viewGraph.addEventListener("click", () => setCanvasView("graph"));
 viewGpu.addEventListener("click", () => setCanvasView("gpu"));
 
+// ---- What's this line ------------------------------------------------------
+
+// The panel under the editor explains the line of the current source that was
+// clicked, reached with the arrow keys, or marked from the graph or the GPU
+// view. It is on by default; `w` hides it, and the choice is remembered.
+const EXPLAIN_KEY = "vizmlir-explain";
+let explainOn = true;
+try {
+  explainOn = localStorage.getItem(EXPLAIN_KEY) !== "off";
+} catch {}
+let explainedLine = -1;
+
+const VERDICT_MEANING = {
+  coalesced: "Neighboring threads use neighboring items, so the GPU fetches them in one trip.",
+  strided: "Neighboring threads use items far apart, so the GPU fetches much more than it uses.",
+  broadcast: "Every thread uses the same item, so it is fetched once and shared.",
+  "conflict-free": "Every thread gets its own shared-memory counter (bank), so nobody waits.",
+};
+
+function setExplainOn(on) {
+  explainOn = on;
+  try {
+    localStorage.setItem(EXPLAIN_KEY, on ? "on" : "off");
+  } catch {}
+  renderExplain(explainedLine);
+}
+
+function caretLine() {
+  return input.value.slice(0, input.selectionStart).split("\n").length - 1;
+}
+
+function partElement(tag, part, text) {
+  const element = document.createElement(tag);
+  element.className = `k-${part.kind}`;
+  element.textContent = text;
+  return element;
+}
+
+// The line with each recognized part underlined in its color.
+function markedLineElement(line, parts) {
+  const pre = document.createElement("div");
+  pre.className = "le-line";
+  let cursor = 0;
+  for (const part of parts) {
+    const at = line.indexOf(part.text, cursor);
+    if (at < 0) continue;
+    pre.append(line.slice(cursor, at), partElement("mark", part, part.text));
+    cursor = at + part.text.length;
+  }
+  pre.append(line.slice(cursor));
+  return pre;
+}
+
+// What the GPU view knows about a load or store on line `index` (0-based).
+function gpuExplain(index) {
+  if (!gpuModel) return null;
+  for (const launch of gpuModel.launches) {
+    const kernel = gpuModel.kernels[launch.kernel];
+    const access = kernel?.accesses?.find((a) => a.line === index + 1);
+    if (!access) continue;
+    const memref = parseMemref(access.type);
+    const space = memorySpace(memref?.space ?? "");
+    const result = warpAccess(access, memref, space, {
+      defs: kernel.defs,
+      args: kernel.args,
+      block: launch.block,
+      grid: launch.grid,
+    });
+    const box = document.createElement("div");
+    box.className = "le-gpu";
+    const head = document.createElement("p");
+    if (!result.analyzed) {
+      head.textContent = `On the GPU: not worked out, because ${result.reason}.`;
+      box.append(head);
+    } else {
+      const strong = document.createElement("strong");
+      strong.textContent = `On the GPU (${space} memory): ${result.verdict.replace("-", " ")}. `;
+      head.append(
+        strong,
+        result.verdict === "bank-conflict"
+          ? `Up to ${result.ways} threads queue at the same shared-memory counter (bank), so they are served one after another.`
+          : (VERDICT_MEANING[result.verdict] ?? ""),
+      );
+      const example = document.createElement("p");
+      const lanes = result.lanes.slice(0, 3);
+      example.append(
+        "For example, ",
+        ...lanes.flatMap((lane, i) => {
+          const code = document.createElement("code");
+          code.textContent = `${access.buffer}[${lane.index.join(", ")}]`;
+          return [
+            i ? (i === lanes.length - 1 ? ", and thread " : ", thread ") : "thread ",
+            `(${lane.tx}, ${lane.ty}, ${lane.tz}) uses `,
+            code,
+          ];
+        }),
+        ".",
+      );
+      box.append(head, example);
+    }
+    const show = document.createElement("button");
+    show.textContent = "Show in the GPU view";
+    show.addEventListener("click", () => {
+      setCanvasView("gpu");
+      renderGpuView(gpuViewEl, gpuModel, { ...GPU_VIEW_OPTIONS, focusLine: index + 1 });
+    });
+    box.append(show);
+    return box;
+  }
+  return null;
+}
+
+// Explains 0-based line `index` of the current source, or shows a hint.
+function renderExplain(index) {
+  explainedLine = index;
+  lineExplain.hidden = !explainOn;
+  if (!explainOn) return;
+  const lines = input.value.split("\n");
+  const explained = index >= 0 ? explainLine(lines, index) : null;
+  leDocs.hidden = !explained?.op;
+  if (!explained) {
+    leTitle.textContent = "What's this line?";
+    const hint = document.createElement("p");
+    hint.className = "le-hint";
+    hint.textContent =
+      "Click any line of code, or a box in the diagram, to see what each part of it means.";
+    leBody.replaceChildren(hint);
+    return;
+  }
+  leTitle.textContent = `Line ${index + 1}` + (explained.op ? ` · ${explained.op}` : "");
+  if (explained.op) {
+    leDocs.href = explained.docs;
+    leDocs.title = `The ${explained.dialect} family in the MLIR documentation`;
+  }
+  const summary = document.createElement("p");
+  summary.className = "le-summary";
+  summary.textContent =
+    explained.summary ??
+    "There is no plain description of this operation yet, but its parts are labeled below.";
+  const children = [summary];
+  if (explained.parts.length) {
+    children.push(markedLineElement(lines[index].trim(), explained.parts));
+    const list = document.createElement("dl");
+    list.className = "le-parts";
+    for (const part of explained.parts) {
+      const dt = partElement("dt", part, part.label);
+      const dd = document.createElement("dd");
+      // Show the part itself unless the sentence already starts with it.
+      const code = document.createElement("code");
+      code.textContent = part.text;
+      if (part.detail.startsWith(part.text)) {
+        dd.append(code, part.detail.slice(part.text.length));
+      } else {
+        dd.append(code, " ", part.detail);
+      }
+      if (part.ref !== undefined) {
+        const go = document.createElement("button");
+        go.className = "link-btn";
+        go.textContent = `go to line ${part.ref + 1}`;
+        go.addEventListener("click", () => showSourceLine(part.ref));
+        dd.append(" ", go);
+      }
+      list.append(dt, dd);
+    }
+    children.push(list);
+  }
+  const gpu = gpuExplain(index);
+  if (gpu) children.push(gpu);
+  leBody.replaceChildren(...children);
+}
+
+input.addEventListener("click", () => renderExplain(caretLine()));
+input.addEventListener("keyup", (e) => {
+  if (/^(Arrow|Page|Home|End)/.test(e.key)) renderExplain(caretLine());
+});
+// New text (another pass, a paste) invalidates the explained line.
+input.addEventListener("input", () => renderExplain(-1));
+document.getElementById("le-close").addEventListener("click", () => setExplainOn(false));
+
 // ---- Symbol view -----------------------------------------------------------
 
 const symbolView = document.getElementById("symbol-view");
@@ -2397,6 +2590,7 @@ async function restoreWatch() {
 
 document.getElementById("abi").textContent = `wasm abi v${ABI_VERSION}`;
 showTab(input);
+renderExplain(-1);
 window.addEventListener("hashchange", updateRoute);
 updateRoute();
 updateWatchUi();
