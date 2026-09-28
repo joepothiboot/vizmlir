@@ -139,9 +139,15 @@ export function changesAt(history, index) {
   );
 }
 
-// `times`, when given, maps a symbol path to { timeNs, calls, kernels } from
-// matched benchmark results.
-export function historyToJSON(source, events, history, describe, times = null) {
+// `benchmarks`, when given, maps a symbol path to the JSON object to export
+// as that symbol's `benchmark` (see comparisonToJSON in bench.js).
+export function historyToJSON(
+  source,
+  events,
+  history,
+  describe,
+  benchmarks = null,
+) {
   return `${JSON.stringify(
     {
       source,
@@ -158,14 +164,8 @@ export function historyToJSON(source, events, history, describe, times = null) {
           op: change.op,
           ...(change.from ? { from: change.from } : {}),
         })),
-        ...(times?.has(record.path)
-          ? {
-              benchmark: {
-                time_ns: times.get(record.path).timeNs,
-                calls: times.get(record.path).calls,
-                kernels: times.get(record.path).kernels,
-              },
-            }
+        ...(benchmarks?.has(record.path)
+          ? { benchmark: benchmarks.get(record.path) }
           : {}),
       })),
     },
