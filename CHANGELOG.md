@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- VizMLIR is now framed as a tool for seeing how MLIR runs on the GPU. The canvas opens on the GPU view whenever the IR launches kernels, and remembers when you switch to the op graph instead (IR without GPU code always shows the graph). A first visit opens the transpose sample, the GPU samples come first in the Samples list, and the field guide, README, and page title lead with the GPU view. The op graph, pass diff, and trace tools are unchanged.
+
 ### Added
 
 - Read `-mlir-timing` reports (tree, list, and JSON output) from pass traces and pasted logs. Each pass in the timeline shows its wall time and IR size, and **p** opens the full report with links back to each pass.

@@ -3,7 +3,11 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>VizMLIR</title>
+    <title>VizMLIR · MLIR on the GPU</title>
+    <meta
+      name="description"
+      content="See how your MLIR kernels run on the GPU: launches as blocks and warps, buffers by memory space, coalescing and bank conflicts per warp, and the passes that produced them. Runs in your browser."
+    />
     <script>
       // Apply the saved or system theme before first paint.
       try {
@@ -2677,27 +2681,93 @@
       <section id="docs-view" hidden aria-labelledby="docs-title">
         <div class="docs-content">
           <div class="docs-kicker">VizMLIR / field guide</div>
-          <h2 id="docs-title">See what your MLIR pass changed.</h2>
+          <h2 id="docs-title">See how your MLIR runs on the GPU.</h2>
           <p>
-            VizMLIR turns two MLIR snapshots into a graph and a focused
-            structural diff. Everything runs in your browser; your IR stays
+            VizMLIR follows your kernels from MLIR to PTX: how each launch
+            splits into blocks and warps, where its data lives, whether each
+            warp's memory accesses are coalesced or conflict-free, and which
+            pass produced them. Everything runs in your browser; your IR stays
             local.
+          </p>
+          <p>
+            It reads the IR; it does not run it. Launch sizes, buffers and
+            access patterns come from the code itself, so occupancy, caching and
+            real timings still need a profiler (you can import its results).
           </p>
 
           <h3>Start here</h3>
           <ul>
             <li>
-              Open <strong>Workspace</strong> and paste the earlier IR into
-              <strong>Baseline</strong>.
+              Open the transpose sample. It is the same kernel three ways: a
+              naive one whose write is strided, one that stages a tile in shared
+              memory but reads it with a 32-way bank conflict, and the padded
+              fix.
             </li>
             <li>
-              Paste the lowered or transformed IR into <strong>Current</strong>.
+              The canvas opens in the <strong>GPU</strong> view whenever the IR
+              launches kernels. <kbd>g</kbd> switches to the op graph and back.
             </li>
             <li>
-              Use the graph to inspect operation relationships and the pass diff
-              to find added, removed, and changed operations.
+              Step through the passes with <kbd>[</kbd> <kbd>]</kbd> to watch the
+              kernels get outlined, lowered to NVVM, and serialized to PTX.
             </li>
           </ul>
+          <div class="sample-actions">
+            <button id="docs-gpu-sample">Open the transpose sample</button>
+          </div>
+
+          <h3>Read the GPU view</h3>
+          <ul>
+            <li>
+              <strong>Launch:</strong> the grid of blocks, and one block opened
+              into warps of 32 threads, the groups that execute together. Sizes
+              come from constant <code>gpu.launch</code> operands; ones only
+              known at runtime show as ?.
+            </li>
+            <li>
+              <strong>Memory:</strong> the kernel's buffers as global (every
+              thread), shared (one copy per block, from
+              <code>workgroup</code> attributions or address space 3) and
+              private (one per thread), with sizes and how often each is loaded
+              and stored. After serialization, the PTX's register and shared
+              memory declarations.
+            </li>
+            <li>
+              <strong>Memory accesses:</strong> every <code>memref.load</code>
+              and <code>memref.store</code>, judged for the 32 threads of the
+              first warp. In global memory a warp moves 32-byte sectors:
+              <em>coalesced</em> means it moves the fewest possible,
+              <em>strided</em> means it moves more than it uses, and
+              <em>broadcast</em> means every thread reads one element. Shared
+              memory has 32 banks: a <em>bank conflict</em> makes the warp wait
+              for one pass per extra word in a bank. Pick an access to see its
+              lanes, the elements they touch, and the usual fix.
+            </li>
+          </ul>
+
+          <h3>Follow a kernel through the passes</h3>
+          <p>
+            Capture the pipeline with a dump before outlining, so VizMLIR can
+            tell which pass created each kernel:
+          </p>
+          <p>
+            <code
+              >mlir-opt input.mlir -pass-pipeline='builtin.module(gpu-kernel-outlining,…,gpu-module-to-binary{format=isa})'
+              -mlir-print-ir-before=gpu-kernel-outlining -mlir-print-ir-after-all
+              -mlir-print-ir-module-scope -mlir-disable-threading 2&gt;
+              trace.txt</code
+            >
+          </p>
+          <p>
+            <kbd>h</kbd> (or <strong>@ symbols</strong> in the status bar) lists
+            every function and kernel with the passes that created, changed,
+            lowered, or removed it. Click one to step through just that kernel
+            as a diff, down to the PTX that <code>format=isa</code> embeds.
+            <strong>Import current…</strong> and
+            <strong>Import baseline…</strong> attach timings from Nsight
+            Systems, Nsight Compute, Google Benchmark, or your own CSV, so each
+            kernel's time sits next to the passes that built it.
+          </p>
 
           <h3>Step through a pass pipeline</h3>
           <p>
@@ -2731,11 +2801,14 @@
             log.
           </p>
 
-          <h3>Try a small example</h3>
+          <h3>The op graph and the pass diff</h3>
           <p>
-            This example creates a tensor, fills it, and multiplies it. The
-            graph turns each operation into a node and draws edges for SSA data
-            flow.
+            For IR without GPU code, or with <kbd>g</kbd>, the canvas shows the
+            op graph: each operation a node, with edges for SSA data flow. Paste
+            earlier IR into <strong>Baseline</strong> and later IR into
+            <strong>Current</strong> (or open a trace) and the diff pane lists
+            what was added, removed, and changed. This example creates a tensor,
+            fills it, and multiplies it.
           </p>
           <div class="sample-editor">
             <div class="code-editor">
@@ -2778,7 +2851,7 @@
             </li>
           </ul>
 
-          <h3>How to read the visual</h3>
+          <h3>How to read the op graph</h3>
           <p>
             Follow the arrows from values being produced to operations that
             consume them. Click a node to see its label and parent. The pass

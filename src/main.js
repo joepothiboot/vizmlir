@@ -136,10 +136,17 @@ let traceCounts = null;
 // buffer totals for each trace event (computed when first shown).
 let viewBuffers = null;
 let traceBuffers = null;
-// What the canvas area shows ("graph" or "gpu"), and the GPU launches and
-// buffers of the rendered IR (null when it has no GPU code).
+// What the canvas area shows ("graph" or "gpu"), the GPU launches and
+// buffers of the rendered IR (null when it has no GPU code), and which view
+// the person prefers when both apply: the GPU view unless they picked the
+// graph. IR without GPU code always shows the graph.
+const CANVAS_KEY = "vizmlir-canvas";
 let canvasView = "graph";
 let gpuModel = null;
+let canvasPreference = "gpu";
+try {
+  if (localStorage.getItem(CANVAS_KEY) === "graph") canvasPreference = "graph";
+} catch {}
 // Created / changed / lowered / removed passes for every symbol in the trace,
 // computed when first shown.
 let traceSymbols = null;
@@ -950,7 +957,6 @@ async function openSample(sample) {
   try {
     applyState(await loadSampleState(sample, fetchSampleText));
     statusEl.textContent = `loaded ${sample.title} · ${statusEl.textContent}`;
-    if (sample.canvas) setCanvasView(sample.canvas);
     if (sample.benchmarks) openSymbols();
   } catch (error) {
     setStatus(`could not load sample: ${error.message}`, { error: true });
@@ -987,7 +993,11 @@ function openSamples() {
 
 document.getElementById("samples-open").addEventListener("click", openSamples);
 document.getElementById("docs-samples").addEventListener("click", openSamples);
+// The field guide's small graph example, and its GPU starting point.
 document.getElementById("load-sample")?.addEventListener("click", () => {
+  openSample(SAMPLES.find((sample) => sample.id === "rename"));
+});
+document.getElementById("docs-gpu-sample")?.addEventListener("click", () => {
   openSample(SAMPLES[0]);
 });
 
@@ -2006,17 +2016,30 @@ symbolsDialog.addEventListener("click", (e) => {
 // Picking an access marks its line (1-based) in the current source.
 const GPU_VIEW_OPTIONS = { onLine: (line) => showSourceLine(line - 1) };
 
-// Shows the Graph | GPU toggle only when the rendered IR has GPU code, and
-// redraws the GPU view when it is open. It stays open while stepping passes.
+// Shows the Graph | GPU toggle only when the rendered IR has GPU code, opens
+// the preferred view, and redraws the GPU view when it is open.
 function setGpuModel(model) {
   gpuModel = model;
   viewToggle.hidden = !model;
   viewSep.hidden = !model;
-  if (!model && canvasView === "gpu") setCanvasView("graph");
-  else if (canvasView === "gpu") renderGpuView(gpuViewEl, gpuModel, GPU_VIEW_OPTIONS);
+  if (!model) {
+    if (canvasView === "gpu") setCanvasView("graph", { remember: false });
+  } else if (canvasView === "gpu") {
+    renderGpuView(gpuViewEl, gpuModel, GPU_VIEW_OPTIONS);
+  } else if (canvasPreference === "gpu") {
+    setCanvasView("gpu", { remember: false });
+  }
 }
 
-function setCanvasView(view) {
+// `remember` records the choice as the preference, for the person's own
+// toggles; automatic switches pass false.
+function setCanvasView(view, { remember = true } = {}) {
+  if (remember && gpuModel) {
+    canvasPreference = view === "gpu" ? "gpu" : "graph";
+    try {
+      localStorage.setItem(CANVAS_KEY, canvasPreference);
+    } catch {}
+  }
   canvasView = view === "gpu" && gpuModel ? "gpu" : "graph";
   const gpu = canvasView === "gpu";
   stage.classList.toggle("gpu-mode", gpu);
@@ -2379,11 +2402,20 @@ updateRoute();
 updateWatchUi();
 
 // An autosave of an emptied workspace would open blank forever; show the
-// sample instead.
+// first sample instead (a GPU trace), or the inline one if it cannot be
+// fetched.
 const saved = await kv.get("autosave");
 const hasContent = (state) =>
   !!(state?.trace || state?.baseline?.trim() || state?.current?.trim());
-if (hasContent(saved)) applyState(saved);
-else applyState(await loadSampleState(SAMPLES[0]));
+if (hasContent(saved)) {
+  applyState(saved);
+} else {
+  const [first] = SAMPLES;
+  try {
+    applyState(await loadSampleState(first, fetchSampleText));
+  } catch {
+    applyState(await loadSampleState(SAMPLES.find((sample) => sample.inline)));
+  }
+}
 restored = true;
 restoreWatch();

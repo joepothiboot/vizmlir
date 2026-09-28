@@ -2,39 +2,49 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-A lightweight, browser-based visualizer for MLIR. Designed primarily for compiler engineers who need to inspect lowering passes and understand IR flow without the noise of raw text logs.
+**See how your MLIR runs on the GPU.** VizMLIR follows GPU kernels from MLIR to PTX, in your browser: how each launch splits into blocks and warps, where its data lives, whether each warp's loads and stores are coalesced or bank-conflicted, and which compiler pass produced them.
 
 **[Try VizMLIR live](https://joepothiboot.github.io/vizmlir/)**
 
-![VizMLIR comparison workspace](public/demo/vizmlir-workspace.png)
+![VizMLIR GPU view of a transpose kernel](public/demo/vizmlir-workspace.png)
 
 ![VizMLIR field guide](public/demo/vizmlir-docs.png)
 
 ## Why VizMLIR?
 
-Parsing complex MLIR by eye is a bottleneck. VizMLIR provides an interactive graph interface to render your IR instantly. It’s built to be a simple, "no-friction" tool that you can keep open in a side tab while you iterate on your compiler passes.
+Much of a kernel's GPU performance is settled in the compiler pipeline, long before a profiler sees it: a lowering that leaves neighboring threads writing memory 1024 elements apart, or a shared-memory tile laid out so that every thread of a warp hits the same bank. MLIR shows you the code and a profiler shows you the cost. VizMLIR sits between them: it reads the IR at every pass and draws the GPU shape of the kernel it describes, so you can see the problem, the pass that introduced it, and whether the fix worked.
+
+VizMLIR reads the IR; it does not run it. Launch sizes, buffers, and access patterns come from the code itself. Occupancy, caching, and real timings still need a profiler, and VizMLIR can import its results.
 
 ## Who is it for?
 
-- **Compiler engineers:** Inspect MLIR graphs and compare the effect of lowering passes.
-- **Frontend engineers:** Explore the React and WebAssembly implementation, or contribute improvements to the UI.
-- **Technical readers:** Build an intuition for how MLIR operations connect without needing to read raw dumps alone.
+- **GPU compiler engineers:** check what each lowering does to a kernel's launch shape, memory placement, and access patterns, pass by pass.
+- **Kernel authors on MLIR-based stacks:** see why a kernel is strided or bank-conflicted before reaching for a profiler, and line up profiler timings with the passes that built each kernel.
+- **Students and newcomers to GPU compilers:** build an intuition for blocks, warps, coalescing, and shared memory on real compiler output, with the IR next to the picture.
 
 ## Features
 
-- **Interactive Graphs:** Visualize nodes and operations as they connect through your IR.
+### On the GPU
+
+- **GPU View:** The canvas opens on the GPU view whenever the IR launches kernels (`g` switches to the op graph). Each `gpu.launch` / `gpu.launch_func` is drawn as its grid of blocks, with one block opened into warps of 32 threads, and the kernel's buffers are grouped as global, shared per block, and private per thread, with sizes and load/store counts. After `gpu-module-to-binary{format=isa}`, the PTX register and shared-memory declarations.
+- **Memory Accesses:** Every `memref.load` and `memref.store` is judged for the 32 threads of the first warp: coalesced, strided (with the 32-byte sectors it moves against the minimum), or broadcast in global memory; conflict-free or an N-way bank conflict in shared memory. Pick one to see its lanes, the elements they touch, the usual fix, and its source line.
+- **Kernel History and PTX:** Press `h` to see which pass created, changed, lowered (`gpu.func` → `llvm.func`), or serialized each kernel. Click one to step through just that kernel as a diff, down to the PTX it became.
+- **Benchmarks:** Import kernel times from Nsight Systems, Nsight Compute, Google Benchmark, or your own CSV, and compare a baseline and a current run, so each kernel's time sits next to the passes that built it ([docs/benchmark-format.md](docs/benchmark-format.md)).
+
+### Through the MLIR pipeline
+
 - **Pass Traces:** Open `mlir-opt -mlir-print-ir-after-all` output (or from any out-of-tree `*-opt` driver) and step through each pass with its before/after diff, failures, and diagnostics. The accepted format is documented in [docs/trace-format.md](docs/trace-format.md).
+- **Op Graph and Diff:** Each operation as a node with its SSA data flow, and a structural diff of what a pass added, removed, or changed. Walk changes with `j` `k`; each is linked to its graph node and source line.
 - **Pass Timing:** Add `-mlir-timing` to see each pass's wall time and IR size in the timeline, and the full report with `p`. Run under `/usr/bin/time -l` / `-v` to add peak memory.
-- **Op Counts:** Press `o` to see how many of each op every pass leaves in the module, trimmed to the passes and ops that change, to spot a lowering that stopped firing or an op-count blow-up. Exports as CSV.
+- **Op Counts:** Press `o` to see how many of each op every pass leaves in the module, to spot a lowering that stopped firing or an op-count blow-up. Exports as CSV.
 - **Buffer Memory:** After bufferization, press `b` to see each `memref.alloc` as a live range with its size, the peak live bytes per function, and which buffers a pass added, removed, or now frees differently.
-- **Symbol History:** Press `h` to see, for every function, kernel, and GPU module in a trace, which pass created it, changed it, lowered it (`gpu.func` → `llvm.func`), or removed it. Click one to follow just that symbol pass by pass as a diff, down to the PTX it was serialized to. Import kernel times from Nsight Systems, Nsight Compute, Google Benchmark, or your own CSV to see each kernel's time next to the passes that built it, or import a baseline run too to see which kernels got slower. The "GPU kernels + benchmarks (mock)" sample shows this with invented timings ([docs/benchmark-format.md](docs/benchmark-format.md)).
-- **GPU View:** When the IR launches GPU kernels, switch the canvas to **GPU** (or press `g`) to see each launch's grid of blocks and warps of threads, and which buffers live in global, shared, or private memory. Each load and store is judged for one warp: coalesced or strided in global memory, conflict-free or bank-conflicted in shared memory, with the lanes and elements drawn. Try the "Transpose: strided, bank conflict, fixed" sample.
+
+### Workflow
+
 - **Live Reload:** Watch a trace file (Chrome/Edge) and the view refreshes each time `mlir-opt` rewrites it.
 - **Save & Export:** The workspace autosaves locally (IndexedDB), named sessions can be saved and shared as `.json`, graphs export as PNG/SVG, and diffs as Markdown/JSON.
-- **Keyboard-First:** Jump to any pass, op, or `@symbol` with ⌘K / Ctrl K, step passes with `[` `]`, walk changes with `j` `k` (each change is linked to its graph node and source line), and press `?` for the full list.
-- **Low Latency:** Renders changes in real-time as you modify your MLIR.
-- **Browser-Native:** Runs entirely on the client side—no backend infrastructure required.
-- **Streamlined UI:** Minimalist interface that stays out of your way.
+- **Keyboard-First:** Jump to any pass, op, or `@symbol` with ⌘K / Ctrl K, step passes with `[` `]`, and press `?` for the full list.
+- **Browser-Native:** Runs entirely on the client; your IR never leaves the browser.
 
 ## Quick Start
 
@@ -47,9 +57,9 @@ npm install
 npm run dev
 ```
 
-1. Open your browser to the local dev address.
-2. Paste your MLIR into the input editor.
-3. The graph view will generate automatically. Use the navigation controls to zoom or pan.
+1. Open your browser to the local dev address. The transpose sample opens in the GPU view.
+2. Step through its passes with `[` `]`, and pick a memory access to see its lanes.
+3. Open your own trace with **Open…**. To follow kernels from their creation, capture it with `-mlir-print-ir-before=gpu-kernel-outlining -mlir-print-ir-after-all -mlir-print-ir-module-scope`.
 
 ## Contributing
 

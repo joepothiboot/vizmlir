@@ -1,7 +1,8 @@
-// Built-in samples. The inline one loads instantly on first visit; the rest are
-// real mlir-opt output in public/samples (see samples/generate.sh) and are
-// fetched only when picked. The benchmark CSVs are the exception: hand-written
-// mock timings (`*.mock.csv`, flagged `mock`) to show the benchmark view.
+// Built-in samples. The inline one needs no fetch, so it is the fallback when
+// the first sample cannot be loaded; the rest are real mlir-opt output in
+// public/samples (see samples/generate.sh), fetched only when picked. The
+// benchmark CSVs are the exception: hand-written mock timings (`*.mock.csv`,
+// flagged `mock`) to show the benchmark view.
 
 export const RENAME_SAMPLE = `module {
   func.func @matmul(%A: tensor<128x256xf32>, %B: tensor<256x64xf32>) -> tensor<128x64xf32> {
@@ -15,36 +16,38 @@ export const RENAME_SAMPLE = `module {
 }`;
 
 /**
- * `baseline`/`current` name a before/after pair; `trace` names a pass trace,
- * and `benchmarks` optional baseline/current kernel results for it, which are
- * invented when `mock` is set. `canvas: "gpu"` opens it in the GPU view.
- * Paths are relative to the samples directory.
+ * In the order the Samples dialog lists them; the first opens on a first
+ * visit. `baseline`/`current` name a before/after pair; `trace` names a pass
+ * trace, and `benchmarks` optional baseline/current kernel results for it,
+ * which are invented when `mock` is set. Paths are relative to the samples
+ * directory.
  */
 export const SAMPLES = [
   {
-    id: "rename",
-    title: "Op rename",
-    blurb: "One op swapped in a matmul. The smallest possible diff.",
-    inline: {
-      baseline: RENAME_SAMPLE,
-      current: RENAME_SAMPLE.replace("linalg.fill", "linalg.fill_relu"),
+    id: "gpu-transpose",
+    title: "Transpose: strided, bank conflict, fixed",
+    blurb:
+      "The same transpose three ways: a naive strided write, a shared tile with a 32-way bank conflict, and the tile padded to 32×33.",
+    trace: "gpu-transpose.trace.txt",
+  },
+  {
+    id: "gpu-tiled-matmul",
+    title: "Tiled matmul on the GPU",
+    blurb:
+      "An 8×8 grid of 16×16-thread blocks staging tiles of A and B in shared memory, from gpu.launch to PTX.",
+    trace: "gpu-tiled-matmul.trace.txt",
+  },
+  {
+    id: "gpu-kernels",
+    title: "GPU kernels + benchmarks (mock)",
+    blurb:
+      "Two kernels outlined, lowered to NVVM and serialized to PTX, with mock baseline and current timings: saxpy_kernel looks 26% slower. The timings are invented to show the feature.",
+    trace: "gpu-kernels.trace.txt",
+    benchmarks: {
+      baseline: "gpu-kernels.baseline.mock.csv",
+      current: "gpu-kernels.current.mock.csv",
     },
-  },
-  {
-    id: "canonicalize",
-    title: "Canonicalize + CSE",
-    blurb:
-      "Identity arithmetic folded, a constant computed, dead code removed.",
-    baseline: "canonicalize.before.mlir",
-    current: "canonicalize.after.mlir",
-  },
-  {
-    id: "tiling",
-    title: "Tile a matmul",
-    blurb:
-      "Transform dialect tiles the matmul 32×32×64 into nested scf.for loops.",
-    baseline: "tiling.before.mlir",
-    current: "tiling.after.mlir",
+    mock: true,
   },
   {
     id: "lowering",
@@ -61,32 +64,29 @@ export const SAMPLES = [
     trace: "failed-transform.trace.txt",
   },
   {
-    id: "gpu-kernels",
-    title: "GPU kernels + benchmarks (mock)",
+    id: "tiling",
+    title: "Tile a matmul",
     blurb:
-      "Two kernels outlined, lowered to NVVM and serialized to PTX, with mock baseline and current timings: saxpy_kernel looks 26% slower. The timings are invented to show the feature.",
-    trace: "gpu-kernels.trace.txt",
-    benchmarks: {
-      baseline: "gpu-kernels.baseline.mock.csv",
-      current: "gpu-kernels.current.mock.csv",
+      "Transform dialect tiles the matmul 32×32×64 into nested scf.for loops.",
+    baseline: "tiling.before.mlir",
+    current: "tiling.after.mlir",
+  },
+  {
+    id: "canonicalize",
+    title: "Canonicalize + CSE",
+    blurb:
+      "Identity arithmetic folded, a constant computed, dead code removed.",
+    baseline: "canonicalize.before.mlir",
+    current: "canonicalize.after.mlir",
+  },
+  {
+    id: "rename",
+    title: "Op rename",
+    blurb: "One op swapped in a matmul. The smallest possible diff.",
+    inline: {
+      baseline: RENAME_SAMPLE,
+      current: RENAME_SAMPLE.replace("linalg.fill", "linalg.fill_relu"),
     },
-    mock: true,
-  },
-  {
-    id: "gpu-tiled-matmul",
-    title: "Tiled matmul on the GPU",
-    blurb:
-      "An 8×8 grid of 16×16-thread blocks staging tiles of A and B in shared memory, from gpu.launch to PTX. Press g for the GPU view.",
-    trace: "gpu-tiled-matmul.trace.txt",
-    canvas: "gpu",
-  },
-  {
-    id: "gpu-transpose",
-    title: "Transpose: strided, bank conflict, fixed",
-    blurb:
-      "The same transpose three ways: a naive strided write, a shared tile with a 32-way bank conflict, and the tile padded to 32×33. Opens in the GPU view.",
-    trace: "gpu-transpose.trace.txt",
-    canvas: "gpu",
   },
 ];
 
