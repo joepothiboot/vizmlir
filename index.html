@@ -1457,6 +1457,35 @@
       #symbols-table .none {
         color: var(--faint);
       }
+      #symbols-table .time {
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+        white-space: nowrap;
+      }
+      #symbols h3 {
+        margin: 0 0 6px;
+        font-size: 12px;
+      }
+      #symbols-unmatched {
+        margin: 0 0 14px;
+        padding: 0;
+        font-size: 11px;
+        list-style: none;
+      }
+      #symbols-unmatched li {
+        padding: 2px 0;
+      }
+      #symbols-unmatched code {
+        font-family: var(--code);
+      }
+      #symbols-bench[hidden],
+      #symbols-bench-error[hidden],
+      #symbols-bench-clear[hidden] {
+        display: none;
+      }
+      #symbols-bench-error {
+        color: var(--err);
+      }
       .timing-scroll[hidden],
       #timing-open[hidden] {
         display: none;
@@ -2137,11 +2166,24 @@
           >
           <span id="symbols-shown" class="dialog-note"></span>
         </div>
+        <p id="symbols-bench-error" class="dialog-note" role="alert" hidden></p>
         <div class="opcount-scroll">
           <table id="symbols-table"></table>
         </div>
+        <div id="symbols-bench" hidden>
+          <h3>Benchmark kernels not matched to a symbol</h3>
+          <ul id="symbols-unmatched"></ul>
+        </div>
         <div class="dialog-actions">
           <button id="symbols-export">Download .json</button>
+          <button id="symbols-bench-import">Import benchmarks…</button>
+          <button id="symbols-bench-clear" hidden>Clear benchmarks</button>
+          <input
+            id="symbols-bench-file"
+            type="file"
+            accept=".csv,.json,.txt"
+            hidden
+          />
           <span class="sp"></span>
           <form method="dialog"><button>Close</button></form>
         </div>
