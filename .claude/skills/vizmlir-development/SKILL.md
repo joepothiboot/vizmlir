@@ -1,6 +1,6 @@
 ---
 name: vizmlir-development
-description: Develop and validate VizMLIR changes across its Vite frontend and Rust WASM parser.
+description: Develop and validate VizMLIR changes across its Vite frontend and Rust WASM parser, and find where a feature is implemented (feature-to-code map).
 ---
 
 # VizMLIR development
@@ -9,11 +9,12 @@ Use this workflow for changes that cross the JavaScript frontend and the Rust WA
 
 ## Workflow
 
-1. Read `CONTRIBUTING.md` and inspect the nearest implementation and call sites.
+1. Read `CONTRIBUTING.md`. To find where a feature lives, start from `references/feature-map.md`, then inspect the nearest implementation and call sites.
 2. Make the smallest change that preserves the existing browser-only design.
 3. If the exported Rust ABI changes, update `src/wasm/abi.js` in the same change.
 4. Run `npm run build`.
 5. For parser or rendering changes, exercise a representative valid and invalid MLIR input in the app.
+6. If you added, moved, or removed a feature, a module, or a `main.js` section banner, update `references/feature-map.md` in the same change.
 
 ## Bug reports
 
