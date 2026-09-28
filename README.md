@@ -8,7 +8,9 @@ When you write a program for a GPU, a compiler reshapes it in many small steps b
 
 **[Try VizMLIR live](https://joepothiboot.github.io/vizmlir/)**: it opens on a small example with two classic GPU mistakes in it.
 
-![VizMLIR showing a transpose kernel whose writes are strided](public/demo/vizmlir-workspace.png)
+![VizMLIR showing a transpose kernel: the GPU view flags a strided write, and "What's this line?" explains the store in plain words](public/demo/vizmlir-workspace.png)
+
+_A transpose whose write is strided. The GPU view shows the 32 threads of a warp landing 1024 items apart; under the code, "What's this line?" takes the store apart in plain words._
 
 ![VizMLIR field guide](public/demo/vizmlir-docs.png)
 
