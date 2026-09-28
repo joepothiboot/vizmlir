@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Import kernel benchmark results into the symbol history: Nsight Systems kernel summaries, Nsight Compute `gpu__time_duration.sum` metrics, Google Benchmark JSON, or a generic CSV/JSON with the unit in the time header. Each kernel is matched to its symbol by name (including C++ and Itanium-mangled names) or by an explicit `symbol` column, and its time per call shows next to the passes that built it. Unmatched and ambiguous kernels are listed; the results are saved with the session and added to the JSON export. The format is documented in `docs/benchmark-format.md`.
 - Compare two benchmark runs against a trace: import a baseline next to the current results to see each kernel's baseline and current time per call and its change, largest slowdown first, with a filter for kernels that changed by more than a set percentage. Sessions saved with a single run open as the current run.
 - Add a "GPU kernels + benchmarks (mock)" sample: a real `mlir-opt` trace of two kernels from outlining to PTX, with invented baseline and current timings that show the benchmark comparison. The Symbol history marks mock data with a note.
+- Open the Symbol history from the status bar while a trace is loaded (**@ symbols**, or **@ N slower** when two benchmark runs are compared). Click a symbol in it to go to the last pass whose dump shows it, with its graph node selected and its line marked.
 
 ### Fixed
 

@@ -81,17 +81,20 @@ export function scanSymbols(ir) {
 
 // Compares the whole-module state at every event with the event before it.
 // Returns one record per symbol ever seen, in order of first appearance:
-//   { path, symbol, op, ops, initial, removed, changes }
+//   { path, symbol, op, ops, initial, removed, changes, lastDump }
 // `initial` is true when the symbol is already in the first dump. `changes`
 // lists { index, kind, op, from } where kind is created, changed, lowered
 // (the defining op changed name; `from` is the old one) or removed. `op` is
 // the latest defining op; `ops` every op it was defined by, in order.
+// `lastDump` is the last event whose own dump shows the symbol (what the graph
+// draws for that event), or -1.
 export function symbolHistory(events) {
   const history = new Map();
   let previous = new Map();
 
   events.forEach((event, index) => {
     const current = scanSymbols(moduleStateAt(events, index));
+    const dumped = [...scanSymbols(event.ir).keys()];
     for (const [path, now] of current) {
       const before = previous.get(path);
       let record = history.get(path);
@@ -104,6 +107,7 @@ export function symbolHistory(events) {
           initial: index === 0,
           removed: false,
           changes: [],
+          lastDump: -1,
         };
         history.set(path, record);
       }
@@ -117,6 +121,8 @@ export function symbolHistory(events) {
       if (record.op !== now.op) record.ops.push(now.op);
       record.op = now.op;
       record.removed = false;
+      if (dumped.some((local) => pathEndsWith(path, local)))
+        record.lastDump = index;
     }
     for (const [path, then] of previous) {
       if (current.has(path)) continue;
@@ -128,6 +134,47 @@ export function symbolHistory(events) {
   });
 
   return [...history.values()];
+}
+
+// A symbol path seen from inside a dump: a nested dump (a gpu.module on its
+// own) starts part-way down, so `@m::@k` appears there as `@k` or `@m::@k`.
+function pathEndsWith(path, local) {
+  return path === local || path.endsWith(`::${local}`);
+}
+
+// Finds the graph node that defines `path` in an engine snapshot (live or
+// copied), reading each node's label (`gpu.func @k`) and its ancestors'.
+// Returns the node index, or -1.
+export function findSymbolNode(snapshot, path) {
+  if (!snapshot) return -1;
+  const label = (i) => snapshot.nodes?.[i]?.label ?? snapshot.labelOf(i);
+  const parent = (i) => snapshot.nodes?.[i]?.parent ?? snapshot.parentOf(i);
+  const symbolOf = (i) => {
+    const match = HEADER.exec(label(i));
+    const op = match?.[2];
+    return op &&
+      op !== "builtin.module" &&
+      DEFINING.test(op.slice(op.lastIndexOf(".") + 1))
+      ? unquote(match[3])
+      : null;
+  };
+  let best = -1;
+  let bestDepth = 0;
+  for (let i = 0; i < snapshot.nodeCount; i++) {
+    const symbol = symbolOf(i);
+    if (!symbol) continue;
+    const names = [symbol];
+    for (let p = parent(i); p >= 0; p = parent(p)) {
+      const outer = symbolOf(p);
+      if (outer) names.unshift(outer);
+    }
+    const local = names.map((name) => `@${name}`).join("::");
+    if (pathEndsWith(path, local) && names.length > bestDepth) {
+      best = i;
+      bestDepth = names.length;
+    }
+  }
+  return best;
 }
 
 // The symbols that `events[index]` created, changed, lowered or removed.
