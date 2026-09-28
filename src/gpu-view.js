@@ -271,11 +271,14 @@ function accessSection(kernel, launch, options) {
     ),
   );
   const judged = kernel.accesses.map((access) => ({ access, ...judge(access, kernel, launch) }));
-  // Start on the first access worth a look.
-  let picked = judged.findIndex(
-    (j) => j.result.analyzed && !GOOD.has(j.result.verdict),
-  );
+  // Start on the access asked for, else the first one worth a look.
+  const focused = judged.findIndex((j) => j.access.line === options.focusLine);
+  let picked =
+    focused >= 0
+      ? focused
+      : judged.findIndex((j) => j.result.analyzed && !GOOD.has(j.result.verdict));
   if (picked < 0) picked = 0;
+  if (focused >= 0) section.dataset.focus = "true";
 
   const table = el("table", "gpu-access-table");
   const head = el("tr");
@@ -560,7 +563,8 @@ function ptxNote(ptx) {
 
 // Fills `container` for `model` (from analyzeGpu), or explains why it is
 // empty. `options.onLine(line)` is called with a 1-based source line when an
-// access is picked.
+// access is picked; `options.focusLine` opens the access on that line and
+// scrolls to it.
 export function renderGpuView(container, model, options = {}) {
   const children = [
     el(
@@ -592,4 +596,5 @@ export function renderGpuView(container, model, options = {}) {
     children.push(section);
   });
   container.replaceChildren(...children);
+  container.querySelector('[data-focus="true"]')?.scrollIntoView({ block: "start" });
 }
