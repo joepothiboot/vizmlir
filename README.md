@@ -27,6 +27,7 @@ Parsing complex MLIR by eye is a bottleneck. VizMLIR provides an interactive gra
 - **Pass Timing:** Add `-mlir-timing` to see each pass's wall time and IR size in the timeline, and the full report with `p`. Run under `/usr/bin/time -l` / `-v` to add peak memory.
 - **Op Counts:** Press `o` to see how many of each op every pass leaves in the module, trimmed to the passes and ops that change, to spot a lowering that stopped firing or an op-count blow-up. Exports as CSV.
 - **Buffer Memory:** After bufferization, press `b` to see each `memref.alloc` as a live range with its size, the peak live bytes per function, and which buffers a pass added, removed, or now frees differently.
+- **Symbol History:** Press `h` to see, for every function, kernel, and GPU module in a trace, which pass created it, changed it, lowered it (`gpu.func` → `llvm.func`), or removed it.
 - **Live Reload:** Watch a trace file (Chrome/Edge) and the view refreshes each time `mlir-opt` rewrites it.
 - **Save & Export:** The workspace autosaves locally (IndexedDB), named sessions can be saved and shared as `.json`, graphs export as PNG/SVG, and diffs as Markdown/JSON.
 - **Keyboard-First:** Jump to any pass, op, or `@symbol` with ⌘K / Ctrl K, step passes with `[` `]`, walk changes with `j` `k` (each change is linked to its graph node and source line), and press `?` for the full list.

@@ -1,0 +1,179 @@
+import { describe, expect, it } from "vitest";
+import {
+  changesAt,
+  historyToJSON,
+  scanSymbols,
+  symbolHistory,
+} from "../../src/provenance.js";
+import { describeEvent, parsePassTrace } from "../../src/trace.js";
+
+const header = (pass, arg, anchor) =>
+  `// -----// IR Dump After ${pass}: ${arg} (${anchor}) //----- //`;
+
+// Outline a GPU kernel, lower it to NVVM, then serialize the module.
+const TRACE = [
+  header("CanonicalizerPass", "canonicalize", "'builtin.module' operation"),
+  "module {",
+  "  func.func @main(%arg0: memref<8xf32>) {",
+  "    gpu.launch blocks(%bx, %by, %bz) in (%gx = %c1, %gy = %c1, %gz = %c1) threads(%tx, %ty, %tz) in (%sx = %c8, %sy = %c1, %sz = %c1) {",
+  "      gpu.terminator",
+  "    }",
+  "    return",
+  "  }",
+  "  func.func private @helper()",
+  "}",
+  "",
+  header("GpuKernelOutliningPass", "gpu-kernel-outlining", "'builtin.module' operation"),
+  "module attributes {gpu.container_module} {",
+  "  func.func @main(%arg0: memref<8xf32>) {",
+  "    gpu.launch_func @main_kernel::@main_kernel blocks in (%c1, %c1, %c1) threads in (%c8, %c1, %c1)",
+  "    return",
+  "  }",
+  "  func.func private @helper()",
+  "  gpu.module @main_kernel {",
+  "    gpu.func @main_kernel() kernel {",
+  "      gpu.return",
+  "    }",
+  "  }",
+  "}",
+  "",
+  header("ConvertGpuOpsToNVVMOps", "convert-gpu-to-nvvm", "'gpu.module' operation: @main_kernel"),
+  "gpu.module @main_kernel {",
+  "  llvm.func @main_kernel() attributes {gpu.kernel, nvvm.kernel} {",
+  "    llvm.return",
+  "  }",
+  "}",
+  "",
+  header("CSEPass", "cse", "'builtin.module' operation"),
+  "module attributes {gpu.container_module} {",
+  "  func.func @main(%arg0: memref<8xf32>) {",
+  "    gpu.launch_func @main_kernel::@main_kernel blocks in (%c1, %c1, %c1) threads in (%c8, %c1, %c1)",
+  "    return",
+  "  }",
+  "  func.func private @helper()",
+  "  gpu.module @main_kernel {",
+  "    llvm.func @main_kernel() attributes {gpu.kernel, nvvm.kernel} {",
+  "      llvm.return",
+  "    }",
+  "  }",
+  "}",
+  "",
+  header("GpuModuleToBinaryPass", "gpu-module-to-binary", "'builtin.module' operation"),
+  "module attributes {gpu.container_module} {",
+  "  func.func @main(%arg0: memref<8xf32>) {",
+  "    gpu.launch_func @main_kernel::@main_kernel blocks in (%c1, %c1, %c1) threads in (%c8, %c1, %c1)",
+  "    return",
+  "  }",
+  "  gpu.binary @main_kernel  [#gpu.object<#nvvm.target, \"BLOB\">]",
+  "}",
+  "",
+].join("\n");
+
+describe("scanSymbols", () => {
+  it("finds defining ops with nested paths and skips uses", () => {
+    const { events } = parsePassTrace(TRACE);
+    const symbols = scanSymbols(events[1].ir);
+    expect([...symbols.keys()]).toEqual([
+      "@main",
+      "@helper",
+      "@main_kernel",
+      "@main_kernel::@main_kernel",
+    ]);
+    expect(symbols.get("@main_kernel").op).toBe("gpu.module");
+    expect(symbols.get("@main_kernel::@main_kernel").op).toBe("gpu.func");
+  });
+
+  it("keeps nested symbols out of their parent's text", () => {
+    const { events } = parsePassTrace(TRACE);
+    const symbols = scanSymbols(events[1].ir);
+    expect(symbols.get("@main_kernel").text).toBe(
+      "gpu.module @main_kernel {\n}",
+    );
+    expect(symbols.get("@helper").text).toBe("func.func private @helper()");
+  });
+
+  it("reads quoted symbols, visibility keywords and globals", () => {
+    const symbols = scanSymbols(
+      [
+        "module {",
+        '  memref.global "private" constant @cst : memref<2xf32> = dense<0.0>',
+        "  llvm.mlir.global internal constant @str(\"hi\") : !llvm.array<2 x i8>",
+        '  func.func @"odd name"() {',
+        "    func.call @cst() : () -> ()",
+        "    return",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+    expect([...symbols.values()].map((s) => [s.path, s.op])).toEqual([
+      ["@cst", "memref.global"],
+      ["@str", "llvm.mlir.global"],
+      ["@odd name", "func.func"],
+    ]);
+  });
+});
+
+describe("symbolHistory", () => {
+  const { events } = parsePassTrace(TRACE);
+  const history = symbolHistory(events);
+  const byPath = Object.fromEntries(history.map((r) => [r.path, r]));
+  const kinds = (path) =>
+    byPath[path].changes.map((c) => [c.index, c.kind, c.from ?? c.op]);
+
+  it("marks symbols present in the first dump as initial", () => {
+    expect(byPath["@main"].initial).toBe(true);
+    expect(byPath["@main_kernel"].initial).toBe(false);
+  });
+
+  it("attributes creation to the pass that outlined the kernel", () => {
+    expect(kinds("@main_kernel")[0]).toEqual([1, "created", "gpu.module"]);
+    expect(kinds("@main_kernel::@main_kernel")[0]).toEqual([
+      1,
+      "created",
+      "gpu.func",
+    ]);
+  });
+
+  it("follows a kernel through lowering and serialization", () => {
+    expect(kinds("@main_kernel::@main_kernel")).toEqual([
+      [1, "created", "gpu.func"],
+      [2, "lowered", "gpu.func"],
+      [4, "removed", "llvm.func"],
+    ]);
+    expect(byPath["@main_kernel::@main_kernel"].ops).toEqual([
+      "gpu.func",
+      "llvm.func",
+    ]);
+    expect(kinds("@main_kernel")).toEqual([
+      [1, "created", "gpu.module"],
+      [4, "lowered", "gpu.module"],
+    ]);
+    expect(byPath["@main_kernel"].op).toBe("gpu.binary");
+  });
+
+  it("does not report a pass that left a symbol alone", () => {
+    expect(changesAt(history, 3)).toEqual([]);
+    expect(kinds("@main")).toEqual([[1, "changed", "func.func"]]);
+  });
+
+  it("reports removed symbols", () => {
+    expect(kinds("@helper")).toEqual([[4, "removed", "func.func"]]);
+    expect(byPath["@helper"].removed).toBe(true);
+  });
+
+  it("exports changes with pass names", () => {
+    const json = JSON.parse(
+      historyToJSON("t.txt", events, history, describeEvent),
+    );
+    const kernel = json.symbols.find(
+      (s) => s.symbol === "@main_kernel::@main_kernel",
+    );
+    expect(kernel.changes[1]).toEqual({
+      pass: describeEvent(events[2]),
+      dump: 3,
+      kind: "lowered",
+      op: "llvm.func",
+      from: "gpu.func",
+    });
+  });
+});

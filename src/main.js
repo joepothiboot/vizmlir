@@ -20,6 +20,7 @@ import {
   renderSummary,
   signedBytes,
 } from "./buffers-view.js";
+import { historyToJSON, symbolHistory } from "./provenance.js";
 import { bindHighlighting } from "./mlir-highlight.js";
 import { CommandPalette } from "./palette.js";
 import { loadSampleState, RENAME_SAMPLE, SAMPLES } from "./samples.js";
@@ -110,6 +111,9 @@ let traceCounts = null;
 // buffer totals for each trace event (computed when first shown).
 let viewBuffers = null;
 let traceBuffers = null;
+// Created / changed / lowered / removed passes for every symbol in the trace,
+// computed when first shown.
+let traceSymbols = null;
 
 const renderer = new CanvasRenderer(canvas, {
   onSelect(index, snap) {
@@ -364,6 +368,7 @@ function loadTrace(text, { keepIndex = false } = {}) {
   trace = parsePassTrace(text);
   traceCounts = null;
   traceBuffers = null;
+  traceSymbols = null;
   if (!trace.events.length) {
     clearTrace();
     setStatus("no IR dumps found in trace", { error: true });
@@ -470,6 +475,7 @@ function clearTrace() {
   trace = null;
   traceCounts = null;
   traceBuffers = null;
+  traceSymbols = null;
   traceText = "";
   traceNote = "";
   traceIndex = -1;
@@ -722,6 +728,7 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
     ["Show pass timing and memory", "p", openTiming],
     ["Show op counts per pass", "o", openOpCounts],
     ["Show buffers and peak memory", "b", openBuffers],
+    ["Show symbol history (which pass made each kernel)", "h", openSymbols],
     ...(canWatchFiles
       ? [
           watcher.watching
@@ -811,6 +818,7 @@ const WORKSPACE_KEYS = {
   p: openTiming,
   o: openOpCounts,
   b: openBuffers,
+  h: openSymbols,
   "[": () => trace && traceIndex > 0 && selectEvent(traceIndex - 1),
   "]": () =>
     trace &&
@@ -1547,6 +1555,137 @@ document
   .addEventListener("click", exportBuffers);
 buffersDialog.addEventListener("click", (e) => {
   if (e.target === buffersDialog) buffersDialog.close();
+});
+
+// ---- Symbol history --------------------------------------------------------
+
+const symbolsDialog = document.getElementById("symbols");
+const symbolsSummary = document.getElementById("symbols-summary");
+const symbolsTable = document.getElementById("symbols-table");
+const symbolsFilter = document.getElementById("symbols-filter");
+const symbolsChanged = document.getElementById("symbols-changed");
+const symbolsAtPass = document.getElementById("symbols-at-pass");
+const symbolsShown = document.getElementById("symbols-shown");
+const STEP_TEXT = {
+  created: "created",
+  changed: "changed",
+  lowered: "lowered",
+  removed: "removed",
+};
+
+function openSymbols() {
+  goToWorkspace();
+  if (!trace) {
+    setStatus("open a pass trace to see symbol history", { error: true });
+    return;
+  }
+  traceSymbols ??= symbolHistory(trace.events);
+  const count = (predicate) => traceSymbols.filter(predicate).length;
+  const facts = [
+    ["Symbols", String(traceSymbols.length)],
+    ["Created during the trace", String(count((r) => !r.initial))],
+    ["Lowered to another op", String(count((r) => r.ops.length > 1))],
+    ["Removed", String(count((r) => r.removed))],
+  ];
+  symbolsSummary.replaceChildren(
+    ...facts.flatMap(([term, value]) => {
+      const dt = document.createElement("dt");
+      dt.textContent = term;
+      const dd = document.createElement("dd");
+      dd.textContent = value;
+      return [dt, dd];
+    }),
+  );
+  renderSymbols();
+  symbolsDialog.showModal();
+}
+
+function renderSymbols() {
+  const needle = symbolsFilter.value.trim().toLowerCase();
+  const rows = traceSymbols.filter(
+    (record) =>
+      (!symbolsChanged.checked || record.changes.length) &&
+      (!symbolsAtPass.checked ||
+        record.changes.some((change) => change.index === traceIndex)) &&
+      (!needle ||
+        record.path.toLowerCase().includes(needle) ||
+        record.ops.some((op) => op.toLowerCase().includes(needle))),
+  );
+  symbolsShown.textContent = `${rows.length} of ${traceSymbols.length} symbols`;
+
+  const head = document.createElement("tr");
+  head.append(
+    cell("th", "Symbol"),
+    cell("th", "Defined by"),
+    cell("th", "Passes that touched it"),
+  );
+  const thead = document.createElement("thead");
+  thead.append(head);
+
+  const tbody = document.createElement("tbody");
+  for (const record of rows) {
+    const tr = document.createElement("tr");
+    if (record.removed) tr.className = "gone";
+    const sym = cell("td", record.path, "sym");
+    sym.title = record.initial
+      ? "In the first dump"
+      : "Created during the trace";
+    const steps = document.createElement("div");
+    steps.className = "steps";
+    if (!record.changes.length)
+      steps.append(cell("span", "unchanged through the trace", "none"));
+    for (const change of record.changes) {
+      const event = trace.events[change.index];
+      const step = document.createElement("button");
+      step.className = [
+        "link-btn",
+        "step",
+        change.kind,
+        change.index === traceIndex ? "current" : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      step.textContent =
+        `#${change.index + 1} ${event.argument || event.pass} · ` +
+        STEP_TEXT[change.kind] +
+        (change.kind === "lowered" ? ` to ${change.op}` : "");
+      step.title = `${change.index + 1}. ${describeEvent(event)}\nGo to this pass`;
+      step.addEventListener("click", () => {
+        symbolsDialog.close();
+        selectEvent(change.index);
+      });
+      steps.append(step);
+    }
+    const stepsCell = document.createElement("td");
+    stepsCell.append(steps);
+    tr.append(sym, cell("td", record.ops.join(" → "), "ops"), stepsCell);
+    tbody.append(tr);
+  }
+  symbolsTable.replaceChildren(thead, tbody);
+}
+
+function exportSymbols() {
+  if (!traceSymbols) return;
+  download(
+    `${slug(sourceName.textContent.replace(/ ●$/, ""))}-symbols.json`,
+    historyToJSON(
+      sourceName.textContent,
+      trace.events,
+      traceSymbols,
+      describeEvent,
+    ),
+    "application/json",
+  );
+}
+
+symbolsFilter.addEventListener("input", renderSymbols);
+symbolsChanged.addEventListener("change", renderSymbols);
+symbolsAtPass.addEventListener("change", renderSymbols);
+document
+  .getElementById("symbols-export")
+  .addEventListener("click", exportSymbols);
+symbolsDialog.addEventListener("click", (e) => {
+  if (e.target === symbolsDialog) symbolsDialog.close();
 });
 
 // ---- Export ----------------------------------------------------------------
