@@ -2003,6 +2003,9 @@ symbolsDialog.addEventListener("click", (e) => {
 
 // ---- GPU view ----------------------------------------------------------------
 
+// Picking an access marks its line (1-based) in the current source.
+const GPU_VIEW_OPTIONS = { onLine: (line) => showSourceLine(line - 1) };
+
 // Shows the Graph | GPU toggle only when the rendered IR has GPU code, and
 // redraws the GPU view when it is open. It stays open while stepping passes.
 function setGpuModel(model) {
@@ -2010,7 +2013,7 @@ function setGpuModel(model) {
   viewToggle.hidden = !model;
   viewSep.hidden = !model;
   if (!model && canvasView === "gpu") setCanvasView("graph");
-  else if (canvasView === "gpu") renderGpuView(gpuViewEl, gpuModel);
+  else if (canvasView === "gpu") renderGpuView(gpuViewEl, gpuModel, GPU_VIEW_OPTIONS);
 }
 
 function setCanvasView(view) {
@@ -2020,7 +2023,7 @@ function setCanvasView(view) {
   gpuViewEl.hidden = !gpu;
   viewGraph.setAttribute("aria-pressed", String(!gpu));
   viewGpu.setAttribute("aria-pressed", String(gpu));
-  if (gpu) renderGpuView(gpuViewEl, gpuModel);
+  if (gpu) renderGpuView(gpuViewEl, gpuModel, GPU_VIEW_OPTIONS);
   else renderer.requestDraw();
 }
 

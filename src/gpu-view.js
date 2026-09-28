@@ -2,6 +2,9 @@
 // opened into its warps and threads, and the kernel's buffers by memory
 // space. Built from analyzeGpu() (src/gpu.js); plain DOM and SVG, no canvas.
 
+import { parseMemref } from "./buffers.js";
+import { warpAccess } from "./gpu-access.js";
+import { memorySpace } from "./gpu.js";
 import { formatBytes } from "./timing.js";
 
 const SVG = "http://www.w3.org/2000/svg";
@@ -122,7 +125,7 @@ function blockDiagram(block) {
   return root;
 }
 
-function launchSection(launch, kernel) {
+function launchSection(launch, kernel, options) {
   const section = el("section", "gpu-launch");
   const head = el("h3");
   head.append(
@@ -186,7 +189,264 @@ function launchSection(launch, kernel) {
   }
   section.append(figures);
   if (kernel) section.append(memorySection(kernel, launch));
+  if (kernel?.accesses?.length) section.append(accessSection(kernel, launch, options));
   return section;
+}
+
+const VERDICT_TEXT = {
+  coalesced: "coalesced",
+  strided: "strided",
+  broadcast: "broadcast",
+  "conflict-free": "no bank conflicts",
+  "bank-conflict": "bank conflict",
+};
+const GOOD = new Set(["coalesced", "broadcast", "conflict-free"]);
+
+function judge(access, kernel, launch) {
+  const memref = parseMemref(access.type);
+  const space = memorySpace(memref?.space ?? "");
+  return {
+    space,
+    memref,
+    result: warpAccess(access, memref, space, {
+      defs: kernel.defs,
+      args: kernel.args,
+      block: launch.block,
+      grid: launch.grid,
+    }),
+  };
+}
+
+function verdictChip(result) {
+  if (!result.analyzed) return el("span", "gpu-chip muted", "not analyzed");
+  const detail =
+    result.sectors !== undefined
+      ? ` · ${result.sectors} sector${result.sectors > 1 ? "s" : ""}`
+      : result.ways > 1
+        ? ` · ${result.ways}-way`
+        : "";
+  return el(
+    "span",
+    `gpu-chip ${GOOD.has(result.verdict) ? "good" : "bad"}`,
+    VERDICT_TEXT[result.verdict] + detail,
+  );
+}
+
+// One sentence on what the verdict means for this warp.
+function explain(result, space) {
+  if (!result.analyzed) return `Not analyzed: ${result.reason}.`;
+  const bytes = result.distinct * result.elementBytes;
+  switch (result.verdict) {
+    case "broadcast":
+      return "Every thread of the warp uses the same element, so it is fetched once and shared.";
+    case "coalesced":
+      return `The warp's 32 threads use ${result.distinct} element(s), ${bytes} B, in ${result.sectors} sector(s) of 32 B: the fewest possible, so every byte moved is used.`;
+    case "strided": {
+      const stride = result.lanes.length > 1 ? result.lanes[1].offset - result.lanes[0].offset : 0;
+      return (
+        `Neighboring threads are ${stride} elements apart, so the warp moves ${result.sectors} sectors of 32 B ` +
+        `(${result.sectors * 32} B) to use ${bytes} B: ${Math.round(result.efficiency * 100)}% of the traffic is useful. ` +
+        "Making thread x walk the last (contiguous) index, or staging the data through shared memory, usually fixes this."
+      );
+    }
+    case "conflict-free":
+      return `Each thread uses its own bank of ${space} memory (or shares a word with another thread), so the warp is served in one pass.`;
+    case "bank-conflict":
+      return `Up to ${result.ways} threads need different words in the same bank, so the warp is served in ${result.ways} passes instead of one. Padding the inner dimension by one element is the usual fix.`;
+    default:
+      return "";
+  }
+}
+
+// Loads and stores of the kernel, judged for warp 0 of block (0, 0, 0), with
+// a lane map of the one picked. `options.onLine(line)` marks a source line.
+function accessSection(kernel, launch, options) {
+  const section = el("div", "gpu-accesses");
+  section.append(
+    el("h4", "", "Memory accesses"),
+    el(
+      "p",
+      "gpu-note",
+      "For warp 0 of block (0, 0, 0): which element each of its 32 threads touches. Global memory is judged by 32-byte sectors, shared memory by its 32 banks. Accesses inside a loop are shown for the first iteration.",
+    ),
+  );
+  const judged = kernel.accesses.map((access) => ({ access, ...judge(access, kernel, launch) }));
+  // Start on the first access worth a look.
+  let picked = judged.findIndex(
+    (j) => j.result.analyzed && !GOOD.has(j.result.verdict),
+  );
+  if (picked < 0) picked = 0;
+
+  const table = el("table", "gpu-access-table");
+  const head = el("tr");
+  for (const title of ["Line", "Access", "Space", "Warp 0"]) head.append(el("th", "", title));
+  const thead = el("thead");
+  thead.append(head);
+  const tbody = el("tbody");
+  const detail = el("div", "gpu-lane-detail");
+
+  const pick = (i, { mark = false } = {}) => {
+    picked = i;
+    [...tbody.children].forEach((row, k) => row.setAttribute("aria-selected", String(k === i)));
+    renderLaneDetail(detail, judged[i]);
+    if (mark) options.onLine?.(judged[i].access.line);
+  };
+  judged.forEach((j, i) => {
+    const row = el("tr");
+    row.tabIndex = 0;
+    const text = `${j.access.kind === "load" ? "load" : "store"} ${j.access.buffer}[${j.access.indices.join(", ")}]`;
+    row.append(
+      el("td", "gpu-dim", String(j.access.line)),
+      el("td", "gpu-code", text + (j.access.inLoop ? "  ↻" : "")),
+      el("td", "", j.space),
+    );
+    const verdict = el("td");
+    verdict.append(verdictChip(j.result));
+    row.append(verdict);
+    row.title =
+      (j.access.inLoop ? "Inside a loop: first iteration shown\n" : "") +
+      "Show its lanes and mark its line in the source";
+    row.addEventListener("click", () => pick(i, { mark: true }));
+    row.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        pick(i, { mark: true });
+      }
+    });
+    tbody.append(row);
+  });
+  table.append(thead, tbody);
+  section.append(table, detail);
+  pick(picked);
+  return section;
+}
+
+// Group colors cycle so neighboring sectors or banks are told apart.
+const groupClass = (order) => `g${order % 4}`;
+
+function renderLaneDetail(container, { access, result, space, memref }) {
+  const children = [el("p", "gpu-explain", explain(result, space))];
+  if (!result.analyzed) {
+    container.replaceChildren(...children);
+    return;
+  }
+  const groups = [...new Set(result.lanes.map((l) => l.group))];
+  const order = new Map(groups.map((g, i) => [g, i]));
+  const unit = space === "shared" ? "bank" : "sector";
+
+  // The 32 lanes, colored by the sector or bank they hit.
+  const cell = 16;
+  const strip = svg("svg", {
+    class: "gpu-lanes",
+    width: result.lanes.length * (cell + 2),
+    height: cell + 14,
+    role: "img",
+    "aria-label": `Lanes by ${unit}`,
+  });
+  for (const lane of result.lanes) {
+    strip.append(
+      svg(
+        "rect",
+        {
+          x: lane.lane * (cell + 2),
+          y: 0,
+          width: cell,
+          height: cell,
+          rx: 2,
+          class: `lane ${groupClass(order.get(lane.group))}`,
+        },
+        `lane ${lane.lane} · thread (${lane.tx}, ${lane.ty}, ${lane.tz})\n` +
+          `${access.buffer}[${lane.index.join(", ")}] · byte ${lane.byte} · ${unit} ${lane.group}`,
+      ),
+    );
+    if (lane.lane % 8 === 0) {
+      const label = svg("text", { x: lane.lane * (cell + 2), y: cell + 11, class: "lane-label" });
+      label.textContent = String(lane.lane);
+      strip.append(label);
+    }
+  }
+  const lanesFigure = el("figure");
+  lanesFigure.append(
+    strip,
+    el(
+      "figcaption",
+      "",
+      `Lanes 0–${result.lanes.length - 1}, colored by the ${unit} they hit: ${groups.length} ${unit}${groups.length > 1 ? "s" : ""}. Hover a lane for its thread and element.`,
+    ),
+  );
+  children.push(lanesFigure);
+  children.push(elementMap(access, result, memref, order));
+  container.replaceChildren(...children);
+}
+
+// The buffer around the touched elements, rows by the first index (or rows
+// of 32 for a 1-D buffer), touched elements colored like their lanes.
+function elementMap(access, result, memref, order) {
+  const twoD = memref.dims.length >= 2;
+  const width = twoD ? memref.dims.at(-1) : 32;
+  const at = (offset) => ({ row: Math.floor(offset / width), col: offset % width });
+  const touched = new Map();
+  for (const lane of result.lanes) touched.set(lane.offset, lane);
+  const points = [...touched.keys()].map(at);
+  const minRow = Math.min(...points.map((p) => p.row));
+  const maxRow = Math.max(...points.map((p) => p.row));
+  const minCol = Math.min(...points.map((p) => p.col));
+  const maxCol = Math.max(...points.map((p) => p.col));
+  const MAX_ROWS = 34;
+  const MAX_COLS = 48;
+  const rows = Math.min(maxRow - minRow + 1, MAX_ROWS);
+  const colStart = Math.max(0, Math.min(minCol, maxCol - MAX_COLS + 1, width - MAX_COLS));
+  const cols = Math.min(width - colStart, MAX_COLS);
+  const cell = 9;
+  const pad = 30;
+  const map = svg("svg", {
+    class: "gpu-elements",
+    width: pad + cols * (cell + 1),
+    height: 14 + rows * (cell + 1),
+    role: "img",
+    "aria-label": `Elements of ${access.buffer} touched by warp 0`,
+  });
+  for (let r = 0; r < rows; r++) {
+    const rowLabel = svg("text", { x: 0, y: 14 + r * (cell + 1) + cell - 1, class: "lane-label" });
+    rowLabel.textContent = twoD ? String(minRow + r) : String((minRow + r) * width);
+    map.append(rowLabel);
+    for (let c = 0; c < cols; c++) {
+      const offset = (minRow + r) * width + colStart + c;
+      const lane = touched.get(offset);
+      map.append(
+        svg(
+          "rect",
+          {
+            x: pad + c * (cell + 1),
+            y: 14 + r * (cell + 1),
+            width: cell,
+            height: cell,
+            class: lane ? `element touched ${groupClass(order.get(lane.group))}` : "element",
+          },
+          lane
+            ? `${access.buffer}[${lane.index.join(", ")}] · lane ${lane.lane}`
+            : twoD
+              ? `${access.buffer}[${minRow + r}, ${colStart + c}]`
+              : `${access.buffer}[${offset}]`,
+        ),
+      );
+    }
+  }
+  const colLabel = svg("text", { x: pad, y: 9, class: "lane-label" });
+  colLabel.textContent = twoD ? `columns ${colStart}–${colStart + cols - 1}` : "element offset";
+  map.append(colLabel);
+  const figure = el("figure");
+  const clipped = maxRow - minRow + 1 > MAX_ROWS || maxCol - minCol + 1 > MAX_COLS;
+  figure.append(
+    map,
+    el(
+      "figcaption",
+      "",
+      `${access.buffer} (${memref.type}) around the elements warp 0 touches` +
+        (clipped ? "; only part of the range fits here." : "."),
+    ),
+  );
+  return figure;
 }
 
 function memorySection(kernel, launch) {
@@ -298,8 +558,10 @@ function ptxNote(ptx) {
   );
 }
 
-// Fills `container` for `model` (from analyzeGpu), or explains why it is empty.
-export function renderGpuView(container, model) {
+// Fills `container` for `model` (from analyzeGpu), or explains why it is
+// empty. `options.onLine(line)` is called with a 1-based source line when an
+// access is picked.
+export function renderGpuView(container, model, options = {}) {
   const children = [
     el(
       "p",
@@ -315,7 +577,7 @@ export function renderGpuView(container, model) {
   const launched = new Set();
   for (const launch of model.launches) {
     launched.add(launch.kernel);
-    children.push(launchSection(launch, model.kernels[launch.kernel]));
+    children.push(launchSection(launch, model.kernels[launch.kernel], options));
   }
   // Kernels with no launch in this IR (a gpu.module dumped on its own).
   model.kernels.forEach((kernel, i) => {

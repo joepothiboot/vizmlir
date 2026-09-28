@@ -6,6 +6,7 @@
 // sizes that are only known at runtime stay null.
 
 import { parseMemref } from "./buffers.js";
+import { buildDefs, findAccesses } from "./gpu-access.js";
 import { embeddedAssembly, scanSymbols } from "./provenance.js";
 
 const LAUNCH_FUNC =
@@ -70,20 +71,22 @@ function joinedHeader(lines, from) {
   return text;
 }
 
-// The region lines of the op that starts at `from`: after its header (which
-// may span lines, up to the `{`) and indented deeper than the op.
+// The region of the op that starts at `from`: the lines after its header
+// (which may span lines, up to the `{`) that are indented deeper than the op,
+// blank lines included so positions stay aligned. `start` is the index of the
+// first one.
 function regionLines(lines, from) {
   const indent = indentOf(lines[from]);
   let i = from;
   while (i < lines.length && !/\{\s*$/.test(lines[i])) i++;
-  const body = [];
-  for (i += 1; i < lines.length; i++) {
-    const line = lines[i];
-    if (line.trim() === "") continue;
-    if (indentOf(line) <= indent) break;
-    body.push(line);
+  const start = i + 1;
+  let end = start;
+  for (let k = start; k < lines.length; k++) {
+    if (lines[k].trim() === "") continue;
+    if (indentOf(lines[k]) <= indent) break;
+    end = k + 1;
   }
-  return body;
+  return { start, lines: lines.slice(start, end) };
 }
 
 // Resolves `%c256` to 256 from the nearest `%c256 = arith.constant 256`
@@ -112,11 +115,13 @@ function launchDims(lines, at, header, keyword) {
   return dims.length === 3 ? dims : null;
 }
 
+// The function around line `at`: { name, index } of its header, or null.
 function hostOf(lines, at) {
   const indent = indentOf(lines[at]);
   for (let i = at - 1; i >= 0; i--) {
     const match = HOST_FUNC.exec(lines[i]);
-    if (match && match[1].length < indent) return `@${unquote(match[2])}`;
+    if (match && match[1].length < indent)
+      return { name: `@${unquote(match[2])}`, index: i };
   }
   return null;
 }
@@ -257,8 +262,10 @@ export function analyzeGpu(ir) {
       const bound = binding(part);
       if (bound) declared.push({ ...bound, source: "argument", fallback: "global" });
     }
+    const params = declared.map((d) => d.name);
     declared.push(...attributions(rest));
-    const body = symbol.full.split("\n").slice(1);
+    const full = symbol.full.split("\n");
+    const body = full.slice(1);
     const kernel = {
       path: symbol.path,
       name: symbol.symbol,
@@ -268,6 +275,14 @@ export function analyzeGpu(ir) {
       lowered: symbol.op !== "gpu.func",
       buffers: isGpuKernel ? kernelBuffers(declared, body) : [],
       ptx: null,
+      ...(isGpuKernel
+        ? {
+            params,
+            args: new Map(),
+            defs: buildDefs(full),
+            accesses: findAccesses(full, symbol.line),
+          }
+        : {}),
     };
     byPath.set(symbol.path, kernels.length);
     kernels.push(kernel);
@@ -305,10 +320,25 @@ export function analyzeGpu(ir) {
     const header = joinedHeader(lines, i);
     const grid = launchDims(lines, i, header, "blocks");
     const block = launchDims(lines, i, header, "threads");
+    const host = hostOf(lines, i);
     let kernel = -1;
     if (outlined) {
       const path = `@${unquote(outlined[1])}::@${unquote(outlined[2])}`;
       kernel = byPath.get(path) ?? -1;
+      // Constant launch arguments resolve the kernel's parameters, as the
+      // `%c16` that outlining passes in for a block size.
+      const entry = kernels[kernel];
+      if (entry?.params && !entry.args.size) {
+        const match = /\bargs\s*\(/.exec(header);
+        const operands = match
+          ? splitTop(parenBody(header, match.index + match[0].length - 1) ?? "")
+          : [];
+        operands.forEach((part, k) => {
+          const name = part.split(":")[0].trim();
+          if (entry.params[k])
+            entry.args.set(entry.params[k], constantBefore(lines, i, name));
+        });
+      }
       if (kernel < 0) {
         kernel = kernels.length;
         byPath.set(path, kernel);
@@ -324,22 +354,29 @@ export function analyzeGpu(ir) {
         });
       }
     } else {
+      const region = regionLines(lines, i);
+      // Values the region uses may be defined earlier in the host function.
+      const scope = lines.slice(host?.index ?? i, region.start + region.lines.length);
       kernel = kernels.length;
       kernels.push({
         path: null,
-        name: `gpu.launch in ${hostOf(lines, i) ?? "?"}`,
+        name: `gpu.launch in ${host?.name ?? "?"}`,
         op: "gpu.launch",
         line: i + 1,
         inline: true,
         lowered: false,
-        buffers: kernelBuffers(attributions(header), regionLines(lines, i)),
+        buffers: kernelBuffers(attributions(header), region.lines),
         ptx: null,
+        params: [],
+        args: new Map(),
+        defs: buildDefs(scope),
+        accesses: findAccesses(region.lines, region.start + 1),
       });
     }
     const dims = [...(grid ?? []), ...(block ?? [])];
     launches.push({
       line: i + 1,
-      host: hostOf(lines, i),
+      host: host?.name ?? null,
       kernel,
       grid,
       block,

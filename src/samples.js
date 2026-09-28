@@ -80,6 +80,14 @@ export const SAMPLES = [
     trace: "gpu-tiled-matmul.trace.txt",
     canvas: "gpu",
   },
+  {
+    id: "gpu-transpose",
+    title: "Transpose: strided, bank conflict, fixed",
+    blurb:
+      "The same transpose three ways: a naive strided write, a shared tile with a 32-way bank conflict, and the tile padded to 32×33. Opens in the GPU view.",
+    trace: "gpu-transpose.trace.txt",
+    canvas: "gpu",
+  },
 ];
 
 /** Every file a sample needs, relative to the samples directory. */

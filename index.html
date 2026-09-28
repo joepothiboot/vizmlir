@@ -1811,6 +1811,103 @@
         margin: 0;
         font-weight: 600;
       }
+      .gpu-accesses {
+        margin-top: 14px;
+      }
+      .gpu-accesses h4 {
+        margin: 0 0 4px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .gpu-access-table {
+        width: 100%;
+        margin: 0 0 10px;
+        border-collapse: collapse;
+        font-size: 11px;
+      }
+      .gpu-access-table th,
+      .gpu-access-table td {
+        padding: 3px 8px;
+        border-top: 1px solid var(--line);
+        text-align: left;
+        white-space: nowrap;
+      }
+      .gpu-access-table th {
+        color: var(--dim);
+        font-weight: 600;
+      }
+      .gpu-access-table tbody tr {
+        cursor: pointer;
+      }
+      .gpu-access-table tbody tr:hover,
+      .gpu-access-table tbody tr[aria-selected="true"] {
+        background: var(--raised);
+      }
+      .gpu-access-table tbody tr[aria-selected="true"] td:first-child {
+        box-shadow: inset 2px 0 0 var(--accent);
+      }
+      .gpu-code {
+        font-family: var(--code);
+      }
+      .gpu-chip {
+        padding: 1px 6px;
+        border: 1px solid currentColor;
+        border-radius: 9px;
+        font-size: 10px;
+      }
+      .gpu-chip.good {
+        color: var(--good);
+      }
+      .gpu-chip.bad {
+        color: var(--warn);
+      }
+      .gpu-chip.muted {
+        color: var(--dim);
+      }
+      .gpu-explain {
+        max-width: 720px;
+        margin: 0 0 8px;
+      }
+      .gpu-lane-detail figure {
+        margin: 0 0 10px;
+        overflow-x: auto;
+      }
+      .gpu-lane-detail figcaption {
+        margin-top: 4px;
+        color: var(--dim);
+        font-size: 11px;
+      }
+      .gpu-lanes .lane,
+      .gpu-elements .element {
+        fill: var(--raised);
+        stroke: var(--line);
+      }
+      .gpu-lanes .g0,
+      .gpu-elements .g0 {
+        fill: color-mix(in srgb, var(--good) 70%, var(--raised));
+      }
+      .gpu-lanes .g1,
+      .gpu-elements .g1 {
+        fill: color-mix(in srgb, var(--warn) 70%, var(--raised));
+      }
+      .gpu-lanes .g2,
+      .gpu-elements .g2 {
+        fill: color-mix(in srgb, var(--good) 35%, var(--raised));
+      }
+      .gpu-lanes .g3,
+      .gpu-elements .g3 {
+        fill: color-mix(in srgb, var(--warn) 35%, var(--raised));
+      }
+      .gpu-lanes rect:hover,
+      .gpu-elements .touched:hover {
+        stroke: var(--fg);
+        stroke-width: 2;
+      }
+      .lane-label {
+        fill: var(--dim);
+        font-family: var(--code);
+        font-size: 8px;
+      }
       #status {
         flex: 0 0 auto;
         display: flex;
