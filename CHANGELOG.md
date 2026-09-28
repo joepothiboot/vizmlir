@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Test traces from out-of-tree `MlirOptMain` drivers with custom dialects (a `schema-opt` fixture), including namespace-qualified pass names.
 - Show the buffers the IR allocates (`memref.alloc`, `memref.alloca`, `gpu.alloc`), with their static size and live range, baseline against current. **b** opens a lifetime chart per function with added, removed and changed buffers and a live-bytes curve, and for traces, buffer count, allocated bytes and peak live bytes at every pass. The status bar shows the current peak and its change. Click a buffer to show its line; download the comparison as JSON.
 - Count operations by name. The status bar shows the current op count and its change from the baseline, and **o** opens a table of counts at every dump of a trace (whole module, with nested dumps spliced in). Filter by op name, hide ops or passes that change nothing, jump to a pass from its column, and download the table as CSV.
+- Follow every function, kernel, GPU module and global through a trace. **h** lists, per symbol, the pass that created it (for example `gpu-kernel-outlining`), the passes that changed its body, lowered it to another op (`gpu.func` → `llvm.func`), or removed it, with links to each pass. Nested symbols are named `@module::@kernel`, as in `gpu.launch_func`. Download the history as JSON.
 
 ### Fixed
 

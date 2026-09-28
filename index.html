@@ -1380,6 +1380,83 @@
       #buffers-pass-table .link-btn:hover {
         color: var(--accent);
       }
+      #symbols {
+        width: min(1100px, calc(100vw - 32px));
+        padding: 18px 20px;
+      }
+      #symbols h2 {
+        margin: 0 0 6px;
+        font-size: 14px;
+      }
+      #symbols-summary {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 4px 16px;
+        margin: 0 0 12px;
+      }
+      #symbols-summary dt {
+        color: var(--dim);
+      }
+      #symbols-summary dd {
+        margin: 0;
+      }
+      #symbols-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 11px;
+      }
+      #symbols-table th,
+      #symbols-table td {
+        padding: 4px 8px;
+        border-top: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+      #symbols-table thead th {
+        position: sticky;
+        top: 0;
+        border-top: 0;
+        background: var(--raised);
+        color: var(--dim);
+        font-weight: 600;
+      }
+      #symbols-table .sym,
+      #symbols-table .ops {
+        font-family: var(--code);
+        white-space: nowrap;
+      }
+      #symbols-table tr.gone .sym {
+        color: var(--faint);
+        text-decoration: line-through;
+      }
+      #symbols-table .steps {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 10px;
+      }
+      #symbols-table .link-btn {
+        padding: 0;
+        color: inherit;
+        font: inherit;
+      }
+      #symbols-table .link-btn:hover {
+        color: var(--accent);
+      }
+      #symbols-table .step.current {
+        box-shadow: inset 0 -2px 0 var(--accent);
+      }
+      #symbols-table .created {
+        color: var(--good);
+      }
+      #symbols-table .removed {
+        color: var(--err);
+      }
+      #symbols-table .lowered {
+        color: var(--warn);
+      }
+      #symbols-table .none {
+        color: var(--faint);
+      }
       .timing-scroll[hidden],
       #timing-open[hidden] {
         display: none;
@@ -1921,6 +1998,8 @@
           <dd>Op counts per pass</dd>
           <dt><kbd>b</kbd></dt>
           <dd>Buffers and peak memory</dd>
+          <dt><kbd>h</kbd></dt>
+          <dd>Symbol history: which pass made each function or kernel</dd>
           <dt><kbd>m</kbd></dt>
           <dd>Show / hide the menu</dd>
           <dt><kbd>shift</kbd> <kbd>L</kbd></dt>
@@ -2026,6 +2105,45 @@
           <button id="buffers-export">Download .json</button>
           <span class="sp"></span>
           <form method="dialog"><button autofocus>Close</button></form>
+        </div>
+      </dialog>
+
+      <dialog id="symbols" aria-labelledby="symbols-title">
+        <h2 id="symbols-title">Symbol history</h2>
+        <p class="dialog-note">
+          Every function, kernel, GPU module and global in the trace, with the
+          passes that created it, changed its body, lowered it to another op
+          (<code>func.func</code> → <code>llvm.func</code>), or removed it.
+          Nested symbols are named as in <code>gpu.launch_func</code>
+          (<code>@module::@kernel</code>), and a change inside a nested symbol
+          is not counted against its parent. Click a pass to go to it.
+        </p>
+        <dl id="symbols-summary"></dl>
+        <div class="opcount-controls">
+          <input
+            id="symbols-filter"
+            type="search"
+            placeholder="Filter symbols or ops…"
+            aria-label="Filter symbols by name or op"
+            autocomplete="off"
+          />
+          <label
+            ><input id="symbols-changed" type="checkbox" checked /> Only symbols
+            that change</label
+          >
+          <label
+            ><input id="symbols-at-pass" type="checkbox" /> Only the current
+            pass</label
+          >
+          <span id="symbols-shown" class="dialog-note"></span>
+        </div>
+        <div class="opcount-scroll">
+          <table id="symbols-table"></table>
+        </div>
+        <div class="dialog-actions">
+          <button id="symbols-export">Download .json</button>
+          <span class="sp"></span>
+          <form method="dialog"><button>Close</button></form>
         </div>
       </dialog>
 
