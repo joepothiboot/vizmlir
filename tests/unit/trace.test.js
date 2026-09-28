@@ -5,6 +5,7 @@ import {
   describeEvent,
   extractSymbolOp,
   isPassTrace,
+  moduleStateAt,
   parseHeader,
   parsePassTrace,
 } from "../../src/trace.js";
@@ -549,5 +550,35 @@ describe("out-of-tree driver trace", () => {
     expect(baseline.ir).toMatch(/^func\.func @validate_person/);
     expect(baseline.ir).toContain("arith.andi");
     expect(trace.events[1].ir).not.toContain("arith.andi");
+  });
+});
+
+describe("moduleStateAt", () => {
+  it("returns a module dump as is", () => {
+    const { events } = parsePassTrace(fixture("mixed-nesting"));
+    expect(moduleStateAt(events, 0)).toBe(events[0].ir);
+    expect(moduleStateAt(events, 3)).toBe(events[3].ir);
+  });
+
+  it("splices a function dump into the last module dump", () => {
+    const { events } = parsePassTrace(fixture("mixed-nesting"));
+    const state = moduleStateAt(events, 1);
+    expect(state.split("\n")[0]).toBe("module {");
+    expect(extractSymbolOp(state, "func.func", "f")).toBe(
+      extractSymbolOp(events[1].ir, "func.func", "f"),
+    );
+    // @g has not been rewritten yet, so it still matches the module dump.
+    expect(extractSymbolOp(state, "func.func", "g")).toBe(
+      extractSymbolOp(events[0].ir, "func.func", "g"),
+    );
+    // After both function dumps the module matches the next module dump.
+    expect(moduleStateAt(events, 2)).toBe(events[3].ir);
+  });
+
+  it("builds a module when no module dump came before", () => {
+    const { events } = parsePassTrace(fixture("nested-after-all"));
+    const state = moduleStateAt(events, 2);
+    expect(state).toContain("func.func @f(");
+    expect(state).toContain("func.func @g(");
   });
 });

@@ -167,6 +167,21 @@ export function baselineFor(events, index) {
   return null;
 }
 
+// Returns the whole-module IR as it stood at `events[index]`: the dump itself
+// when it covers the module, otherwise the last module dump with every newer
+// nested dump up to and including this one spliced in.
+export function moduleStateAt(events, index) {
+  const event = events[index];
+  if (!event?.root || event.root.op === "builtin.module") return event?.ir ?? "";
+  const module = events
+    .slice(0, index)
+    .findLast((candidate) => candidate.root?.op === "builtin.module");
+  const probe = { root: { op: "builtin.module", symbol: null } };
+  probe.scope = module?.scope ?? scopeKey(probe.root);
+  const probed = [...events.slice(0, index + 1), probe];
+  return moduleBaseline(probed, index + 1)?.ir ?? event.ir;
+}
+
 function moduleBaseline(events, index) {
   let base = -1;
   for (let j = index - 1; j >= 0; j--) {
