@@ -67,21 +67,22 @@ const CASTS = new Set([
 // Definitions of SSA values in `lines`: Map(name → { op, operands, rest }).
 // scf.for induction variables are "loop" (their lower bound), and the ids
 // and sizes a gpu.launch binds are "env" values.
-export function buildDefs(lines) {
+export function buildDefs(lines, firstLine = 1) {
   const defs = new Map();
-  for (const line of lines) {
+  for (const [i, line] of lines.entries()) {
+    const at = firstLine + i;
     const loop = FOR.exec(line);
-    if (loop) defs.set(loop[1], { op: "loop", operands: [loop[2]], rest: "" });
+    if (loop) defs.set(loop[1], { op: "loop", operands: [loop[2]], rest: "", line: at });
     if (/\bgpu\.launch\b(?!_)/.test(line) || /^\s*threads\(/.test(line)) {
       for (const [keyword, ids] of Object.entries(LAUNCH_IDS)) {
         const match = new RegExp(`\\b${keyword}\\(([^)]*)\\)\\s+in\\s+\\(([^)]*)\\)`).exec(line);
         if (!match) continue;
         match[1].split(",").forEach((name, i) =>
-          defs.set(name.trim(), { op: "env", operands: [], rest: ids[i] }),
+          defs.set(name.trim(), { op: "env", operands: [], rest: ids[i], line: at }),
         );
         match[2].split(",").forEach((part, i) => {
           const name = part.split("=")[0].trim();
-          defs.set(name, { op: "env", operands: [], rest: LAUNCH_SIZES[keyword][i] });
+          defs.set(name, { op: "env", operands: [], rest: LAUNCH_SIZES[keyword][i], line: at });
         });
       }
     }
@@ -91,6 +92,7 @@ export function buildDefs(lines) {
       op: def[2],
       operands: def[3].match(/%[\w$.-]+/g) ?? [],
       rest: def[3],
+      line: at,
     });
   }
   return defs;

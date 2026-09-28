@@ -2,9 +2,9 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**See how your code runs on the GPU.**
+**Learn how a compiler turns your code into GPU work, by watching it happen.**
 
-When you write a program for a GPU, the compiler reshapes it in many small steps before the GPU ever sees it. VizMLIR lets you watch those steps one at a time, and draws what the result will do on the GPU: how the work is split up, where the data lives, and whether it's read in a way the GPU is good at. It runs in your browser, and your code never leaves it.
+VizMLIR is a visual companion for computer architecture, compilers, and parallel programming courses. It takes real output from MLIR, the compiler framework behind many modern GPU and machine learning compilers, and draws what it means: how the work is split among thousands of threads, where the data lives, and whether it's read in a way the GPU is good at. You can step through the compiler's work one pass at a time and watch the picture change. It runs in your browser, and your code never leaves it.
 
 🚀 **[Try VizMLIR live](https://joepothiboot.github.io/vizmlir/)**: it opens on a small example with two classic GPU mistakes in it. See if you can spot them.
 
@@ -12,7 +12,18 @@ When you write a program for a GPU, the compiler reshapes it in many small steps
 
 _A transpose whose write is strided. The GPU view shows the 32 threads of a warp landing 1024 items apart; under the code, "What's this line?" takes the store apart in plain words._
 
-![VizMLIR field guide](public/demo/vizmlir-docs.png)
+## 📚 Learn with the guide
+
+The app comes with a short course (**Learn** in the top bar). It all sits on one page, grouped into parts with a contents list that follows along as you scroll, and each lesson has a picture to explore in the app and a question to check yourself:
+
+1. **How a GPU runs code**: threads, blocks, the grid, warps, and SIMT.
+2. **Memory and access patterns**: global, shared, and private memory; coalesced and strided accesses; bank conflicts and the padding fix.
+3. **Reading MLIR**: intermediate representations, SSA form, operations, and dialects.
+4. **How a compiler builds a kernel**: passes, and lowering from `gpu.launch` down to PTX.
+
+Lab chapters show how to run your own `mlir-opt` pipeline, and the reference has the model's limits and a glossary.
+
+![The VizMLIR guide open on the memory lesson, with its chapter list on the left](public/demo/vizmlir-docs.png)
 
 ## 💡 Why VizMLIR?
 
@@ -24,7 +35,7 @@ One honest limit: VizMLIR only reads your code; it never runs it. It can spot th
 
 ## 🎯 Who is it for?
 
-- 📚 **People learning how GPUs and compilers work.** See threads, warps, coalescing and shared memory on real compiler output, with the code right next to the picture. You don't need to be a compiler expert.
+- 📚 **CS students and teachers.** See threads, warps, coalescing, shared memory, SSA and lowering on real compiler output, with the code right next to the picture. If you know loops and arrays, you can follow along.
 - 🛠️ **Engineers building GPU compilers on MLIR.** Check what each step does to a kernel's shape, memory, and access patterns, one step at a time.
 - ⚡ **Kernel authors.** Find out why a kernel is slow before reaching for a profiler, and line up profiler timings with the steps that built each kernel.
 
@@ -67,7 +78,7 @@ npm run dev
 1. Open the address it prints. The transpose example opens on the GPU view.
 2. Scroll to **Memory accesses** and click the orange row to see what went wrong and how it's usually fixed.
 3. Press `]` to step through the compiler's work and watch the picture change.
-4. When you're ready, open your own `mlir-opt` log with **Open…**. The field guide (the **Docs** link in the app) explains which flags to use and what each one does.
+4. When you're ready, open your own `mlir-opt` log with **Open…**. The guide (**Learn** in the app) explains which flags to use and what each one does.
 
 ## 🤝 Contributing
 

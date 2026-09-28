@@ -142,8 +142,8 @@
         flex: 0 0 auto;
         flex-wrap: wrap;
         align-items: center;
-        gap: 10px;
-        padding: 8px 14px;
+        gap: 12px;
+        padding: 12px 20px;
         background: var(--bg);
         color: var(--fg);
       }
@@ -262,10 +262,9 @@
       #pass-strip {
         display: flex;
         flex: 0 0 auto;
-        gap: 6px;
-        padding: 8px 14px;
+        gap: 8px;
+        padding: 6px 20px 14px;
         overflow-x: auto;
-        border-bottom: 1px solid var(--line);
         scrollbar-width: thin;
       }
       #pass-strip[hidden] {
@@ -277,8 +276,8 @@
         flex-direction: column;
         align-items: flex-start;
         gap: 2px;
-        width: 168px;
-        padding: 6px 10px;
+        width: 176px;
+        padding: 8px 12px;
         background: transparent;
         color: var(--dim);
         font-size: 11px;
@@ -326,10 +325,24 @@
       #docs-view[hidden] {
         display: none;
       }
+      /* The workspace is a padded frame; the source, canvas, and diff sit in
+         it as separate rounded cards, with the splitters as the gutters. */
       main {
         display: flex;
         flex: 1 1 auto;
         min-height: 0;
+        padding: 0 20px 16px;
+      }
+      #source-pane,
+      #stage,
+      #diff-pane {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--bg);
+      }
+      #source-pane,
+      #stage {
+        overflow: hidden;
       }
       #source-pane {
         flex: 0 0 auto;
@@ -341,8 +354,7 @@
       .splitter {
         position: relative;
         z-index: 2;
-        flex: 0 0 1px;
-        background: var(--line);
+        flex: 0 0 14px;
         cursor: col-resize;
         touch-action: none;
         outline: none;
@@ -350,12 +362,13 @@
       .splitter::before {
         content: "";
         position: absolute;
-        inset: 0 -4px;
+        inset: 0;
       }
       .splitter::after {
         content: "";
         position: absolute;
-        inset: 0 -1px;
+        inset: 24px 6px;
+        border-radius: 2px;
         background: var(--accent);
         opacity: 0;
         transition: opacity 0.12s;
@@ -385,13 +398,70 @@
         justify-content: space-between;
         gap: 10px;
         margin: 0;
-        padding: 10px 12px;
+        padding: 16px 18px 10px;
         font-size: 12px;
         font-weight: 700;
       }
       #diff-summary {
         color: var(--dim);
         font-weight: 400;
+      }
+      /* The side panel's tabs: the pass diff, or (with the GPU view on) the
+         path a picked line takes into the GPU. */
+      .side-tabs {
+        display: flex;
+        gap: 4px;
+        padding: 12px 14px 0;
+      }
+      .side-tabs [role="tab"] {
+        padding: 3px 10px;
+        border-color: transparent;
+        background: none;
+        color: var(--dim);
+      }
+      .side-tabs [role="tab"][aria-selected="true"] {
+        border-color: var(--line);
+        background: var(--raised);
+        color: var(--fg);
+      }
+      #gpu-path {
+        padding: 10px 18px 18px;
+        font-family: var(--ui);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      #gpu-path h3 {
+        margin: 4px 0 4px;
+        font-size: 13px;
+      }
+      #gpu-path h4 {
+        margin: 14px 0 2px;
+        font-size: 12px;
+      }
+      .gpu-steps {
+        margin: 6px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+      .gpu-step {
+        display: block;
+        width: 100%;
+        margin: 0 0 4px;
+        padding: 6px 8px;
+        border-color: var(--line);
+        border-radius: 6px;
+        background: var(--bg);
+        text-align: left;
+        overflow-wrap: anywhere;
+      }
+      .gpu-step code {
+        display: block;
+        margin: 2px 0;
+        font: 11px/1.4 var(--code);
+      }
+      .gpu-step.current {
+        border-color: var(--accent);
+        box-shadow: inset 3px 0 0 var(--accent);
       }
       .tabs {
         display: flex;
@@ -401,7 +471,7 @@
       }
       .tabs [role="tab"] {
         max-width: 50%;
-        padding: 8px 14px;
+        padding: 12px 16px;
         overflow: hidden;
         border: 0;
         border-radius: 0;
@@ -569,9 +639,9 @@
         position: absolute;
         inset: 0;
         margin: 0;
-        padding: 10px;
+        padding: 14px 18px;
         border: 0;
-        font: 12px/1.5 var(--code);
+        font: 12px/1.65 var(--code);
         font-variant-ligatures: none;
         tab-size: 2;
         white-space: pre;
@@ -650,7 +720,7 @@
       }
       #diff-list {
         margin: 0;
-        padding: 0 6px 12px;
+        padding: 0 10px 16px;
         list-style: none;
       }
       #diff-list li {
@@ -708,12 +778,17 @@
         display: flex;
         align-items: center;
         gap: 4px;
-        padding: 4px 12px 12px;
+        padding: 6px 18px 16px;
         color: var(--dim);
         font-size: 11px;
       }
       .diff-hint > * {
         white-space: nowrap;
+      }
+      @media (max-width: 1100px) {
+        #diff-pane {
+          width: 250px;
+        }
       }
       @media (max-width: 900px) {
         #diff-pane {
@@ -723,6 +798,18 @@
       @media (max-width: 680px) {
         main {
           flex-direction: column;
+          gap: 10px;
+          padding: 0 12px 12px;
+        }
+        header {
+          padding: 10px 12px;
+        }
+        #pass-strip {
+          padding: 4px 12px 10px;
+        }
+        #status {
+          gap: 10px;
+          padding: 0 12px 8px;
         }
         #source-pane,
         #diff-pane {
@@ -734,13 +821,9 @@
         }
         #source-pane {
           height: 42%;
-          border-right: 0;
-          border-bottom: 1px solid var(--line);
         }
         #diff-pane {
           height: 28%;
-          border-left: 0;
-          border-top: 1px solid var(--line);
         }
       }
       #source-name {
@@ -1855,41 +1938,127 @@
         margin: 0;
         font-variant-numeric: tabular-nums;
       }
-      .gpu-figures {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 18px 28px;
+      /* The launch in 3D (src/gpu-3d.js): a canvas with a hover tip and a
+         few view buttons in its corner. */
+      .gpu-3d {
         margin: 0 0 12px;
       }
-      .gpu-figures figure {
-        margin: 0;
-        max-width: 100%;
-        overflow-x: auto;
+      .gpu-3d-stage {
+        position: relative;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--bg);
+        overflow: hidden;
       }
-      .gpu-figures figcaption {
-        max-width: 360px;
-        margin-top: 6px;
-        color: var(--dim);
+      .gpu-3d canvas {
+        display: block;
+        cursor: grab;
+        touch-action: none;
+      }
+      .gpu-3d canvas:active {
+        cursor: grabbing;
+      }
+      .gpu-3d canvas:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: -2px;
+      }
+      .gpu-3d-tip {
+        position: absolute;
+        z-index: 1;
+        max-width: 260px;
+        padding: 4px 8px;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: var(--overlay);
+        box-shadow: 0 2px 8px var(--shadow);
+        font-family: var(--code);
+        font-size: 11px;
+        white-space: pre-line;
+        pointer-events: none;
+      }
+      .gpu-3d-tools {
+        position: absolute;
+        right: 8px;
+        bottom: 8px;
+        display: flex;
+        gap: 4px;
+      }
+      .gpu-3d-tools button {
+        min-width: 26px;
+        padding: 2px 8px;
         font-size: 11px;
       }
-      .gpu-grid .block {
-        fill: var(--raised);
-        stroke: var(--line);
+      /* Overlays on the canvas: launch facts (top left), the Memory panel
+         (right), and a one-line hint (bottom). */
+      .gpu-3d-facts,
+      .gpu-3d-panel {
+        position: absolute;
+        z-index: 1;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--overlay);
+        box-shadow: 0 2px 10px var(--shadow);
       }
-      .gpu-grid .block.open {
-        fill: var(--accent);
+      .gpu-3d-facts.gpu-facts {
+        top: 8px;
+        left: 8px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 2px 6px;
+        max-width: calc(100% - 180px);
+        margin: 0;
+        padding: 5px 10px;
+        font-size: 11px;
       }
-      .gpu-block .thread {
-        fill: color-mix(in srgb, var(--good) 45%, var(--raised));
+      .gpu-3d-facts div {
+        display: flex;
+        gap: 5px;
+        margin-right: 8px;
+        white-space: nowrap;
       }
-      .gpu-grid .block:hover,
-      .gpu-block .thread:hover {
-        fill: var(--warn);
+      .gpu-3d-facts dd {
+        margin: 0;
       }
-      .gpu-block .warp-label {
-        fill: var(--dim);
-        font-family: var(--code);
-        font-size: 8px;
+      .gpu-3d-panel {
+        top: 8px;
+        right: 8px;
+        max-height: calc(100% - 60px);
+        overflow: auto;
+        font-size: 11px;
+      }
+      .gpu-3d-panel[open] {
+        width: 270px;
+      }
+      .gpu-3d-panel summary {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        padding: 8px 10px;
+        background: var(--overlay);
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .gpu-3d-panel .gpu-memory {
+        padding: 0 10px 10px;
+      }
+      .gpu-3d-panel .gpu-spaces {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+      .gpu-3d-hint {
+        position: absolute;
+        right: 190px;
+        bottom: 10px;
+        left: 10px;
+        color: var(--dim);
+        font-size: 10.5px;
+        pointer-events: none;
+      }
+      @media (max-width: 680px) {
+        .gpu-3d-panel[open] {
+          left: 8px;
+          width: auto;
+        }
       }
       .gpu-memory h4 {
         margin: 0 0 6px;
@@ -1928,6 +2097,70 @@
       .gpu-space li {
         padding: 2px 0;
         overflow-wrap: anywhere;
+      }
+      /* Each buffer is a button: hover lights up its rows in Memory
+         accesses, click opens its details. */
+      .gpu-buffer {
+        display: block;
+        width: 100%;
+        margin: 0 -6px;
+        padding: 3px 6px;
+        box-sizing: content-box;
+        border: 0;
+        border-radius: 4px;
+        background: none;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        overflow-wrap: anywhere;
+        cursor: pointer;
+      }
+      .gpu-buffer::before {
+        content: "▸ ";
+        color: var(--dim);
+      }
+      .gpu-buffer[aria-expanded="true"]::before {
+        content: "▾ ";
+      }
+      .gpu-buffer:hover,
+      .gpu-buffer:focus-visible,
+      .gpu-buffer[aria-expanded="true"] {
+        background: var(--raised);
+      }
+      .gpu-buffer-detail {
+        margin: 4px 0 8px;
+        padding: 6px 8px;
+        border-left: 2px solid var(--accent);
+        font-size: 11px;
+      }
+      .gpu-buffer-detail .gpu-facts {
+        margin: 0 0 6px;
+      }
+      .gpu-buffer-detail .gpu-note {
+        margin: 0;
+      }
+      .gpu-buffer-uses {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .gpu-buffer-uses button {
+        width: 100%;
+        padding: 2px 4px;
+        border: 0;
+        border-radius: 4px;
+        background: none;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        overflow-wrap: anywhere;
+        cursor: pointer;
+      }
+      .gpu-buffer-uses button:hover {
+        background: var(--raised);
+      }
+      .gpu-access-table tbody tr.gpu-linked td {
+        background: color-mix(in srgb, var(--accent) 14%, transparent);
       }
       .gpu-type {
         font-family: var(--code);
@@ -2039,10 +2272,9 @@
         display: flex;
         gap: 16px;
         align-items: stretch;
-        height: 26px;
-        padding-right: 12px;
+        height: 30px;
+        padding: 0 20px 8px;
         background: var(--bg);
-        border-top: 1px solid var(--line);
         color: var(--dim);
         font-size: 11px;
         white-space: nowrap;
@@ -2057,7 +2289,9 @@
         text-overflow: ellipsis;
       }
       #mode {
+        flex: 0 0 auto;
         padding: 0 10px;
+        border-radius: 5px;
         background: var(--raised);
         color: var(--fg);
         font-weight: 600;
@@ -2099,9 +2333,197 @@
       #docs-view {
         flex: 1 1 auto;
         overflow: auto;
-        padding: 36px min(8vw, 96px) 56px;
+        padding: 28px min(4vw, 48px) 64px;
         font-size: 14px;
         line-height: 1.6;
+        scroll-behavior: smooth;
+      }
+      /* One scrolling page: a padded shell holds the sticky contents list
+         and every chapter, grouped into parts. */
+      .guide-shell {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 40px min(5vw, 56px) 48px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--panel);
+      }
+      .guide {
+        display: grid;
+        grid-template-columns: 210px minmax(0, 760px);
+        justify-content: center;
+        gap: 56px;
+      }
+      .guide-nav {
+        position: sticky;
+        top: 0;
+        align-self: start;
+        max-height: calc(100vh - 140px);
+        overflow-y: auto;
+      }
+      .guide-part {
+        margin: 56px 0 0;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--line);
+        color: var(--dim);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .guide-part:first-child {
+        margin-top: 0;
+      }
+      .lesson {
+        padding: 28px 0 8px;
+        scroll-margin-top: 12px;
+      }
+      .lesson + .lesson {
+        border-top: 1px dashed var(--line);
+      }
+      .guide-part + .lesson {
+        padding-top: 20px;
+      }
+      .guide-nav-title {
+        margin-bottom: 14px;
+        color: var(--fg);
+        font-weight: 600;
+      }
+      .guide-nav ol {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .guide-nav .group {
+        margin: 16px 0 4px;
+        color: var(--dim);
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .guide-nav .group:first-child {
+        margin-top: 0;
+      }
+      .guide-nav button {
+        display: block;
+        width: 100%;
+        padding: 4px 10px;
+        border: 0;
+        border-left: 2px solid transparent;
+        border-radius: 0;
+        background: none;
+        color: var(--dim);
+        text-align: left;
+      }
+      .guide-nav button:hover {
+        color: var(--fg);
+      }
+      .guide-nav button[aria-current="step"] {
+        border-left-color: var(--accent);
+        color: var(--fg);
+        font-weight: 600;
+      }
+      .docs-content a[data-lesson-link] {
+        cursor: pointer;
+      }
+      .lesson-goals,
+      .try {
+        margin: 16px 0;
+        padding: 10px 14px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+      }
+      .lesson-goals ul {
+        margin: 4px 0 0;
+      }
+      .try {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 6px 10px;
+        background: var(--bg);
+      }
+      .try span {
+        color: var(--dim);
+      }
+      .check {
+        margin: 12px 0;
+        padding: 10px 14px;
+        border-left: 3px solid var(--good);
+        border-radius: 4px;
+        background: var(--bg);
+      }
+      .check summary {
+        color: var(--fg);
+        cursor: pointer;
+      }
+      .check p {
+        margin: 8px 0 0;
+      }
+      .docs-code {
+        margin: 10px 0;
+        padding: 10px 14px;
+        overflow-x: auto;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        font: 12.5px/1.5 var(--code);
+      }
+      .docs-aside {
+        font-size: 13px;
+      }
+      .ladder li::marker {
+        color: var(--fg);
+        font-weight: 600;
+      }
+      .course-map {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+        gap: 10px;
+        margin-top: 10px;
+      }
+      .course-map button {
+        padding: 10px 12px;
+        text-align: left;
+      }
+      .course-map .n {
+        display: block;
+        color: var(--dim);
+        font-size: 12px;
+      }
+      @media (max-width: 900px) {
+        .guide {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 20px;
+        }
+        .guide-nav {
+          position: sticky;
+          /* Cover #docs-view's top padding so text can't show above. */
+          top: -16px;
+          z-index: 1;
+          max-height: none;
+          margin: -8px 0 0;
+          padding: 16px 0 8px;
+          background: var(--panel);
+        }
+        .guide-nav-title,
+        .guide-nav .group {
+          display: none;
+        }
+        .guide-nav ol {
+          display: flex;
+          gap: 6px;
+          overflow-x: auto;
+          padding-bottom: 4px;
+        }
+        .guide-nav button {
+          width: auto;
+          border: 1px solid var(--line);
+          border-radius: 6px;
+          white-space: nowrap;
+        }
+        .guide-nav button[aria-current="step"] {
+          border-color: var(--accent);
+        }
       }
       .docs-content {
         max-width: 760px;
@@ -2143,7 +2565,7 @@
         padding: 10px 14px;
         border-left: 3px solid var(--accent);
         border-radius: 4px;
-        background: var(--panel);
+        background: var(--bg);
       }
       .docs-terms {
         display: grid;
@@ -2235,7 +2657,10 @@
       }
       @media (max-width: 680px) {
         #docs-view {
-          padding: 24px 18px 40px;
+          padding: 16px 16px 40px;
+        }
+        .guide-shell {
+          padding: 24px 16px 32px;
         }
       }
       /* App chrome (menu, passes, status, dialogs) uses the plain sans font;
@@ -2350,7 +2775,7 @@
           ?
         </button>
         <a class="nav-link" href="#/" data-route="workspace">Workspace</a>
-        <a class="nav-link" href="#/docs" data-route="docs">Docs</a>
+        <a class="nav-link" href="#/docs" data-route="docs">Learn</a>
         <span class="love-note">built with care for compiler explorers</span>
       </header>
       <button
@@ -2458,7 +2883,13 @@
             <div id="diags"></div>
             <div id="gpu-view" hidden></div>
             <div class="graph-tools" role="toolbar" aria-label="Graph">
-              <span id="view-toggle" class="view-toggle" role="group" aria-label="View" hidden>
+              <span
+                id="view-toggle"
+                class="view-toggle"
+                role="group"
+                aria-label="View"
+                hidden
+              >
                 <button id="view-graph" aria-pressed="true" title="Op graph">
                   Graph
                 </button>
@@ -2470,7 +2901,12 @@
                   GPU
                 </button>
               </span>
-              <span id="view-sep" class="tools-sep" aria-hidden="true" hidden></span>
+              <span
+                id="view-sep"
+                class="tools-sep"
+                aria-hidden="true"
+                hidden
+              ></span>
               <button id="zoom-out" aria-label="Zoom out" title="Zoom out (-)">
                 −
               </button>
@@ -2500,7 +2936,26 @@
             title="Drag to resize · double-click to reset"
           ></div>
           <aside id="diff-pane" class="pane">
-            <h2>
+            <div class="side-tabs" role="tablist" aria-label="Side panel">
+              <button
+                id="side-changes"
+                role="tab"
+                aria-selected="true"
+                aria-controls="diff-list"
+              >
+                Changes
+              </button>
+              <button
+                id="side-gpu"
+                role="tab"
+                aria-selected="false"
+                aria-controls="gpu-path"
+                hidden
+              >
+                GPU path
+              </button>
+            </div>
+            <h2 id="diff-head">
               <span id="diff-title">diff</span>
               <span id="diff-summary">no comparison yet</span>
             </h2>
@@ -2536,6 +2991,7 @@
                 .json
               </button>
             </div>
+            <div id="gpu-path" role="tabpanel" hidden></div>
           </aside>
         </main>
 
@@ -2658,6 +3114,8 @@
           <dd>Switch the canvas between the op graph and the GPU view</dd>
           <dt><kbd>w</kbd></dt>
           <dd>What's this line? Explain the line of code you click</dd>
+          <dt><kbd>←</kbd> <kbd>→</kbd></dt>
+          <dd>Jump to the previous / next chapter of the guide (Learn)</dd>
           <dt><kbd>m</kbd></dt>
           <dd>Show / hide the menu</dd>
           <dt><kbd>shift</kbd> <kbd>L</kbd></dt>
@@ -2740,8 +3198,8 @@
         </p>
         <dl id="buffers-summary"></dl>
         <p id="buffers-empty" class="dialog-note" hidden>
-          No memref allocations. Buffers appear after bufferization, for
-          example <code>-one-shot-bufferize</code>.
+          No memref allocations. Buffers appear after bufferization, for example
+          <code>-one-shot-bufferize</code>.
         </p>
         <div class="buf-scroll">
           <div id="buffers-functions"></div>
@@ -2780,8 +3238,8 @@
           <strong>Mock data.</strong> These kernel timings are invented to show
           how benchmark results line up with the passes that built each kernel.
           They were not measured on any GPU. The trace itself is real
-          <code>mlir-opt</code> output. Use <strong>Import current…</strong>
-          and <strong>Import baseline…</strong> to load your own results.
+          <code>mlir-opt</code> output. Use <strong>Import current…</strong> and
+          <strong>Import baseline…</strong> to load your own results.
         </p>
         <dl id="symbols-summary"></dl>
         <div class="opcount-controls">
@@ -2869,347 +3327,823 @@
       </dialog>
 
       <section id="docs-view" hidden aria-labelledby="docs-title">
-        <div class="docs-content">
-          <div class="docs-kicker">VizMLIR / field guide</div>
-          <h2 id="docs-title">See how your code runs on the GPU.</h2>
-          <p>
-            When you write a program for a GPU, a compiler reshapes it in many
-            small steps before the GPU ever sees it. VizMLIR lets you watch
-            those steps one at a time, and draws what the result will do on the
-            GPU: how the work is split up, where the data is kept, and whether
-            it is read in a way the GPU is good at.
-          </p>
-          <p>
-            You don't need to be a compiler expert. If you know roughly what a
-            loop and an array are, you can follow along.
-          </p>
-          <p class="docs-callout">
-            <strong>A promise and a limit.</strong> VizMLIR only reads your
-            code. It never runs it, and nothing leaves your browser. That also
-            means it can't tell you exact speeds; a profiler measures those,
-            and you can bring its numbers in here.
-          </p>
-
-          <h3>Try it in a minute</h3>
-          <ol>
-            <li>
-              Open the transpose sample. Transposing a table turns its rows into
-              columns. The sample does it three ways, and two of them contain a
-              classic GPU mistake.
-            </li>
-            <li>
-              The big panel in the middle is the GPU view. Scroll to
-              <strong>Memory accesses</strong> and click a row marked in orange.
-              It explains what is wrong and how people usually fix it.
-            </li>
-            <li>
-              Press <kbd>]</kbd> a few times to step through the compiler's
-              work. The code on the left changes, and the picture follows.
-            </li>
-            <li>
-              Click any line of code on the left. The panel under it,
-              <strong>What's this line?</strong>, names each part of that line
-              in plain words and links every value back to the line that made
-              it.
-            </li>
-          </ol>
-          <div class="sample-actions">
-            <button id="docs-gpu-sample">Open the transpose sample</button>
-            <span
-              ><kbd>g</kbd> swaps the GPU picture for a diagram of the code;
-              <kbd>?</kbd> lists every key.</span
-            >
-          </div>
-
-          <h3>The GPU in four ideas</h3>
-          <p>These four ideas are all you need to read the GPU view.</p>
-          <dl class="docs-terms">
-            <dt>Threads</dt>
-            <dd>
-              A GPU runs the same small piece of code thousands of times at
-              once. Each copy is a thread, and each works on its own piece of
-              the data, like thousands of people each handed one cell of a huge
-              spreadsheet.
-            </dd>
-            <dt>Blocks and the grid</dt>
-            <dd>
-              Threads come in teams called blocks, and all the blocks together
-              make the grid. Teams don't wait for each other, so the GPU can
-              spread them over its many cores however it likes.
-            </dd>
-            <dt>Warps</dt>
-            <dd>
-              Inside a block, threads move in groups of 32 called warps. Picture
-              32 people who must take every step together: when one reaches for
-              memory, all 32 reach at the same moment. That is why the way
-              neighbors read memory matters so much.
-            </dd>
-            <dt>Memory</dt>
-            <dd>
-              <em>Global</em> memory is the big warehouse every thread can
-              reach, but it is far away. <em>Shared</em> memory is a small shelf
-              inside each block: quick to reach, shared by that team only.
-              <em>Private</em> memory belongs to a single thread.
-            </dd>
-          </dl>
-
-          <h3>Reading the GPU view</h3>
-          <p>
-            For every place your program starts work on the GPU (a
-            <em>launch</em>), you'll see three things.
-          </p>
-          <ul>
-            <li>
-              <strong>The launch.</strong> A grid of squares, one per block. The
-              highlighted one is opened up below it so you can see its threads,
-              32 to a row: each row is one warp. Hover any square for its number.
-            </li>
-            <li>
-              <strong>Memory.</strong> Every array the code uses, sorted into
-              global, shared and private, with its size and how often it is
-              read or written.
-            </li>
-            <li>
-              <strong>Memory accesses.</strong> Every place the code reads or
-              writes an array, with a verdict for the first warp.
-            </li>
-          </ul>
-          <dl class="docs-terms">
-            <dt><span class="good">coalesced</span></dt>
-            <dd>
-              The 32 threads read neighboring items, like people taking books
-              side by side from one shelf. The GPU fetches them in one trip.
-              This is what you want.
-            </dd>
-            <dt><span class="bad">strided</span></dt>
-            <dd>
-              The threads read items far apart, like 32 people each walking to a
-              different aisle. The GPU fetches much more than it uses and throws
-              the rest away. The panel says how much is wasted.
-            </dd>
-            <dt><span class="good">broadcast</span></dt>
-            <dd>
-              Every thread reads the same item. The GPU fetches it once and
-              hands out copies, which is perfectly fine.
-            </dd>
-            <dt><span class="bad">bank conflict</span></dt>
-            <dd>
-              Shared memory has 32 counters, called banks. If several threads
-              need different items from the same counter, they queue up.
-              "32-way" means 32 threads waiting in one line.
-            </dd>
-            <dt><span class="good">no bank conflicts</span></dt>
-            <dd>Everyone is served at their own counter at the same time.</dd>
-          </dl>
-          <p>
-            Click a row to see the warp's 32 threads as colored squares (the
-            same color means the same chunk of memory, or the same counter) and
-            to highlight that line in the code on the left.
-          </p>
-
-          <h3>Reading a line of MLIR</h3>
-          <p>
-            Most lines of MLIR have the same shape. Take this one:
-            <code>%4 = memref.load %arg0[%3, %1] : memref&lt;1024x1024xf32&gt;</code>
-          </p>
-          <dl class="docs-terms">
-            <dt><code>%4 =</code></dt>
-            <dd>The name of the value the line produces. Later lines use it.</dd>
-            <dt><code>memref.load</code></dt>
-            <dd>
-              What the line does: <em>load</em> (read one item) from the
-              <em>memref</em> family of operations, which work on arrays in
-              memory.
-            </dd>
-            <dt><code>%arg0[%3, %1]</code></dt>
-            <dd>
-              The inputs: which array, and which item in it (row
-              <code>%3</code>, column <code>%1</code>).
-            </dd>
-            <dt><code>: memref&lt;…&gt;</code></dt>
-            <dd>
-              The type: a 1024 × 1024 table of 32-bit decimal numbers.
-            </dd>
-          </dl>
-          <p>
-            You don't have to decode this yourself: click a line and
-            <strong>What's this line?</strong> does it for you, with a short
-            description of the operation and a link to the MLIR documentation.
-            For loads and stores it also tells you how the GPU handles them.
-            Press <kbd>w</kbd> to hide or show the panel.
-          </p>
-
-          <h3>Watch a kernel being built</h3>
-          <p>
-            A <em>kernel</em> is the part of your program that runs on the GPU.
-            The compiler builds it in steps called <em>passes</em>; the row of
-            cards along the top shows them in order.
-          </p>
-          <ul>
-            <li>
-              Press <kbd>h</kbd>, or click <strong>@ symbols</strong> at the
-              bottom, to see every function and kernel and which step created or
-              changed it. Click one to follow just that kernel, like a
-              time-lapse, all the way to the GPU assembly (PTX) at the end.
-            </li>
-            <li>
-              If you have timed your kernels with a profiler,
-              <strong>Import current…</strong> puts each time next to the steps
-              that built that kernel. Import an older run with
-              <strong>Import baseline…</strong> to see what got faster or
-              slower. The "GPU kernels + benchmarks (mock)" sample shows this
-              with made-up numbers.
-            </li>
-          </ul>
-
-          <h3>Use your own code</h3>
-          <p>
-            VizMLIR reads the log <code>mlir-opt</code> writes when you ask it
-            to print your code after every step. Run your pipeline like this,
-            then open the file with <strong>Open…</strong>:
-          </p>
-          <p>
-            <code
-              >mlir-opt input.mlir -pass-pipeline='…'
-              -mlir-print-ir-before=gpu-kernel-outlining -mlir-print-ir-after-all
-              -mlir-print-ir-module-scope -mlir-disable-threading 2&gt;
-              trace.txt</code
-            >
-          </p>
-          <p>What those flags ask for, in plain words:</p>
-          <ul>
-            <li>
-              <code>-mlir-print-ir-after-all</code>: a snapshot of the code after
-              every step.
-            </li>
-            <li>
-              <code>-mlir-print-ir-before=gpu-kernel-outlining</code>: one more
-              snapshot just before the GPU kernels are carved out, so VizMLIR
-              can tell you which step made them.
-            </li>
-            <li>
-              <code>-mlir-print-ir-module-scope</code>: the whole program in
-              every snapshot, not just the part that changed.
-            </li>
-            <li>
-              <code>-mlir-disable-threading</code>: keeps the log in order.
-            </li>
-          </ul>
-          <p>
-            Add <code>-mlir-timing</code> to see how long each step took (press
-            <kbd>p</kbd>). With <strong>Watch…</strong> (Chrome and Edge),
-            VizMLIR reloads the file every time you run the command again, so
-            you can keep it open beside your terminal. If a step fails, its card
-            is marked ✗ and the compiler's messages appear over the picture.
-          </p>
-
-          <h3>The code diagram and what changed</h3>
-          <p>
-            For code without GPU parts, or when you press <kbd>g</kbd>, the
-            middle panel draws your code as a diagram: every operation is a
-            box, and arrows show where each value goes next. The panel on the
-            right lists what the current step added, removed or changed. Walk
-            through the list with <kbd>j</kbd> and <kbd>k</kbd>; each change is
-            highlighted in the diagram and in the code.
-          </p>
-          <p>
-            You can also compare any two versions by hand: paste the earlier
-            code into <strong>Baseline</strong> and the later one into
-            <strong>Current</strong>. This small example makes a table, fills
-            it, and multiplies it:
-          </p>
-          <div class="sample-editor">
-            <div class="code-editor">
-              <pre
-                aria-hidden="true"
-              ><code id="docs-sample-highlight"></code></pre>
-              <textarea
-                id="docs-sample"
-                aria-label="Sample MLIR source"
-                readonly
-                spellcheck="false"
-              ></textarea>
-            </div>
-            <div class="sample-actions">
-              <button id="load-sample">Load in workspace</button>
-              <button id="docs-samples">More samples…</button>
-              <span>Then change <code>linalg.fill</code> and compare.</span>
-            </div>
-          </div>
-          <p>The colors of the boxes in the diagram:</p>
-          <div class="legend" aria-label="Node color legend">
-            <span
-              class="legend-item"
-              style="--legend-color: var(--node-1-stroke)"
-              >functions</span
-            >
-            <span
-              class="legend-item"
-              style="--legend-color: var(--node-2-stroke)"
-              >operations</span
-            >
-            <span
-              class="legend-item"
-              style="--legend-color: var(--node-3-stroke)"
-              >blocks</span
-            >
-            <span
-              class="legend-item"
-              style="--legend-color: var(--node-4-stroke)"
-              >terminators</span
-            >
-          </div>
-
-          <h3>Save and share</h3>
-          <ul>
-            <li>
-              Your work saves itself in this browser. Close the tab and it is
-              still there when you come back.
-            </li>
-            <li>
-              <strong>Sessions</strong> keeps named copies, and turns them into
-              <code>.json</code> files you can send to someone else. Nothing is
-              uploaded anywhere.
-            </li>
-            <li>
-              Save the diagram as a picture (PNG or SVG) from the buttons above
-              it, and the list of changes as Markdown or JSON from the right
-              panel. Pick changes with <kbd>x</kbd> and press <kbd>c</kbd> to
-              copy them.
-            </li>
-          </ul>
-
-          <h3>Good to know</h3>
-          <ul>
-            <li>
-              The memory verdicts look at the first warp of the first block, on
-              the first trip through any loop. That is usually representative,
-              but not always.
-            </li>
-            <li>
-              They follow how NVIDIA GPUs fetch memory (32-byte chunks and 32
-              banks). Other GPUs work in a similar but not identical way.
-            </li>
-            <li>
-              VizMLIR understands the most common MLIR code. If something
-              doesn't show up the way you expect, please
-              <a
-                href="https://github.com/joepothiboot/vizmlir/issues"
-                target="_blank"
-                rel="noreferrer"
-                >open an issue</a
+        <div class="guide-shell">
+          <div class="guide">
+            <nav class="guide-nav" aria-label="Guide chapters">
+              <div class="guide-nav-title">A visual guide to GPU compilers</div>
+              <ol id="guide-toc"></ol>
+            </nav>
+            <div class="docs-content">
+              <article
+                class="lesson"
+                id="lesson-welcome"
+                data-group="Start here"
+                data-title="Welcome"
               >
-              with the snippet, and we'll look at it.
-            </li>
-          </ul>
-          <p>
-            <a
-              href="https://github.com/joepothiboot/vizmlir#readme"
-              target="_blank"
-              rel="noreferrer"
-              >Read the project README on GitHub</a
-            >
-          </p>
+                <div class="docs-kicker">VizMLIR · a visual guide</div>
+                <h2 id="docs-title">How does your code end up on a GPU?</h2>
+                <p>
+                  Between the program you write and the instructions a GPU runs
+                  sits a compiler that rewrites your code dozens of times. Each
+                  rewrite decides something that matters: how the work is split
+                  among thousands of threads, where the data is kept, and
+                  whether it is read in a way the hardware is good at.
+                </p>
+                <p>
+                  This guide teaches those ideas with real compiler output from
+                  MLIR, the compiler framework behind many modern GPU and
+                  machine learning compilers. Every idea comes with a picture in
+                  VizMLIR you can poke at, and a short question to check
+                  yourself.
+                </p>
+
+                <h3>Where this fits in a CS course</h3>
+                <dl class="docs-terms">
+                  <dt>Computer architecture</dt>
+                  <dd>
+                    How a GPU runs threads in lockstep (SIMT), its memory
+                    hierarchy, and why the order of memory accesses changes
+                    speed.
+                  </dd>
+                  <dt>Compilers</dt>
+                  <dd>
+                    Intermediate representations, SSA form, passes, and lowering
+                    a program from high-level operations down to assembly.
+                  </dd>
+                  <dt>Parallel programming</dt>
+                  <dd>
+                    Mapping loops onto a grid of threads, thread indexing, and
+                    the classic transpose and tiled matrix multiply.
+                  </dd>
+                </dl>
+
+                <h3>What you need</h3>
+                <p>
+                  Loops, arrays, and a rough idea that memory is a long row of
+                  numbered bytes. No compiler, GPU, or CUDA experience needed.
+                </p>
+
+                <h3>The course</h3>
+                <div class="course-map" id="course-map"></div>
+
+                <p class="docs-callout">
+                  <strong>A promise and a limit.</strong> VizMLIR only reads
+                  code. It never runs it, and nothing leaves your browser. That
+                  also means it shows the patterns that make a GPU fast or slow,
+                  not exact timings; a profiler measures those.
+                </p>
+              </article>
+
+              <article
+                class="lesson"
+                id="lesson-tour"
+                data-group="Start here"
+                data-title="A one-minute tour"
+              >
+                <div class="docs-kicker">Start here</div>
+                <h2>A one-minute tour</h2>
+                <p>
+                  Before any theory, see what you'll be looking at. The
+                  transpose sample turns a 1024 × 1024 table's rows into
+                  columns, three different ways. Two of them contain a classic
+                  GPU mistake.
+                </p>
+                <ol>
+                  <li>
+                    Open the sample. The big panel in the middle is the
+                    <strong>GPU view</strong>: a picture of the work the GPU
+                    will do.
+                  </li>
+                  <li>
+                    Scroll to <strong>Memory accesses</strong> and click a row
+                    marked in orange. It explains what is wrong and how people
+                    usually fix it.
+                  </li>
+                  <li>
+                    Press <kbd>]</kbd> a few times to step through the
+                    compiler's work. The code on the left changes, and the
+                    picture follows.
+                  </li>
+                  <li>
+                    Click any line of code on the left. The panel under it,
+                    <strong>What's this line?</strong>, explains that line in
+                    plain words.
+                  </li>
+                </ol>
+                <div class="try">
+                  <button id="docs-gpu-sample">
+                    Open the transpose sample
+                  </button>
+                  <span
+                    >Come back here any time with <strong>Learn</strong> in the
+                    top bar. <kbd>?</kbd> lists every key.</span
+                  >
+                </div>
+                <p>
+                  Don't worry if the words mean nothing yet. The next four
+                  lessons explain everything on that screen.
+                </p>
+              </article>
+
+              <article
+                class="lesson"
+                id="lesson-gpu"
+                data-group="Lessons"
+                data-title="How a GPU runs code"
+              >
+                <div class="docs-kicker">Lesson 1 · Architecture</div>
+                <h2>How a GPU runs code</h2>
+                <div class="lesson-goals">
+                  <strong>You'll learn</strong>
+                  <ul>
+                    <li>what threads, blocks, and the grid are;</li>
+                    <li>why threads move in groups of 32 called warps;</li>
+                    <li>how each thread finds the piece of data it owns.</li>
+                  </ul>
+                </div>
+                <p>
+                  A CPU has a few powerful cores that each follow their own
+                  instructions. A GPU has thousands of simpler ones built to run
+                  <em>the same</em> instructions on different data. Instead of
+                  one loop that visits every cell of a table, a GPU program says
+                  what to do with <em>one</em> cell, and the hardware runs that
+                  piece of code once per cell, all at the same time. That piece
+                  of code is a <em>kernel</em>.
+                </p>
+                <dl class="docs-terms">
+                  <dt>Threads</dt>
+                  <dd>
+                    Each running copy of the kernel is a thread. Think of
+                    thousands of people each handed one cell of a huge
+                    spreadsheet.
+                  </dd>
+                  <dt>Blocks and the grid</dt>
+                  <dd>
+                    Threads come in teams called blocks, and all the blocks
+                    together make the grid. Blocks never wait for each other, so
+                    the GPU can spread them over its cores in any order.
+                  </dd>
+                  <dt>Warps</dt>
+                  <dd>
+                    Inside a block, the hardware runs threads in groups of 32
+                    called warps, executing one instruction for all 32 at once.
+                    This is called SIMT: single instruction, multiple threads.
+                    When one thread in a warp reads memory, all 32 read at the
+                    same moment.
+                  </dd>
+                </dl>
+
+                <h3>Which thread am I?</h3>
+                <p>
+                  Every thread knows its position: its block number and its
+                  thread number inside the block. The kernel turns those into
+                  "my cell". In the transpose sample, that looks like:
+                </p>
+                <pre class="docs-code">
+%x0 = arith.muli %bx, %c32 : index   // block x × 32
+%x  = arith.addi %x0, %tx : index    // + thread x
+%y0 = arith.muli %by, %c32 : index
+%y  = arith.addi %y0, %ty : index</pre>
+                <p>
+                  With blocks of 32 × 32 threads, thread (<code>tx</code>,
+                  <code>ty</code>) of block (<code>bx</code>, <code>by</code>)
+                  owns cell (<code>bx·32 + tx</code>, <code>by·32 + ty</code>).
+                  The first warp is the 32 threads with <code>ty = 0</code> and
+                  <code>tx</code> = 0 to 31.
+                </p>
+
+                <div class="try">
+                  <strong>Try it.</strong>
+                  <span
+                    >In the transpose sample, look at the top of the GPU view: a
+                    grid of squares, one per block. The highlighted block is
+                    opened below it, 32 threads to a row; each row is one warp.
+                    Hover a square for its number.</span
+                  >
+                </div>
+
+                <details class="check">
+                  <summary>
+                    Check yourself: the tiled matmul sample uses blocks of 16 ×
+                    16 threads. How many warps is each block?
+                  </summary>
+                  <p>
+                    16 × 16 = 256 threads, and 256 / 32 =
+                    <strong>8 warps</strong>. Open "Tiled matmul on the GPU"
+                    from <strong>Samples</strong>
+                    and count the rows in the opened block.
+                  </p>
+                </details>
+              </article>
+
+              <article
+                class="lesson"
+                id="lesson-memory"
+                data-group="Lessons"
+                data-title="Memory and access patterns"
+              >
+                <div class="docs-kicker">Lesson 2 · Architecture</div>
+                <h2>Memory and access patterns</h2>
+                <div class="lesson-goals">
+                  <strong>You'll learn</strong>
+                  <ul>
+                    <li>the three kinds of GPU memory and why they differ;</li>
+                    <li>what makes a warp's access coalesced or strided;</li>
+                    <li>what a shared-memory bank conflict is, and one fix.</li>
+                  </ul>
+                </div>
+
+                <h3>Near and far memory</h3>
+                <dl class="docs-terms">
+                  <dt>Global</dt>
+                  <dd>
+                    The big warehouse every thread can reach. Large, but far
+                    away: each trip is slow, so the GPU fetches it in chunks of
+                    32 bytes called <em>sectors</em>.
+                  </dd>
+                  <dt>Shared</dt>
+                  <dd>
+                    A small shelf inside each block, quick to reach and shared
+                    by that team only. Programs copy a tile of data here once,
+                    then read it many times.
+                  </dd>
+                  <dt>Private</dt>
+                  <dd>Registers that belong to a single thread.</dd>
+                </dl>
+
+                <h3>Coalesced or strided</h3>
+                <p>
+                  Because a warp's 32 threads read at the same moment, what
+                  matters is where their 32 addresses land.
+                </p>
+                <dl class="docs-terms">
+                  <dt><span class="good">coalesced</span></dt>
+                  <dd>
+                    Neighboring threads read neighboring items, like taking
+                    books side by side from one shelf. 32 floats of 4 bytes are
+                    128 bytes: four sectors, the least possible.
+                  </dd>
+                  <dt><span class="bad">strided</span></dt>
+                  <dd>
+                    Threads read items far apart, like 32 people each walking to
+                    a different aisle. Each thread pulls in its own 32-byte
+                    sector to use 4 bytes of it: 32 sectors instead of four,
+                    eight times the traffic.
+                  </dd>
+                  <dt><span class="good">broadcast</span></dt>
+                  <dd>
+                    Every thread reads the same item. The GPU fetches it once
+                    and hands out copies.
+                  </dd>
+                </dl>
+
+                <h3>Bank conflicts</h3>
+                <p>
+                  Shared memory is split into 32 <em>banks</em>, like 32 service
+                  counters; consecutive 4-byte words go to consecutive counters,
+                  wrapping around. If several threads of a warp need different
+                  words from the same bank, they queue.
+                </p>
+                <dl class="docs-terms">
+                  <dt><span class="bad">bank conflict</span></dt>
+                  <dd>
+                    "32-way" means all 32 threads wait in one line: the access
+                    takes 32 turns instead of one.
+                  </dd>
+                  <dt><span class="good">no conflicts</span></dt>
+                  <dd>Everyone is served at their own counter at once.</dd>
+                </dl>
+
+                <h3>Reading the GPU view</h3>
+                <p>
+                  For every <em>launch</em> (a place the program starts work on
+                  the GPU), the view shows the grid and one opened block, every
+                  array sorted into global, shared, and private memory, and
+                  every read and write with a verdict for the first warp. Click
+                  an access to see its 32 threads as colored squares (same
+                  color, same sector or bank) and to mark its line in the code.
+                </p>
+
+                <div class="try">
+                  <strong>Try it.</strong>
+                  <span
+                    >In the transpose sample, compare the three kernels'
+                    accesses: the naive one's write, the 32 × 32 tile's read,
+                    and the padded 32 × 33 tile.</span
+                  >
+                </div>
+
+                <details class="check">
+                  <summary>
+                    Check yourself: the naive transpose reads
+                    <code>in[%y, %x]</code> and writes <code>out[%x, %y]</code>.
+                    Across the first warp only <code>%x</code> changes. Which
+                    one is strided?
+                  </summary>
+                  <p>
+                    The <strong>write</strong>. In <code>in[%y, %x]</code>,
+                    <code>%x</code> is the column, so neighbors are 4 bytes
+                    apart: coalesced. In <code>out[%x, %y]</code>,
+                    <code>%x</code> is the row, so neighbors are a whole row
+                    (1024 × 4 bytes) apart: 32 sectors for 128 useful bytes.
+                  </p>
+                </details>
+                <details class="check">
+                  <summary>
+                    Check yourself: why does padding a 32 × 32 shared tile to 32
+                    × 33 remove the bank conflict when threads read down a
+                    column?
+                  </summary>
+                  <p>
+                    Thread <code>t</code> reads word <code>t·32 + c</code>,
+                    whose bank is <code>(t·32 + c) mod 32 = c</code>: the same
+                    bank for all 32 threads. With rows of 33 words, the bank is
+                    <code>(t·33 + c) mod 32 = (t + c) mod 32</code>, which is
+                    different for every thread.
+                  </p>
+                </details>
+              </article>
+
+              <article
+                class="lesson"
+                id="lesson-ir"
+                data-group="Lessons"
+                data-title="Reading MLIR"
+              >
+                <div class="docs-kicker">Lesson 3 · Compilers</div>
+                <h2>Reading MLIR</h2>
+                <div class="lesson-goals">
+                  <strong>You'll learn</strong>
+                  <ul>
+                    <li>what an intermediate representation (IR) is;</li>
+                    <li>
+                      the parts of a line: value, operation, operands, type;
+                    </li>
+                    <li>what SSA form and dialects are.</li>
+                  </ul>
+                </div>
+                <p>
+                  Compilers don't rewrite your source text directly. They first
+                  translate it into an <em>intermediate representation</em>: a
+                  simpler, regular language that is easy to analyze and
+                  transform. MLIR is a framework for building such IRs, and the
+                  code in VizMLIR's left panel is MLIR.
+                </p>
+
+                <h3>Anatomy of a line</h3>
+                <p>
+                  <code
+                    >%4 = memref.load %arg0[%3, %1] :
+                    memref&lt;1024x1024xf32&gt;</code
+                  >
+                </p>
+                <dl class="docs-terms">
+                  <dt><code>%4 =</code></dt>
+                  <dd>The value this line produces. Later lines use it.</dd>
+                  <dt><code>memref.load</code></dt>
+                  <dd>
+                    The operation: <em>load</em> (read one item) from the
+                    <em>memref</em> dialect, a family of operations on arrays in
+                    memory.
+                  </dd>
+                  <dt><code>%arg0[%3, %1]</code></dt>
+                  <dd>
+                    The operands: which array, and which item in it (row
+                    <code>%3</code>, column <code>%1</code>).
+                  </dd>
+                  <dt><code>: memref&lt;…&gt;</code></dt>
+                  <dd>The type: a 1024 × 1024 table of 32-bit floats.</dd>
+                </dl>
+
+                <h3>Two ideas worth knowing</h3>
+                <dl class="docs-terms">
+                  <dt>SSA form</dt>
+                  <dd>
+                    Every value is assigned exactly once. <code>%4</code> never
+                    changes after this line, so to find where any value comes
+                    from, there is exactly one line to look at. This is what
+                    makes the "which line made this?" links possible.
+                  </dd>
+                  <dt>Dialects</dt>
+                  <dd>
+                    The part before the dot is the dialect.
+                    <code>arith</code> does math, <code>scf</code> is loops and
+                    ifs, <code>gpu</code> is launches and thread ids,
+                    <code>nvvm</code> is NVIDIA's hardware operations. A
+                    compiler mixes dialects and moves the program from
+                    high-level ones to low-level ones.
+                  </dd>
+                </dl>
+
+                <div class="try">
+                  <strong>Try it.</strong>
+                  <span
+                    >Click any line in the workspace.
+                    <strong>What's this line?</strong> names each part, links
+                    every value back to the line that made it, and for loads and
+                    stores says how the GPU handles them. <kbd>w</kbd> hides or
+                    shows it.</span
+                  >
+                </div>
+
+                <details class="check">
+                  <summary>
+                    Check yourself: in the line above, where would you look to
+                    learn what <code>%3</code> is?
+                  </summary>
+                  <p>
+                    At the single line that starts with <code>%3 =</code>. SSA
+                    guarantees there is exactly one. In VizMLIR, click the
+                    <code>%3</code> link in <strong>What's this line?</strong>.
+                  </p>
+                </details>
+              </article>
+
+              <article
+                class="lesson"
+                id="lesson-passes"
+                data-group="Lessons"
+                data-title="How a compiler builds a kernel"
+              >
+                <div class="docs-kicker">Lesson 4 · Compilers</div>
+                <h2>How a compiler builds a kernel</h2>
+                <div class="lesson-goals">
+                  <strong>You'll learn</strong>
+                  <ul>
+                    <li>what a compiler pass is;</li>
+                    <li>what "lowering" means, and the steps down to PTX;</li>
+                    <li>
+                      how to follow one kernel through the whole pipeline.
+                    </li>
+                  </ul>
+                </div>
+                <p>
+                  A compiler is a pipeline of small rewrites called
+                  <em>passes</em>. Each pass does one job, such as simplifying
+                  arithmetic or moving a kernel into its own function, and hands
+                  the result to the next. Small passes are easier to write,
+                  test, and reorder than one giant translator.
+                </p>
+
+                <h3>Lowering, step by step</h3>
+                <p>
+                  <em>Lowering</em> means rewriting operations from a high-level
+                  dialect into lower-level ones, closer to the hardware. For the
+                  GPU samples in VizMLIR, the path is:
+                </p>
+                <ol class="ladder">
+                  <li>
+                    <code>gpu.launch</code> inside an ordinary function: the
+                    kernel's body written in place.
+                  </li>
+                  <li>
+                    <code>gpu-kernel-outlining</code> carves the body out into a
+                    <code>gpu.func</code> inside a <code>gpu.module</code>, and
+                    replaces it with a <code>gpu.launch_func</code> call.
+                  </li>
+                  <li>
+                    <code>convert-gpu-to-nvvm</code> rewrites thread ids and
+                    other GPU operations into NVIDIA's <code>nvvm</code> and
+                    <code>llvm</code> dialects.
+                  </li>
+                  <li>
+                    <code>gpu-module-to-binary</code> turns the module into
+                    <em>PTX</em>, NVIDIA's GPU assembly, stored in a
+                    <code>gpu.binary</code>.
+                  </li>
+                </ol>
+                <p>
+                  The row of cards along the top of the workspace is this
+                  pipeline, one card per pass. <kbd>[</kbd> and
+                  <kbd>]</kbd> step through it, and the right panel lists what
+                  each pass added, removed, or changed.
+                </p>
+
+                <h3>Follow one kernel</h3>
+                <p>
+                  Press <kbd>h</kbd>, or click <strong>@ symbols</strong> at the
+                  bottom, to list every function and kernel with the pass that
+                  created, changed, or lowered it. Click one to follow just that
+                  kernel like a time-lapse, all the way to its PTX.
+                </p>
+
+                <div class="try">
+                  <strong>Try it.</strong>
+                  <span
+                    >In the transpose sample, press <kbd>h</kbd> and follow
+                    <code>@transpose_naive_kernel</code> from
+                    <code>gpu-kernel-outlining</code> to PTX. Find the line
+                    where the thread id becomes an
+                    <code>nvvm</code> operation.</span
+                  >
+                </div>
+
+                <details class="check">
+                  <summary>
+                    Check yourself: after <code>gpu-kernel-outlining</code>, why
+                    does the original function still exist?
+                  </summary>
+                  <p>
+                    It runs on the CPU (the <em>host</em>). Outlining moves only
+                    the GPU part into its own <code>gpu.func</code>; the host
+                    function keeps a <code>gpu.launch_func</code> that starts
+                    it.
+                  </p>
+                </details>
+                <p class="docs-aside">
+                  Timed your kernels with a profiler? In the Symbol history,
+                  <strong>Import current…</strong> puts each time next to the
+                  passes that built that kernel, and
+                  <strong>Import baseline…</strong> compares two runs. The "GPU
+                  kernels + benchmarks (mock)" sample shows this with made-up
+                  numbers.
+                </p>
+              </article>
+
+              <article
+                class="lesson"
+                id="lesson-own"
+                data-group="Lab"
+                data-title="Run your own compiler"
+              >
+                <div class="docs-kicker">Lab</div>
+                <h2>Run your own compiler</h2>
+                <p>
+                  VizMLIR reads the log <code>mlir-opt</code> writes when you
+                  ask it to print the code after every pass. Run your pipeline
+                  like this, then open the file with <strong>Open…</strong>:
+                </p>
+                <pre class="docs-code">
+mlir-opt input.mlir -pass-pipeline='…' \
+  -mlir-print-ir-before=gpu-kernel-outlining \
+  -mlir-print-ir-after-all \
+  -mlir-print-ir-module-scope \
+  -mlir-disable-threading 2&gt; trace.txt</pre>
+                <dl class="docs-terms">
+                  <dt><code>-mlir-print-ir-after-all</code></dt>
+                  <dd>A snapshot of the code after every pass.</dd>
+                  <dt>
+                    <code>-mlir-print-ir-before=gpu-kernel-outlining</code>
+                  </dt>
+                  <dd>
+                    One more snapshot just before kernels are carved out, so
+                    VizMLIR can tell which pass made them.
+                  </dd>
+                  <dt><code>-mlir-print-ir-module-scope</code></dt>
+                  <dd>The whole program in every snapshot.</dd>
+                  <dt><code>-mlir-disable-threading</code></dt>
+                  <dd>Keeps the log in order.</dd>
+                </dl>
+                <p>
+                  Add <code>-mlir-timing</code> to see how long each pass took
+                  (<kbd>p</kbd>). With <strong>Watch…</strong> (Chrome and
+                  Edge), VizMLIR reloads the file each time you rerun the
+                  command, so you can keep it open beside your terminal. A
+                  failed pass is marked ✗, with the compiler's messages over the
+                  picture.
+                </p>
+              </article>
+
+              <article
+                class="lesson"
+                id="lesson-diagram"
+                data-group="Lab"
+                data-title="Diagrams and diffs"
+              >
+                <div class="docs-kicker">Lab</div>
+                <h2>Diagrams and diffs</h2>
+                <p>
+                  For code without GPU parts, or when you press <kbd>g</kbd>,
+                  the middle panel draws the code as a dataflow graph: every
+                  operation is a box, and arrows show where each value goes
+                  next. The panel on the right lists what the current pass
+                  added, removed, or changed; walk through it with
+                  <kbd>j</kbd> and <kbd>k</kbd>.
+                </p>
+                <p>
+                  You can also compare any two versions by hand: paste the
+                  earlier code into <strong>Baseline</strong> and the later one
+                  into <strong>Current</strong>. This small example makes a
+                  table, fills it, and multiplies it:
+                </p>
+                <div class="sample-editor">
+                  <div class="code-editor">
+                    <pre
+                      aria-hidden="true"
+                    ><code id="docs-sample-highlight"></code></pre>
+                    <textarea
+                      id="docs-sample"
+                      aria-label="Sample MLIR source"
+                      readonly
+                      spellcheck="false"
+                    ></textarea>
+                  </div>
+                  <div class="sample-actions">
+                    <button id="load-sample">Load in workspace</button>
+                    <button id="docs-samples">More samples…</button>
+                    <span
+                      >Then change <code>linalg.fill</code> and compare.</span
+                    >
+                  </div>
+                </div>
+                <p>The colors of the boxes:</p>
+                <div class="legend" aria-label="Node color legend">
+                  <span
+                    class="legend-item"
+                    style="--legend-color: var(--node-1-stroke)"
+                    >functions</span
+                  >
+                  <span
+                    class="legend-item"
+                    style="--legend-color: var(--node-2-stroke)"
+                    >operations</span
+                  >
+                  <span
+                    class="legend-item"
+                    style="--legend-color: var(--node-3-stroke)"
+                    >blocks</span
+                  >
+                  <span
+                    class="legend-item"
+                    style="--legend-color: var(--node-4-stroke)"
+                    >terminators</span
+                  >
+                </div>
+              </article>
+
+              <article
+                class="lesson"
+                id="lesson-share"
+                data-group="Lab"
+                data-title="Save and share"
+              >
+                <div class="docs-kicker">Lab</div>
+                <h2>Save and share</h2>
+                <ul>
+                  <li>
+                    Your work saves itself in this browser. Close the tab and it
+                    is still there when you come back.
+                  </li>
+                  <li>
+                    <strong>Sessions</strong> keeps named copies and turns them
+                    into <code>.json</code> files you can send to a classmate or
+                    attach to an assignment. Nothing is uploaded.
+                  </li>
+                  <li>
+                    Save the diagram as PNG or SVG from the buttons above it,
+                    and the list of changes as Markdown or JSON from the right
+                    panel. Pick changes with <kbd>x</kbd> and press
+                    <kbd>c</kbd> to copy them.
+                  </li>
+                </ul>
+              </article>
+
+              <article
+                class="lesson"
+                id="lesson-limits"
+                data-group="Reference"
+                data-title="Limits of the model"
+              >
+                <div class="docs-kicker">Reference</div>
+                <h2>Limits of the model</h2>
+                <p>
+                  Every model simplifies. Knowing where this one does is part of
+                  reading it well.
+                </p>
+                <ul>
+                  <li>
+                    The memory verdicts look at the first warp of the first
+                    block, on the first trip through any loop. That is usually
+                    representative, but not always.
+                  </li>
+                  <li>
+                    They follow how NVIDIA GPUs fetch memory (32-byte sectors
+                    and 32 banks). Other GPUs work in a similar but not
+                    identical way.
+                  </li>
+                  <li>
+                    Index arithmetic built from values VizMLIR can't work out
+                    (data loaded from memory, for example) is reported as not
+                    analyzed rather than guessed.
+                  </li>
+                  <li>
+                    VizMLIR understands the most common MLIR code. If something
+                    doesn't show up the way you expect, please
+                    <a
+                      href="https://github.com/joepothiboot/vizmlir/issues"
+                      target="_blank"
+                      rel="noreferrer"
+                      >open an issue</a
+                    >
+                    with the snippet.
+                  </li>
+                </ul>
+                <p>
+                  <a
+                    href="https://github.com/joepothiboot/vizmlir#readme"
+                    target="_blank"
+                    rel="noreferrer"
+                    >Read the project README on GitHub</a
+                  >
+                </p>
+              </article>
+
+              <article
+                class="lesson"
+                id="lesson-glossary"
+                data-group="Reference"
+                data-title="Glossary"
+              >
+                <div class="docs-kicker">Reference</div>
+                <h2>Glossary</h2>
+                <dl class="docs-terms">
+                  <dt>Bank</dt>
+                  <dd>
+                    One of 32 slices of shared memory that can each serve one
+                    word per turn. <a data-lesson-link="memory">Lesson 2</a>
+                  </dd>
+                  <dt>Block</dt>
+                  <dd>
+                    A team of threads that can share memory.
+                    <a data-lesson-link="gpu">Lesson 1</a>
+                  </dd>
+                  <dt>Coalesced</dt>
+                  <dd>
+                    A warp access whose addresses sit side by side, fetched in
+                    the fewest sectors.
+                    <a data-lesson-link="memory">Lesson 2</a>
+                  </dd>
+                  <dt>Dialect</dt>
+                  <dd>
+                    A family of MLIR operations, named before the dot.
+                    <a data-lesson-link="ir">Lesson 3</a>
+                  </dd>
+                  <dt>Grid</dt>
+                  <dd>
+                    All the blocks of one launch.
+                    <a data-lesson-link="gpu">Lesson 1</a>
+                  </dd>
+                  <dt>IR</dt>
+                  <dd>
+                    Intermediate representation: the language a compiler works
+                    in between source and machine code.
+                    <a data-lesson-link="ir">Lesson 3</a>
+                  </dd>
+                  <dt>Kernel</dt>
+                  <dd>
+                    The part of a program that runs on the GPU, once per thread.
+                    <a data-lesson-link="gpu">Lesson 1</a>
+                  </dd>
+                  <dt>Launch</dt>
+                  <dd>
+                    The point where the CPU starts a kernel on a grid of
+                    threads. <a data-lesson-link="memory">Lesson 2</a>
+                  </dd>
+                  <dt>Lowering</dt>
+                  <dd>
+                    Rewriting high-level operations into lower-level ones.
+                    <a data-lesson-link="passes">Lesson 4</a>
+                  </dd>
+                  <dt>Pass</dt>
+                  <dd>
+                    One step of the compiler pipeline.
+                    <a data-lesson-link="passes">Lesson 4</a>
+                  </dd>
+                  <dt>PTX</dt>
+                  <dd>
+                    NVIDIA's GPU assembly language.
+                    <a data-lesson-link="passes">Lesson 4</a>
+                  </dd>
+                  <dt>Sector</dt>
+                  <dd>
+                    The 32-byte chunk global memory is fetched in.
+                    <a data-lesson-link="memory">Lesson 2</a>
+                  </dd>
+                  <dt>SIMT</dt>
+                  <dd>
+                    Single instruction, multiple threads: a warp runs one
+                    instruction for all 32 threads.
+                    <a data-lesson-link="gpu">Lesson 1</a>
+                  </dd>
+                  <dt>SSA</dt>
+                  <dd>
+                    Static single assignment: every value is assigned exactly
+                    once. <a data-lesson-link="ir">Lesson 3</a>
+                  </dd>
+                  <dt>Strided</dt>
+                  <dd>
+                    A warp access whose addresses are spread apart, wasting most
+                    of each sector. <a data-lesson-link="memory">Lesson 2</a>
+                  </dd>
+                  <dt>Warp</dt>
+                  <dd>
+                    32 threads that execute in lockstep.
+                    <a data-lesson-link="gpu">Lesson 1</a>
+                  </dd>
+                </dl>
+              </article>
+            </div>
+          </div>
         </div>
       </section>
     </div>
