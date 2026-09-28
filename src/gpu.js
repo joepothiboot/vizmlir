@@ -279,7 +279,7 @@ export function analyzeGpu(ir) {
         ? {
             params,
             args: new Map(),
-            defs: buildDefs(full),
+            defs: buildDefs(full, symbol.line),
             accesses: findAccesses(full, symbol.line),
           }
         : {}),
@@ -369,7 +369,7 @@ export function analyzeGpu(ir) {
         ptx: null,
         params: [],
         args: new Map(),
-        defs: buildDefs(scope),
+        defs: buildDefs(scope, (host?.index ?? i) + 1),
         accesses: findAccesses(region.lines, region.start + 1),
       });
     }

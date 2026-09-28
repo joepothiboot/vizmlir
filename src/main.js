@@ -28,10 +28,11 @@ import {
 } from "./provenance.js";
 import { diffStats, lineDiff } from "./linediff.js";
 import { analyzeGpu, memorySpace } from "./gpu.js";
-import { renderGpuView } from "./gpu-view.js";
+import { focusGpuLine, renderGpuPath, renderGpuView } from "./gpu-view.js";
 import { warpAccess } from "./gpu-access.js";
 import { parseMemref } from "./buffers.js";
 import { explainLine } from "./anatomy.js";
+import { bindGuide } from "./guide.js";
 import {
   changedBeyond,
   compareBenchmarks,
@@ -99,6 +100,9 @@ const sourcePane = document.getElementById("source-pane");
 const splitToggle = document.getElementById("split-toggle");
 const sourceName = document.getElementById("source-name");
 const diffTitle = document.getElementById("diff-title");
+const sideChanges = document.getElementById("side-changes");
+const sideGpu = document.getElementById("side-gpu");
+const gpuPath = document.getElementById("gpu-path");
 const helpDialog = document.getElementById("help");
 const zoomLevel = document.getElementById("zoom-level");
 const timingOpen = document.getElementById("timing-open");
@@ -464,7 +468,7 @@ function loadTrace(text, { keepIndex = false } = {}) {
       return button;
     }),
   );
-  passStrip.hidden = false;
+  passStrip.hidden = !docsView.hidden;
   const firstFailure = trace.events.findIndex((event) => event.failed);
   selectEvent(
     keepIndex && previousIndex >= 0
@@ -568,6 +572,8 @@ function updateRoute() {
   });
 }
 
+const guide = bindGuide(docsView);
+
 let timer = 0;
 docsSample.value = RENAME_SAMPLE;
 bindHighlighting(baseline, baselineHighlight);
@@ -665,6 +671,7 @@ function showSourceLine(line) {
       input.scrollTop = Math.max(0, y - input.clientHeight / 3);
     renderExplain(markedLine);
   }
+  focusGpu(markedLine);
   positionLineMark();
 }
 
@@ -811,7 +818,7 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
       () => toggleMenu(),
     ],
     ["Switch light / dark theme", "shift L", toggleTheme],
-    ["Open docs", "", () => (window.location.hash = "#/docs")],
+    ["Open the guide", "", () => (window.location.hash = "#/docs")],
     ["Keyboard shortcuts", "?", () => helpDialog.showModal()],
   ];
   for (const [text, hint, action] of actions)
@@ -921,6 +928,9 @@ window.addEventListener("keydown", (e) => {
     toggleTheme();
   } else if (e.key === "m") {
     toggleMenu();
+  } else if (!docsView.hidden && ["ArrowLeft", "ArrowRight"].includes(e.key)) {
+    e.preventDefault();
+    guide.step(e.key === "ArrowRight" ? 1 : -1);
   } else if (!workspace.hidden && WORKSPACE_KEYS[e.key]) {
     e.preventDefault();
     WORKSPACE_KEYS[e.key]();
@@ -2030,6 +2040,28 @@ symbolsDialog.addEventListener("click", (e) => {
 // Picking an access marks its line (1-based) in the current source.
 const GPU_VIEW_OPTIONS = { onLine: (line) => showSourceLine(line - 1) };
 
+// The side panel shows the pass diff, or the GPU path of the picked line.
+// It follows the canvas (GPU view → GPU path) until the person picks a tab.
+function showSide(tab) {
+  const gpu = tab === "gpu" && !sideGpu.hidden;
+  sideChanges.setAttribute("aria-selected", String(!gpu));
+  sideGpu.setAttribute("aria-selected", String(gpu));
+  for (const part of ["diff-head", "diff-list"]) document.getElementById(part).hidden = gpu;
+  document.querySelector("#diff-pane .diff-hint").hidden = gpu;
+  gpuPath.hidden = !gpu;
+  if (gpu) renderGpuPath(gpuPath, GPU_VIEW_OPTIONS);
+}
+sideChanges.addEventListener("click", () => showSide("changes"));
+sideGpu.addEventListener("click", () => showSide("gpu"));
+
+// Traces 0-based source line `index` in the GPU view (3D IR wall, Memory
+// accesses, GPU path) when that view is open.
+function focusGpu(index) {
+  if (canvasView !== "gpu" || !gpuModel) return;
+  focusGpuLine(index >= 0 ? index + 1 : null);
+  if (!gpuPath.hidden) renderGpuPath(gpuPath, GPU_VIEW_OPTIONS);
+}
+
 // Shows the Graph | GPU toggle only when the rendered IR has GPU code, opens
 // the preferred view, and redraws the GPU view when it is open.
 function setGpuModel(model) {
@@ -2040,6 +2072,7 @@ function setGpuModel(model) {
     if (canvasView === "gpu") setCanvasView("graph", { remember: false });
   } else if (canvasView === "gpu") {
     renderGpuView(gpuViewEl, gpuModel, GPU_VIEW_OPTIONS);
+    focusGpu(markedLine);
   } else if (canvasPreference === "gpu") {
     setCanvasView("gpu", { remember: false });
   }
@@ -2062,6 +2095,9 @@ function setCanvasView(view, { remember = true } = {}) {
   viewGpu.setAttribute("aria-pressed", String(gpu));
   if (gpu) renderGpuView(gpuViewEl, gpuModel, GPU_VIEW_OPTIONS);
   else renderer.requestDraw();
+  sideGpu.hidden = !gpu;
+  showSide(gpu ? "gpu" : "changes");
+  if (gpu) focusGpu(markedLine);
 }
 
 viewGraph.addEventListener("click", () => setCanvasView("graph"));
@@ -2238,9 +2274,14 @@ function renderExplain(index) {
   leBody.replaceChildren(...children);
 }
 
-input.addEventListener("click", () => renderExplain(caretLine()));
+input.addEventListener("click", () => {
+  renderExplain(caretLine());
+  focusGpu(caretLine());
+});
 input.addEventListener("keyup", (e) => {
-  if (/^(Arrow|Page|Home|End)/.test(e.key)) renderExplain(caretLine());
+  if (!/^(Arrow|Page|Home|End)/.test(e.key)) return;
+  renderExplain(caretLine());
+  focusGpu(caretLine());
 });
 // New text (another pass, a paste) invalidates the explained line.
 input.addEventListener("input", () => renderExplain(-1));

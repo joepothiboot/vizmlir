@@ -6,12 +6,10 @@ import { parseMemref } from "./buffers.js";
 import { warpAccess } from "./gpu-access.js";
 import { memorySpace } from "./gpu.js";
 import { formatBytes } from "./timing.js";
+import { gpuScene } from "./gpu-3d.js";
 
 const SVG = "http://www.w3.org/2000/svg";
 const WARP = 32;
-// Drawing limits; larger launches are drawn in part and say so.
-const MAX_BLOCKS = 64;
-const MAX_WARPS = 32;
 
 const SPACE_TEXT = {
   global: ["Global", "device memory, visible to every thread in the launch"],
@@ -40,90 +38,6 @@ function svg(tag, attrs, title) {
 const dim = (dims) => (dims ? dims.map((d) => d ?? "?").join(" × ") : "?");
 const count = (dims) =>
   dims && dims.every((d) => d !== null) ? dims.reduce((a, b) => a * b, 1) : null;
-// Linear index → (x, y, z) for `dims`.
-function coords(index, dims) {
-  const [x, y] = dims.map((d) => d ?? 1);
-  return [index % x, Math.floor(index / x) % y, Math.floor(index / (x * y))];
-}
-
-// The grid of blocks, block (0,0,0) highlighted as the one opened below.
-function gridDiagram(grid) {
-  const total = count(grid);
-  const x = Math.max(1, grid?.[0] ?? 1);
-  const shown = Math.min(total ?? 1, MAX_BLOCKS);
-  const columns = Math.min(x, 16);
-  const rows = Math.ceil(shown / columns);
-  const size = 18;
-  const gap = 3;
-  const root = svg("svg", {
-    class: "gpu-grid",
-    width: columns * (size + gap),
-    height: rows * (size + gap),
-    role: "img",
-    "aria-label": `Grid of ${total ?? "?"} blocks`,
-  });
-  for (let i = 0; i < shown; i++) {
-    const [bx, by, bz] = coords(i, grid ?? [1, 1, 1]);
-    root.append(
-      svg(
-        "rect",
-        {
-          x: (i % columns) * (size + gap),
-          y: Math.floor(i / columns) * (size + gap),
-          width: size,
-          height: size,
-          rx: 2,
-          class: i === 0 ? "block open" : "block",
-        },
-        `block (${bx}, ${by}, ${bz})`,
-      ),
-    );
-  }
-  return root;
-}
-
-// One block: its threads in rows of 32 (warps), which run in lockstep.
-function blockDiagram(block) {
-  const total = count(block);
-  const warps = total === null ? 0 : Math.ceil(total / WARP);
-  const shownWarps = Math.min(warps, MAX_WARPS);
-  const cell = 9;
-  const gap = 1;
-  const label = 54;
-  const root = svg("svg", {
-    class: "gpu-block",
-    width: label + WARP * (cell + gap),
-    height: shownWarps * (cell + gap + 2),
-    role: "img",
-    "aria-label": `Block of ${total ?? "?"} threads in ${warps} warps`,
-  });
-  for (let w = 0; w < shownWarps; w++) {
-    const y = w * (cell + gap + 2);
-    const name = svg("text", { x: 0, y: y + cell - 1, class: "warp-label" });
-    name.textContent = `warp ${w}`;
-    root.append(name);
-    for (let lane = 0; lane < WARP; lane++) {
-      const t = w * WARP + lane;
-      if (t >= total) break;
-      const [tx, ty, tz] = coords(t, block);
-      root.append(
-        svg(
-          "rect",
-          {
-            x: label + lane * (cell + gap),
-            y,
-            width: cell,
-            height: cell,
-            rx: 1,
-            class: "thread",
-          },
-          `thread (${tx}, ${ty}, ${tz}) · warp ${w}, lane ${lane}`,
-        ),
-      );
-    }
-  }
-  return root;
-}
 
 function launchSection(launch, kernel, options) {
   const section = el("section", "gpu-launch");
@@ -155,42 +69,138 @@ function launchSection(launch, kernel, options) {
         : `${launch.threads.toLocaleString()} in ${Math.ceil((perBlock ?? 0) / WARP) * (blocks ?? 0)} warps of ${WARP}`,
     ],
   ]) {
-    facts.append(el("dt", "", term), el("dd", "", value));
+    // Each term and value wrap together in the overlay's single line.
+    const pair = el("div");
+    pair.append(el("dt", "", term), el("dd", "", value));
+    facts.append(pair);
   }
-  section.append(facts);
+  // The launch in 3D, with the facts and the Memory panel laid over it.
+  // Picking a row in Memory accesses colors warp 0 in it; hovering a buffer
+  // outlines its memory's floor plate.
+  const scene = gpuScene(launch, kernel, { onLine: options.onLine });
+  section.append(scene.figure);
+  const accesses = kernel?.accesses?.length
+    ? accessSection(kernel, launch, { ...options, onPick: scene.showAccess })
+    : null;
+  const memory = kernel
+    ? memorySection(kernel, launch, {
+        accesses,
+        onLine: options.onLine,
+        onSpace: scene.showSpace,
+        heading: false,
+      })
+    : null;
+  scene.overlay(facts, memory, memorySummary(kernel));
+  if (accesses) section.append(accesses);
+  shown.push({ section, scene, accesses, kernel, name: kernel?.path ?? kernel?.name ?? "kernel" });
+  return section;
+}
 
-  const figures = el("div", "gpu-figures");
-  const gridFigure = el("figure");
-  gridFigure.append(
-    gridDiagram(launch.grid),
-    el(
-      "figcaption",
-      "",
-      (blocks ?? 0) > MAX_BLOCKS
-        ? `First ${MAX_BLOCKS} of ${blocks} blocks. Blocks run independently, spread over the GPU's multiprocessors.`
-        : "Blocks run independently, spread over the GPU's multiprocessors.",
-    ),
-  );
-  figures.append(gridFigure);
-  if (perBlock !== null) {
-    const blockFigure = el("figure");
-    const warps = Math.ceil(perBlock / WARP);
-    blockFigure.append(
-      blockDiagram(launch.block),
+// The launches on screen, for focusGpuLine and renderGpuPath.
+let shown = [];
+let focused = null;
+
+// Lights source line `line` (1-based) in whichever launch's kernel IR has it,
+// picks it in Memory accesses when it is a load or store, and remembers it
+// for renderGpuPath. Returns true when some launch has the line.
+export function focusGpuLine(line) {
+  shown = shown.filter((entry) => entry.section.isConnected);
+  focused = null;
+  for (const entry of shown) {
+    const lit = entry.scene.showLine(focused ? null : line);
+    if (!lit || focused) continue;
+    focused = { entry, line };
+    entry.accesses?.pickLine(line);
+  }
+  return !!focused;
+}
+
+// The path the focused line takes into the GPU, as steps a person can click
+// through (`onLine(line)` marks a 1-based line): where the thread is, the
+// index math, and the memory it reaches with the verdict. With nothing
+// focused, lists the loads and stores to start from.
+export function renderGpuPath(container, { onLine } = {}) {
+  shown = shown.filter((entry) => entry.section.isConnected);
+  const step = (node, entry) => {
+    const button = el("button", "gpu-step");
+    button.type = "button";
+    button.append(el("span", "gpu-dim", `line ${node.line}`), el("code", "", node.text));
+    if (node.kind === "access") {
+      const judged = entry.accesses?.judged.find((j) => j.access.line === node.line);
+      if (judged) button.append(el("span", "gpu-dim", ` ${judged.space} memory `), verdictChip(judged.result));
+    } else if (node.kind === "thread" || node.kind === "block" || node.kind === "size") {
+      button.append(el("span", "gpu-dim", ` ${node.label}`));
+    }
+    if (focused && node.line === focused.line) button.classList.add("current");
+    button.addEventListener("click", () => onLine?.(node.line));
+    return button;
+  };
+  const children = [];
+  if (!shown.length) {
+    children.push(el("p", "gpu-note", "No kernels with loads or stores to trace here."));
+  } else if (!focused) {
+    children.push(
+      el("h3", "", "How the IR reaches the GPU"),
       el(
-        "figcaption",
-        "",
-        `Block (0, 0, 0) opened: ${perBlock} threads as ${warps} warp(s) of ${WARP} that run in lockstep` +
-          (warps > MAX_WARPS ? `; first ${MAX_WARPS} warps shown.` : ".") +
-          " Hover a thread for its ids.",
+        "p",
+        "gpu-note",
+        "Click a line of kernel code (or a node on the IR wall in the 3D view) to trace it from the thread and block ids, through the index math, to the memory it touches. Or start from a load or store:",
       ),
     );
-    figures.append(blockFigure);
+    for (const entry of shown) {
+      const starts = entry.scene.flow.nodes.filter((n) => n.kind === "access");
+      if (!starts.length) continue;
+      children.push(el("h4", "", entry.name));
+      const list = el("ul", "gpu-steps");
+      for (const node of starts) {
+        const item = el("li");
+        item.append(step(node, entry));
+        list.append(item);
+      }
+      children.push(list);
+    }
+  } else {
+    const { entry, line } = focused;
+    const { flow } = entry.scene;
+    const lit = new Set(flow.nodes.filter((n) => entry.scene.lit?.(n.id)).map((n) => n.id));
+    const nodes = flow.nodes
+      .filter((n) => lit.has(n.id))
+      .sort((a, b) => a.rank - b.rank || a.line - b.line);
+    children.push(
+      el("h3", "", `Line ${line} on its way to the GPU`),
+      el("p", "gpu-note", entry.name),
+    );
+    for (const [title, kinds, note] of [
+      ["Where the thread is", ["thread", "block", "size"], "The ids the launch gives each thread and block."],
+      ["Index math", ["math", "const", "loop", "arg"], "Ops that turn those ids into an element index."],
+      ["Memory", ["access"], "The element each thread reads or writes, and how the warp's accesses land."],
+    ]) {
+      const group = nodes.filter((n) => kinds.includes(n.kind));
+      if (!group.length) continue;
+      children.push(el("h4", "", title), el("p", "gpu-note", note));
+      const list = el("ol", "gpu-steps");
+      for (const node of group) {
+        const item = el("li");
+        item.append(step(node, entry));
+        list.append(item);
+      }
+      children.push(list);
+    }
+    const clear = el("button", "link-btn", "show all loads and stores");
+    clear.addEventListener("click", () => {
+      focusGpuLine(null);
+      renderGpuPath(container, { onLine });
+    });
+    children.push(clear);
   }
-  section.append(figures);
-  if (kernel) section.append(memorySection(kernel, launch));
-  if (kernel?.accesses?.length) section.append(accessSection(kernel, launch, options));
-  return section;
+  container.replaceChildren(...children);
+}
+
+// "Memory · 3 buffers", the Memory panel's heading (the plates in the scene
+// already show the sizes).
+function memorySummary(kernel) {
+  const n = kernel?.buffers?.length ?? 0;
+  return n ? `Memory · ${n} buffer${n > 1 ? "s" : ""}` : "Memory";
 }
 
 const VERDICT_TEXT = {
@@ -292,6 +302,7 @@ function accessSection(kernel, launch, options) {
     picked = i;
     [...tbody.children].forEach((row, k) => row.setAttribute("aria-selected", String(k === i)));
     renderLaneDetail(detail, judged[i]);
+    options.onPick?.(judged[i]);
     if (mark) options.onLine?.(judged[i].access.line);
   };
   judged.forEach((j, i) => {
@@ -321,6 +332,20 @@ function accessSection(kernel, launch, options) {
   table.append(thead, tbody);
   section.append(table, detail);
   pick(picked);
+  // Used by the Memory section: its buffers light up and open their rows.
+  section.judged = judged;
+  section.pick = (i) => {
+    pick(i, { mark: true });
+    tbody.children[i].scrollIntoView({ block: "nearest" });
+  };
+  section.pickLine = (line) => {
+    const i = judged.findIndex((j) => j.access.line === line);
+    if (i >= 0) pick(i);
+  };
+  section.highlight = (name) =>
+    judged.forEach((j, i) =>
+      tbody.children[i].classList.toggle("gpu-linked", j.access.buffer === name),
+    );
   return section;
 }
 
@@ -452,9 +477,86 @@ function elementMap(access, result, memref, order) {
   return figure;
 }
 
-function memorySection(kernel, launch) {
+// Where a buffer comes from, in plain words, by its `source`.
+const SOURCE_TEXT = {
+  argument: "Passed in by the host when the kernel launches.",
+  workgroup: "Declared with workgroup(...) on the kernel: the GPU sets aside one copy per block.",
+  private: "Declared with private(...) on the kernel: one copy per thread.",
+  alloc: "Allocated inside the kernel.",
+  alloca: "Allocated on each thread's stack inside the kernel.",
+  captured: "A host value that the launch body uses directly.",
+};
+
+// What opens under a buffer in the Memory section: its size, where it comes
+// from, and its loads and stores, each linked to the Memory accesses row (or
+// straight to the source line when there is no table).
+function bufferDetail(buffer, { blocks, threads, accesses, onLine, kernel }) {
+  const detail = el("div", "gpu-buffer-detail");
+  const memref = parseMemref(buffer.type);
+  const facts = el("dl", "gpu-facts");
+  const shape = memref?.dims?.length
+    ? `${memref.dims.map((d) => d ?? "?").join(" × ")} of ${memref.element}`
+    : (memref?.element ?? buffer.type);
+  const size = buffer.bytes === null ? "only known at runtime" : formatBytes(buffer.bytes);
+  const copies =
+    buffer.space === "shared" && blocks
+      ? ` per block, ${blocks.toLocaleString()} copies across the grid`
+      : buffer.space === "private" && threads
+        ? ` per thread, ${threads.toLocaleString()} copies`
+        : "";
+  const [spaceName, spaceBlurb] = SPACE_TEXT[buffer.space] ?? [buffer.space, "a custom memory space"];
+  for (const [term, value] of [
+    ["Holds", shape],
+    ["Size", size + copies],
+    ["Lives in", `${spaceName} memory: ${spaceBlurb}`],
+    ["From", SOURCE_TEXT[buffer.source] ?? buffer.source],
+  ])
+    facts.append(el("dt", "", term), el("dd", "", value));
+  detail.append(facts);
+
+  const uses = (accesses?.judged ?? (kernel.accesses ?? []).map((access) => ({ access })))
+    .map((j, i) => ({ ...j, i }))
+    .filter((j) => j.access.buffer === buffer.name);
+  if (!uses.length) {
+    detail.append(
+      el(
+        "p",
+        "gpu-note",
+        buffer.loads || buffer.stores
+          ? "Its loads and stores could not be placed on a line here."
+          : "Never read or written in this kernel.",
+      ),
+    );
+    return detail;
+  }
+  const list = el("ul", "gpu-buffer-uses");
+  for (const j of uses) {
+    const button = el("button");
+    button.type = "button";
+    button.append(
+      el("span", "gpu-dim", `line ${j.access.line}`),
+      el(
+        "span",
+        "gpu-code",
+        ` ${j.access.kind === "load" ? "load" : "store"} ${j.access.buffer}[${j.access.indices.join(", ")}]${j.access.inLoop ? "  ↻" : ""} `,
+      ),
+    );
+    if (j.result) button.append(verdictChip(j.result));
+    button.title = accesses ? "Show its lanes below and mark its line" : "Mark its line in the source";
+    button.addEventListener("click", () =>
+      accesses ? accesses.pick(j.i) : onLine?.(j.access.line),
+    );
+    const item = el("li");
+    item.append(button);
+    list.append(item);
+  }
+  detail.append(list);
+  return detail;
+}
+
+function memorySection(kernel, launch, { accesses = null, onLine, onSpace, heading = true } = {}) {
   const section = el("div", "gpu-memory");
-  section.append(el("h4", "", "Memory"));
+  if (heading) section.append(el("h4", "", "Memory"));
   if (kernel.lowered && !kernel.buffers.length && !kernel.ptx) {
     section.append(
       el(
@@ -504,11 +606,15 @@ function memorySection(kernel, launch) {
     const list = el("ul");
     for (const buffer of buffers) {
       const item = el("li");
+      const toggle = el("button", "gpu-buffer");
+      toggle.type = "button";
+      toggle.setAttribute("aria-expanded", "false");
+      toggle.title = "Show its size, origin, and every load and store";
       const access = [
         buffer.loads ? `${buffer.loads} load${buffer.loads > 1 ? "s" : ""}` : "",
         buffer.stores ? `${buffer.stores} store${buffer.stores > 1 ? "s" : ""}` : "",
       ].filter(Boolean);
-      item.append(
+      toggle.append(
         el("code", "", buffer.name),
         el("span", "gpu-type", ` ${buffer.type}`),
         el(
@@ -519,6 +625,23 @@ function memorySection(kernel, launch) {
             (access.length ? ` · ${access.join(", ")}` : " · not accessed"),
         ),
       );
+      let detail = null;
+      toggle.addEventListener("click", () => {
+        detail ??= bufferDetail(buffer, { blocks, threads, accesses, onLine, kernel });
+        const open = toggle.getAttribute("aria-expanded") !== "true";
+        toggle.setAttribute("aria-expanded", String(open));
+        if (open) item.append(detail);
+        else detail.remove();
+      });
+      const light = (on) => {
+        accesses?.highlight(on ? buffer.name : null);
+        onSpace?.(on ? buffer.space : null);
+      };
+      toggle.addEventListener("pointerenter", () => light(true));
+      toggle.addEventListener("pointerleave", () => light(false));
+      toggle.addEventListener("focus", () => light(true));
+      toggle.addEventListener("blur", () => light(false));
+      item.append(toggle);
       list.append(item);
     }
     if (!buffers.length) list.append(el("li", "gpu-dim", "none"));
@@ -566,6 +689,8 @@ function ptxNote(ptx) {
 // access is picked; `options.focusLine` opens the access on that line and
 // scrolls to it.
 export function renderGpuView(container, model, options = {}) {
+  shown = [];
+  focused = null;
   const children = [
     el(
       "p",
@@ -592,7 +717,7 @@ export function renderGpuView(container, model, options = {}) {
       el("code", "", kernel.path ?? kernel.name),
       el("span", "gpu-dim", " · not launched in this IR, so launch sizes are unknown"),
     );
-    section.append(head, memorySection(kernel, null));
+    section.append(head, memorySection(kernel, null, { onLine: options.onLine }));
     children.push(section);
   });
   container.replaceChildren(...children);
