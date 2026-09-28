@@ -139,7 +139,9 @@ export function changesAt(history, index) {
   );
 }
 
-export function historyToJSON(source, events, history, describe) {
+// `times`, when given, maps a symbol path to { timeNs, calls, kernels } from
+// matched benchmark results.
+export function historyToJSON(source, events, history, describe, times = null) {
   return `${JSON.stringify(
     {
       source,
@@ -156,6 +158,15 @@ export function historyToJSON(source, events, history, describe) {
           op: change.op,
           ...(change.from ? { from: change.from } : {}),
         })),
+        ...(times?.has(record.path)
+          ? {
+              benchmark: {
+                time_ns: times.get(record.path).timeNs,
+                calls: times.get(record.path).calls,
+                kernels: times.get(record.path).kernels,
+              },
+            }
+          : {}),
       })),
     },
     null,
