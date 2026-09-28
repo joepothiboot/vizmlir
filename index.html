@@ -1652,6 +1652,165 @@
         width: 100%;
         height: 100%;
       }
+      .view-toggle {
+        display: inline-flex;
+        gap: 2px;
+      }
+      .view-toggle[hidden],
+      #view-sep[hidden],
+      #gpu-view[hidden] {
+        display: none;
+      }
+      .view-toggle [aria-pressed="true"] {
+        background: var(--raised);
+        box-shadow: inset 0 -2px 0 var(--accent);
+      }
+      #stage .graph-tools {
+        z-index: 2;
+      }
+      /* The GPU view replaces the graph; only the toggle stays in the toolbar. */
+      #stage.gpu-mode .graph-tools > :not(.view-toggle),
+      #stage.gpu-mode .graph-legend,
+      #stage.gpu-mode #diags {
+        display: none;
+      }
+      #stage.gpu-mode #canvas {
+        visibility: hidden;
+      }
+      /* Starts below the toolbar so scrolled content never runs under it. */
+      #gpu-view {
+        position: absolute;
+        inset: 48px 0 0;
+        z-index: 1;
+        padding: 4px 20px 24px;
+        overflow: auto;
+        background: var(--bg);
+        font-family: var(--ui);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      .gpu-intro {
+        max-width: 720px;
+      }
+      .gpu-note,
+      .gpu-dim {
+        color: var(--dim);
+      }
+      .gpu-note {
+        margin: 0 0 10px;
+        font-size: 11px;
+      }
+      .gpu-launch {
+        margin: 0 0 18px;
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+      }
+      .gpu-launch h3 {
+        margin: 0 0 8px;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .gpu-launch h3 code,
+      .gpu-launch li code {
+        font-family: var(--code);
+      }
+      .gpu-facts {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 2px 14px;
+        margin: 0 0 12px;
+      }
+      .gpu-facts dt {
+        color: var(--dim);
+      }
+      .gpu-facts dd {
+        margin: 0;
+        font-variant-numeric: tabular-nums;
+      }
+      .gpu-figures {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 18px 28px;
+        margin: 0 0 12px;
+      }
+      .gpu-figures figure {
+        margin: 0;
+        max-width: 100%;
+        overflow-x: auto;
+      }
+      .gpu-figures figcaption {
+        max-width: 360px;
+        margin-top: 6px;
+        color: var(--dim);
+        font-size: 11px;
+      }
+      .gpu-grid .block {
+        fill: var(--raised);
+        stroke: var(--line);
+      }
+      .gpu-grid .block.open {
+        fill: var(--accent);
+      }
+      .gpu-block .thread {
+        fill: color-mix(in srgb, var(--good) 45%, var(--raised));
+      }
+      .gpu-grid .block:hover,
+      .gpu-block .thread:hover {
+        fill: var(--warn);
+      }
+      .gpu-block .warp-label {
+        fill: var(--dim);
+        font-family: var(--code);
+        font-size: 8px;
+      }
+      .gpu-memory h4 {
+        margin: 0 0 6px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .gpu-spaces {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 10px;
+      }
+      .gpu-space {
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-top-width: 3px;
+        border-radius: 6px;
+      }
+      .gpu-space.global {
+        border-top-color: var(--dim);
+      }
+      .gpu-space.shared {
+        border-top-color: var(--warn);
+      }
+      .gpu-space.private {
+        border-top-color: var(--good);
+      }
+      .gpu-space h5 {
+        margin: 0;
+        font-size: 12px;
+      }
+      .gpu-space ul {
+        margin: 0 0 6px;
+        padding: 0;
+        list-style: none;
+      }
+      .gpu-space li {
+        padding: 2px 0;
+        overflow-wrap: anywhere;
+      }
+      .gpu-type {
+        font-family: var(--code);
+        font-size: 11px;
+      }
+      .gpu-total {
+        margin: 0;
+        font-weight: 600;
+      }
       #status {
         flex: 0 0 auto;
         display: flex;
@@ -2008,7 +2167,21 @@
           <div id="stage">
             <canvas id="canvas"></canvas>
             <div id="diags"></div>
+            <div id="gpu-view" hidden></div>
             <div class="graph-tools" role="toolbar" aria-label="Graph">
+              <span id="view-toggle" class="view-toggle" role="group" aria-label="View" hidden>
+                <button id="view-graph" aria-pressed="true" title="Op graph">
+                  Graph
+                </button>
+                <button
+                  id="view-gpu"
+                  aria-pressed="false"
+                  title="How the kernels are launched and where their data lives (g)"
+                >
+                  GPU
+                </button>
+              </span>
+              <span id="view-sep" class="tools-sep" aria-hidden="true" hidden></span>
               <button id="zoom-out" aria-label="Zoom out" title="Zoom out (-)">
                 −
               </button>
@@ -2192,6 +2365,8 @@
           <dd>Buffers and peak memory</dd>
           <dt><kbd>h</kbd></dt>
           <dd>Symbol history: which pass made each function or kernel</dd>
+          <dt><kbd>g</kbd></dt>
+          <dd>Switch the canvas between the op graph and the GPU view</dd>
           <dt><kbd>m</kbd></dt>
           <dd>Show / hide the menu</dd>
           <dt><kbd>shift</kbd> <kbd>L</kbd></dt>

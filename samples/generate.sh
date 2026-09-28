@@ -37,6 +37,11 @@ if [[ "$(uname)" == Darwin ]]; then TIME_FLAG=-l; else TIME_FLAG=-v; fi
 opt gpu-kernels.trace.txt gpu-kernels.mlir \
   -pass-pipeline='builtin.module(gpu-kernel-outlining,canonicalize,nvvm-attach-target{chip=sm_80},gpu.module(convert-gpu-to-nvvm),gpu-module-to-binary{format=isa})' \
   -mlir-print-ir-before=gpu-kernel-outlining -mlir-print-ir-after-all -mlir-print-ir-module-scope
+# A tiled matmul that stages tiles in shared (workgroup) memory, for the GPU
+# view. scf.for is lowered to cf inside the gpu.module before NVVM.
+opt gpu-tiled-matmul.trace.txt gpu-tiled-matmul.mlir \
+  -pass-pipeline='builtin.module(gpu-kernel-outlining,canonicalize,nvvm-attach-target{chip=sm_80},gpu.module(convert-scf-to-cf,convert-gpu-to-nvvm),gpu-module-to-binary{format=isa})' \
+  -mlir-print-ir-before=gpu-kernel-outlining -mlir-print-ir-after-all -mlir-print-ir-module-scope
 opt failed-transform.trace.txt matmul.mlir \
   -pass-pipeline='builtin.module(transform-preload-library{transform-library-paths=tile-wrong-op.transform.mlir},canonicalize,cse,transform-interpreter)' \
   -mlir-print-ir-after-all -mlir-print-ir-module-scope
