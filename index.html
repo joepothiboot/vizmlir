@@ -1950,6 +1950,18 @@
         background: var(--bg);
         overflow: hidden;
       }
+      /* A launch the side panel or the code just pointed at. */
+      .gpu-3d.gpu-flash .gpu-3d-stage {
+        animation: gpu-flash 1.2s ease-out;
+      }
+      @keyframes gpu-flash {
+        from {
+          box-shadow: 0 0 0 3px var(--accent);
+        }
+        to {
+          box-shadow: 0 0 0 3px transparent;
+        }
+      }
       .gpu-3d canvas {
         display: block;
         cursor: grab;

@@ -101,8 +101,10 @@ let shown = [];
 let focused = null;
 
 // Lights source line `line` (1-based) in whichever launch's kernel IR has it,
-// picks it in Memory accesses when it is a load or store, and remembers it
-// for renderGpuPath. Returns true when some launch has the line.
+// picks it in Memory accesses when it is a load or store, scrolls that
+// launch's 3D view into sight (unless it already is) with a short flash,
+// and remembers the line for renderGpuPath. Returns true when some launch
+// has the line.
 export function focusGpuLine(line) {
   shown = shown.filter((entry) => entry.section.isConnected);
   focused = null;
@@ -112,7 +114,25 @@ export function focusGpuLine(line) {
     focused = { entry, line };
     entry.accesses?.pickLine(line);
   }
+  if (focused) reveal(focused.entry.scene.figure);
   return !!focused;
+}
+
+// Scrolls `figure` into its scrolling GPU view when any of it is hidden, and
+// flashes its outline so the eye finds it.
+function reveal(figure) {
+  const view = figure.closest("#gpu-view");
+  if (!view || view.hidden) return;
+  const outer = view.getBoundingClientRect();
+  const inner = figure.getBoundingClientRect();
+  if (inner.top < outer.top || inner.bottom > outer.bottom)
+    view.scrollTo({
+      top: view.scrollTop + inner.top - outer.top - 12,
+      behavior: "smooth",
+    });
+  figure.classList.remove("gpu-flash");
+  void figure.offsetWidth;
+  figure.classList.add("gpu-flash");
 }
 
 // The path the focused line takes into the GPU, as steps a person can click
