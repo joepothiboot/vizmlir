@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   changesAt,
+  embeddedAssembly,
   findSymbolNode,
   historyToJSON,
   scanSymbols,
   symbolHistory,
+  symbolTimeline,
+  unescapeMlirString,
 } from "../../src/provenance.js";
 
 describe("findSymbolNode", () => {
@@ -219,5 +222,109 @@ describe("symbolHistory", () => {
       op: "llvm.func",
       from: "gpu.func",
     });
+  });
+});
+
+describe("scanSymbols full text", () => {
+  it("keeps nested symbols in `full` but not in `text`", () => {
+    const { events } = parsePassTrace(TRACE);
+    const module = scanSymbols(events[1].ir).get("@main_kernel");
+    expect(module.text).toBe("gpu.module @main_kernel {\n}");
+    expect(module.full).toBe(
+      [
+        "gpu.module @main_kernel {",
+        "  gpu.func @main_kernel() kernel {",
+        "    gpu.return",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+  });
+});
+
+describe("symbolTimeline", () => {
+  const { events } = parsePassTrace(TRACE);
+
+  it("lists the kernel's IR at each pass that touched it", () => {
+    const steps = symbolTimeline(events, "@main_kernel::@main_kernel");
+    expect(steps.map((s) => [s.index, s.kind, s.op])).toEqual([
+      [1, "created", "gpu.func"],
+      [2, "lowered", "llvm.func"],
+      [4, "removed", "llvm.func"],
+    ]);
+    expect(steps[0].text).toMatch(/^gpu\.func @main_kernel\(\) kernel \{/);
+    expect(steps[1].text).toMatch(/^llvm\.func @main_kernel\(\)/);
+    expect(steps[2].text).toBe(null);
+  });
+
+  it("starts with the first dump for symbols that were already there", () => {
+    const steps = symbolTimeline(events, "@main");
+    expect(steps.map((s) => [s.index, s.kind])).toEqual([
+      [0, "initial"],
+      [1, "changed"],
+    ]);
+  });
+
+  it("counts a nested change against the module's full text", () => {
+    const steps = symbolTimeline(events, "@main_kernel");
+    expect(steps.map((s) => [s.index, s.kind])).toEqual([
+      [1, "created"],
+      [2, "changed"],
+      [4, "lowered"],
+    ]);
+  });
+
+  it("returns nothing for an unknown symbol", () => {
+    expect(symbolTimeline(events, "@nope")).toEqual([]);
+  });
+
+  it("attaches the enclosing binary's assembly when a kernel is serialized", () => {
+    const withPtx = parsePassTrace(
+      TRACE.replace(
+        '[#gpu.object<#nvvm.target, "BLOB">]',
+        '[#gpu.object<#nvvm.target<chip = "sm_80">, properties = {O = 2 : i32}, assembly = ".version 7.0\\0A.entry main_kernel()\\0A">]',
+      ),
+    ).events;
+    const removed = symbolTimeline(withPtx, "@main_kernel::@main_kernel").at(-1);
+    expect(removed.kind).toBe("removed");
+    expect(removed.assembly).toEqual([
+      {
+        target: '#nvvm.target<chip = "sm_80">',
+        text: ".version 7.0\n.entry main_kernel()\n",
+      },
+    ]);
+    const binary = symbolTimeline(withPtx, "@main_kernel").at(-1);
+    expect(binary.kind).toBe("lowered");
+    expect(binary.assembly).toHaveLength(1);
+  });
+});
+
+describe("unescapeMlirString and embeddedAssembly", () => {
+  it("decodes hex, quote and backslash escapes, and UTF-8", () => {
+    expect(unescapeMlirString('a\\0Ab\\09c\\"d\\\\e\\C3\\A9')).toBe(
+      'a\nb\tc"d\\eé',
+    );
+  });
+
+  it("skips binary objects", () => {
+    expect(
+      embeddedAssembly(
+        'gpu.binary @k [#gpu.object<#nvvm.target, bin = "\\7FELF">]',
+      ),
+    ).toEqual([]);
+  });
+
+  it("reads the real GPU sample's PTX", async () => {
+    const { readFileSync } = await import("node:fs");
+    const trace = readFileSync(
+      new URL("../../public/samples/gpu-kernels.trace.txt", import.meta.url),
+      "utf8",
+    );
+    const { events } = parsePassTrace(trace);
+    const [ptx] = symbolTimeline(events, "@saxpy_kernel::@saxpy_kernel").at(-1)
+      .assembly;
+    expect(ptx.target).toBe('#nvvm.target<chip = "sm_80">');
+    expect(ptx.text).toContain(".visible .entry saxpy_kernel(");
+    expect(ptx.text).not.toContain("\\0A");
   });
 });

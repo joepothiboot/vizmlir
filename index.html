@@ -1494,6 +1494,137 @@
       #symbols-unmatched code {
         font-family: var(--code);
       }
+      #symbol-view {
+        width: min(1200px, calc(100vw - 32px));
+        height: min(820px, calc(100vh - 48px));
+        padding: 18px 20px;
+      }
+      #symbol-view[open] {
+        display: flex;
+        flex-direction: column;
+      }
+      #symbol-view h2 {
+        margin: 0 0 4px;
+        font-family: var(--code);
+        font-size: 14px;
+      }
+      .sv-body {
+        display: grid;
+        grid-template-columns: minmax(180px, 260px) 1fr;
+        grid-template-rows: minmax(0, 1fr);
+        flex: 1;
+        gap: 12px;
+        min-height: 0;
+        margin: 0 0 14px;
+      }
+      #symbol-view-steps {
+        margin: 0;
+        padding: 0;
+        overflow: auto;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        list-style: none;
+        font-size: 11px;
+      }
+      #symbol-view-steps button {
+        display: block;
+        width: 100%;
+        padding: 6px 8px;
+        border: 0;
+        border-bottom: 1px solid var(--line);
+        border-radius: 0;
+        background: none;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+      }
+      #symbol-view-steps button[aria-current="step"] {
+        background: var(--raised);
+        box-shadow: inset 2px 0 0 var(--accent);
+      }
+      #symbol-view-steps .kind {
+        display: block;
+        margin-top: 2px;
+      }
+      #symbol-view-steps .created,
+      .sv-code .add {
+        color: var(--good);
+      }
+      #symbol-view-steps .removed,
+      .sv-code .del {
+        color: var(--err);
+      }
+      #symbol-view-steps .lowered {
+        color: var(--warn);
+      }
+      #symbol-view-steps .changed,
+      #symbol-view-steps .initial {
+        color: var(--dim);
+      }
+      .sv-main {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        gap: 8px;
+      }
+      .sv-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 11px;
+      }
+      .sv-step-title {
+        overflow: hidden;
+        color: var(--dim);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .sv-tabs {
+        display: flex;
+        gap: 2px;
+      }
+      .sv-tabs [aria-selected="true"] {
+        background: var(--raised);
+        box-shadow: inset 0 -2px 0 var(--accent);
+      }
+      .sv-tabs [hidden] {
+        display: none;
+      }
+      .sv-code {
+        flex: 1;
+        min-height: 0;
+        margin: 0;
+        padding: 8px 0;
+        overflow: auto;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--panel);
+        font-family: var(--code);
+        font-size: 11px;
+        line-height: 1.5;
+      }
+      .sv-code .line {
+        padding: 0 10px 0 22px;
+        text-indent: -12px;
+        white-space: pre;
+      }
+      .sv-code .add {
+        background: color-mix(in srgb, var(--good) 12%, transparent);
+      }
+      .sv-code .del {
+        background: color-mix(in srgb, var(--err) 12%, transparent);
+      }
+      .sv-code .plain {
+        padding: 0 10px;
+        text-indent: 0;
+      }
+      .sv-code .note {
+        padding: 0 10px;
+        text-indent: 0;
+        color: var(--dim);
+        font-family: var(--ui);
+        white-space: normal;
+      }
       .mock-note {
         margin: 0 0 12px;
         padding: 8px 10px;
@@ -2237,6 +2368,36 @@
             hidden
           />
           <span class="sp"></span>
+          <form method="dialog"><button>Close</button></form>
+        </div>
+      </dialog>
+
+      <dialog id="symbol-view" aria-labelledby="symbol-view-title">
+        <h2 id="symbol-view-title"></h2>
+        <p id="symbol-view-meta" class="dialog-note"></p>
+        <div class="sv-body">
+          <ol id="symbol-view-steps" aria-label="Passes that changed it"></ol>
+          <div class="sv-main">
+            <div class="sv-toolbar">
+              <span id="symbol-view-step" class="sv-step-title"></span>
+              <span class="sp"></span>
+              <div class="sv-tabs" role="tablist" aria-label="Show">
+                <button id="sv-tab-diff" role="tab">Diff</button>
+                <button id="sv-tab-ir" role="tab">IR</button>
+                <button id="sv-tab-asm" role="tab" hidden>Assembly</button>
+              </div>
+              <button id="symbol-view-go">Show in graph</button>
+            </div>
+            <div id="symbol-view-code" class="sv-code" tabindex="0"></div>
+          </div>
+        </div>
+        <div class="dialog-actions">
+          <span class="dialog-note"
+            ><kbd>j</kbd> <kbd>k</kbd> or <kbd>↑</kbd> <kbd>↓</kbd> step ·
+            <kbd>d</kbd> diff · <kbd>i</kbd> IR · <kbd>a</kbd> assembly</span
+          >
+          <span class="sp"></span>
+          <button id="symbol-view-back">Symbol history</button>
           <form method="dialog"><button>Close</button></form>
         </div>
       </dialog>
