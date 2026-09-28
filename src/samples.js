@@ -1,6 +1,7 @@
 // Built-in samples. The inline one loads instantly on first visit; the rest are
 // real mlir-opt output in public/samples (see samples/generate.sh) and are
-// fetched only when picked.
+// fetched only when picked. The benchmark CSVs are the exception: hand-written
+// mock timings (`*.mock.csv`, flagged `mock`) to show the benchmark view.
 
 export const RENAME_SAMPLE = `module {
   func.func @matmul(%A: tensor<128x256xf32>, %B: tensor<256x64xf32>) -> tensor<128x64xf32> {
@@ -14,8 +15,9 @@ export const RENAME_SAMPLE = `module {
 }`;
 
 /**
- * `baseline`/`current` name a before/after pair; `trace` names a pass trace.
- * Paths are relative to the samples directory.
+ * `baseline`/`current` name a before/after pair; `trace` names a pass trace,
+ * and `benchmarks` optional baseline/current kernel results for it, which are
+ * invented when `mock` is set. Paths are relative to the samples directory.
  */
 export const SAMPLES = [
   {
@@ -57,11 +59,29 @@ export const SAMPLES = [
       "A transform script targets the wrong op; the trace stops on the failing pass.",
     trace: "failed-transform.trace.txt",
   },
+  {
+    id: "gpu-kernels",
+    title: "GPU kernels + benchmarks (mock)",
+    blurb:
+      "Two kernels outlined, lowered to NVVM and serialized to PTX, with mock baseline and current timings: saxpy_kernel looks 26% slower. The timings are invented to show the feature.",
+    trace: "gpu-kernels.trace.txt",
+    benchmarks: {
+      baseline: "gpu-kernels.baseline.mock.csv",
+      current: "gpu-kernels.current.mock.csv",
+    },
+    mock: true,
+  },
 ];
 
 /** Every file a sample needs, relative to the samples directory. */
 export function sampleFiles(sample) {
-  return [sample.baseline, sample.current, sample.trace].filter(Boolean);
+  return [
+    sample.baseline,
+    sample.current,
+    sample.trace,
+    sample.benchmarks?.baseline,
+    sample.benchmarks?.current,
+  ].filter(Boolean);
 }
 
 /**
@@ -71,7 +91,21 @@ export function sampleFiles(sample) {
 export async function loadSampleState(sample, fetchText) {
   const sourceName = `sample: ${sample.title}`;
   if (sample.trace) {
-    return { sourceName, trace: await fetchText(sample.trace), traceIndex: -1 };
+    const state = {
+      sourceName,
+      trace: await fetchText(sample.trace),
+      traceIndex: -1,
+    };
+    if (sample.benchmarks) {
+      state.benchmarks = {};
+      for (const [slot, path] of Object.entries(sample.benchmarks))
+        state.benchmarks[slot] = {
+          name: path,
+          text: await fetchText(path),
+          mock: !!sample.mock,
+        };
+    }
+    return state;
   }
   const [baseline, current] = sample.inline
     ? [sample.inline.baseline, sample.inline.current]

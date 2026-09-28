@@ -1487,6 +1487,15 @@
       #symbols-unmatched code {
         font-family: var(--code);
       }
+      .mock-note {
+        margin: 0 0 12px;
+        padding: 8px 10px;
+        border: 1px dashed var(--warn);
+        border-radius: 6px;
+        color: var(--fg);
+        font-size: 11px;
+      }
+      .mock-note[hidden],
       #symbols-bench[hidden],
       #symbols-bench-error[hidden],
       #symbols-bench-clear[hidden] {
@@ -2155,6 +2164,13 @@
           Nested symbols are named as in <code>gpu.launch_func</code>
           (<code>@module::@kernel</code>), and a change inside a nested symbol
           is not counted against its parent. Click a pass to go to it.
+        </p>
+        <p id="symbols-mock" class="mock-note" role="note" hidden>
+          <strong>Mock data.</strong> These kernel timings are invented to show
+          how benchmark results line up with the passes that built each kernel.
+          They were not measured on any GPU. The trace itself is real
+          <code>mlir-opt</code> output. Use <strong>Import current…</strong>
+          and <strong>Import baseline…</strong> to load your own results.
         </p>
         <dl id="symbols-summary"></dl>
         <div class="opcount-controls">

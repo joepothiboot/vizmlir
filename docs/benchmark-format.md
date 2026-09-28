@@ -6,6 +6,16 @@ lowered it. It does not run anything: you import results from a profiler or
 your own harness. This document describes what the importer (`src/bench.js`)
 accepts and how it matches a kernel to a symbol.
 
+## Try it with mock data
+
+**Samples → GPU kernels + benchmarks (mock)** opens a real `mlir-opt` trace
+of two kernels (outlined, lowered to NVVM, serialized to PTX) with a baseline
+and a current benchmark file, and opens the Symbol history. The timings in
+`public/samples/gpu-kernels.*.mock.csv` are invented to show the feature and
+were not measured on any GPU; the dialog marks them as mock data. They follow
+the Nsight Systems CSV shape below, and their `# MOCK DATA` comment lines are
+skipped like any text before the header.
+
 ## Importing
 
 Open a pass trace, press **h** (Symbol history), and choose **Import
