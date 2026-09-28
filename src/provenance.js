@@ -24,16 +24,18 @@ function indentOf(line) {
 }
 
 // Returns a Map from symbol path (`@outer::@inner`, as in gpu.launch_func) to
-// { path, symbol, op, line, text }. `text` is the op's own lines without the
-// nested symbol ops, so a change inside a gpu.func is not also reported as a
-// change to its gpu.module. Nesting is read from indentation, which is how
-// MLIR prints; `line` is 1-based.
+// { path, symbol, op, line, text, full }. `text` is the op's own lines without
+// the nested symbol ops, so a change inside a gpu.func is not also reported as
+// a change to its gpu.module; `full` is the whole op, nested ops included.
+// Nesting is read from indentation, which is how MLIR prints; `line` is
+// 1-based.
 export function scanSymbols(ir) {
   const lines = ir.split("\n");
   const symbols = new Map();
   const stack = [];
   let owner = null;
   const own = new Map();
+  let last = -1;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -47,8 +49,9 @@ export function scanSymbols(ir) {
       (indent < stack.at(-1).indent ||
         (indent === stack.at(-1).indent && !/^\s*}/.test(line)))
     )
-      stack.pop();
+      stack.pop().end = last;
     owner = stack.at(-1) ?? null;
+    last = i;
 
     const match = HEADER.exec(line);
     const op = match?.[2];
@@ -67,6 +70,7 @@ export function scanSymbols(ir) {
     }
     if (owner) own.get(owner.path).push(line.slice(Math.min(owner.indent, indent)));
   }
+  for (const entry of stack) entry.end = last;
 
   for (const [path, entry] of symbols)
     symbols.set(path, {
@@ -75,8 +79,90 @@ export function scanSymbols(ir) {
       op: entry.op,
       line: entry.line,
       text: own.get(path).join("\n"),
+      full: lines
+        .slice(entry.line - 1, entry.end + 1)
+        .map((line) => line.slice(Math.min(entry.indent, indentOf(line))))
+        .join("\n"),
     });
   return symbols;
+}
+
+// One symbol through a trace: a step for the first dump that has it and for
+// every event that changes its whole text (nested ops included), lowers it,
+// or removes it. Each step is { index, kind, op, text } with kind initial,
+// created, changed, lowered (`from` is the old op) or removed (`text` null).
+// A step carries `assembly` (see embeddedAssembly) when the symbol embeds
+// text assembly, or, when removed, an enclosing symbol now does, as after
+// gpu-module-to-binary.
+export function symbolTimeline(events, path) {
+  const steps = [];
+  let previous = null;
+  events.forEach((event, index) => {
+    const symbols = scanSymbols(moduleStateAt(events, index));
+    const now = symbols.get(path);
+    if (!now) {
+      if (previous) {
+        const outer = [...symbols.values()]
+          .filter((symbol) => path.startsWith(`${symbol.path}::`))
+          .flatMap((symbol) => embeddedAssembly(symbol.full));
+        steps.push({
+          index,
+          kind: "removed",
+          op: previous.op,
+          text: null,
+          ...(outer.length ? { assembly: outer } : {}),
+        });
+      }
+      previous = null;
+      return;
+    }
+    const kind = !previous
+      ? steps.length || index > 0
+        ? "created"
+        : "initial"
+      : previous.op !== now.op
+        ? "lowered"
+        : previous.full !== now.full
+          ? "changed"
+          : null;
+    if (kind) {
+      const assembly = embeddedAssembly(now.full);
+      steps.push({
+        index,
+        kind,
+        op: now.op,
+        text: now.full,
+        ...(kind === "lowered" ? { from: previous.op } : {}),
+        ...(assembly.length ? { assembly } : {}),
+      });
+    }
+    previous = now;
+  });
+  return steps;
+}
+
+// Decodes MLIR string escapes: `\0A` (hex byte), `\\`, `\"`, `\n`, `\t`. The
+// printer escapes every byte outside printable ASCII, so the bytes are
+// rebuilt one per character and decoded as UTF-8.
+export function unescapeMlirString(text) {
+  const bytes = text.replace(/\\(?:([0-9A-Fa-f]{2})|(.))/g, (_, hex, c) =>
+    String.fromCharCode(hex ? parseInt(hex, 16) : ({ n: 10, t: 9 }[c] ?? c.charCodeAt(0))),
+  );
+  return new TextDecoder().decode(
+    Uint8Array.from(bytes, (c) => c.charCodeAt(0) & 0xff),
+  );
+}
+
+// Text assembly embedded in `#gpu.object<...>` attributes (gpu.binary with
+// format=isa), as [{ target, text }]. Binary objects (`bin = "..."`) are left
+// out; they are not readable text.
+export function embeddedAssembly(ir) {
+  const objects = [];
+  const pattern =
+    /#gpu\.object<(#[\w.]+(?:<[^>]*>)?)[^"]*?\bassembly = "((?:\\.|[^"\\])*)"/g;
+  for (const match of ir.matchAll(pattern))
+    objects.push({ target: match[1], text: unescapeMlirString(match[2]) });
+  return objects;
 }
 
 // Compares the whole-module state at every event with the event before it.

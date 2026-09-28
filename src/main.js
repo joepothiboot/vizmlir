@@ -24,7 +24,9 @@ import {
   findSymbolNode,
   historyToJSON,
   symbolHistory,
+  symbolTimeline,
 } from "./provenance.js";
+import { diffStats, lineDiff } from "./linediff.js";
 import {
   changedBeyond,
   compareBenchmarks,
@@ -35,7 +37,7 @@ import {
   parseBenchmarks,
   symbolTimes,
 } from "./bench.js";
-import { bindHighlighting } from "./mlir-highlight.js";
+import { bindHighlighting, highlightMlir } from "./mlir-highlight.js";
 import { CommandPalette } from "./palette.js";
 import { loadSampleState, RENAME_SAMPLE, SAMPLES } from "./samples.js";
 import { bindSplitters } from "./splitters.js";
@@ -1813,15 +1815,12 @@ function renderSymbols() {
     const show = document.createElement("button");
     show.className = "link-btn";
     show.textContent = record.path;
-    show.disabled = record.lastDump < 0;
     show.title =
       (record.initial ? "In the first dump" : "Created during the trace") +
-      (record.lastDump < 0
-        ? "\nNo dump shows it on its own"
-        : `\nShow it in #${record.lastDump + 1} ${describeEvent(trace.events[record.lastDump])}`);
+      "\nOpen its IR at every pass that changed it";
     show.addEventListener("click", () => {
       symbolsDialog.close();
-      showSymbol(record);
+      openSymbolView(record);
     });
     sym.append(show);
     const steps = document.createElement("div");
@@ -1887,12 +1886,12 @@ function renderSymbols() {
   updateSymbolsOpen();
 }
 
-// Goes to the last pass whose dump shows the symbol and selects its node,
-// which also marks its line in the source.
-function showSymbol(record) {
-  if (record.lastDump < 0) return;
+// Goes to pass `index` (by default the last whose dump shows the symbol) and
+// selects the symbol's node, which also marks its line in the source.
+function showSymbol(record, index = record.lastDump) {
+  if (index < 0) return;
   goToWorkspace();
-  selectEvent(record.lastDump);
+  selectEvent(index);
   const node = findSymbolNode(renderer.snapshot, record.path);
   if (node >= 0) renderer.select(node, { center: true });
   else setStatus(`${record.path} is not drawn in this pass`, { error: true });
@@ -1975,6 +1974,221 @@ symbolsMinChange.addEventListener("input", () => {
 symbolsMinChangeOn.addEventListener("change", renderSymbols);
 symbolsDialog.addEventListener("click", (e) => {
   if (e.target === symbolsDialog) symbolsDialog.close();
+});
+
+// ---- Symbol view -----------------------------------------------------------
+
+const symbolView = document.getElementById("symbol-view");
+const symbolViewTitle = document.getElementById("symbol-view-title");
+const symbolViewMeta = document.getElementById("symbol-view-meta");
+const symbolViewSteps = document.getElementById("symbol-view-steps");
+const symbolViewStep = document.getElementById("symbol-view-step");
+const symbolViewCode = document.getElementById("symbol-view-code");
+const symbolViewTabs = {
+  diff: document.getElementById("sv-tab-diff"),
+  ir: document.getElementById("sv-tab-ir"),
+  asm: document.getElementById("sv-tab-asm"),
+};
+// { record, steps, current, mode } for the open symbol view.
+let symbolViewState = null;
+
+function openSymbolView(record) {
+  goToWorkspace();
+  if (!trace) return;
+  const steps = symbolTimeline(trace.events, record.path);
+  if (!steps.length) {
+    setStatus(`${record.path} has no IR in this trace`, { error: true });
+    return;
+  }
+  // Start at the step for the pass on screen, if it touched the symbol.
+  const here = steps.findIndex((step) => step.index === traceIndex);
+  symbolViewState = {
+    record,
+    steps,
+    current: here >= 0 ? here : 0,
+    mode: "diff",
+  };
+  renderSymbolViewHead();
+  renderSymbolView();
+  symbolView.showModal();
+  symbolViewCode.focus();
+}
+
+function renderSymbolViewHead() {
+  const { record, steps } = symbolViewState;
+  symbolViewTitle.textContent = record.path;
+  const facts = [
+    record.ops.join(" → "),
+    `${steps.length} step(s)`,
+    record.removed ? "removed by the end" : "",
+  ];
+  const row = benchmarkView()?.comparison.get(record.path);
+  if (row?.current || row?.baseline) {
+    const time = (slot) => row[slot] && `${slot} ${formatDuration(row[slot].timeNs)}`;
+    facts.push(
+      [time("baseline"), time("current")].filter(Boolean).join(" → ") +
+        (row.change !== null ? ` (${formatChange(row.change)})` : "") +
+        (benchmarks.current?.mock || benchmarks.baseline?.mock ? " · mock data" : ""),
+    );
+  }
+  symbolViewMeta.textContent = facts.filter(Boolean).join(" · ");
+
+  symbolViewSteps.replaceChildren(
+    ...steps.map((step, i) => {
+      const event = trace.events[step.index];
+      const item = document.createElement("li");
+      const button = document.createElement("button");
+      const name = document.createElement("span");
+      name.textContent = `#${step.index + 1} ${event.argument || event.pass}`;
+      const kind = document.createElement("span");
+      kind.className = `kind ${step.kind}`;
+      kind.textContent =
+        step.kind === "lowered"
+          ? `lowered ${step.from} → ${step.op}`
+          : step.kind === "initial"
+            ? `first dump · ${step.op}`
+            : `${step.kind} · ${step.op}`;
+      button.append(name, kind);
+      button.title = `${step.index + 1}. ${describeEvent(event)}`;
+      button.addEventListener("click", () => {
+        symbolViewState.current = i;
+        renderSymbolView();
+      });
+      item.append(button);
+      return item;
+    }),
+  );
+}
+
+// The IR of the latest step at or before `i` that has any.
+function stepText(i) {
+  for (let k = i; k >= 0; k--)
+    if (symbolViewState.steps[k].text !== null) return symbolViewState.steps[k].text;
+  return null;
+}
+
+function renderSymbolView() {
+  const { steps, current } = symbolViewState;
+  const step = steps[current];
+  const event = trace.events[step.index];
+  [...symbolViewSteps.children].forEach((item, i) => {
+    const button = item.firstChild;
+    if (i === current) {
+      button.setAttribute("aria-current", "step");
+      button.scrollIntoView({ block: "nearest" });
+    } else button.removeAttribute("aria-current");
+  });
+
+  const assembly = step.assembly ?? [];
+  const isNvvm = assembly.some((object) => object.target.startsWith("#nvvm"));
+  symbolViewTabs.asm.hidden = !assembly.length;
+  symbolViewTabs.asm.textContent = isNvvm ? "PTX" : "Assembly";
+  // Fall back to a mode this step can show.
+  let mode = symbolViewState.mode;
+  if (mode === "asm" && !assembly.length) mode = "diff";
+  if (mode === "diff" && step.text === null && assembly.length) mode = "asm";
+  for (const [name, tab] of Object.entries(symbolViewTabs))
+    tab.setAttribute("aria-selected", String(name === mode));
+
+  const before = current > 0 ? stepText(current - 1) : null;
+  const lines = [];
+  const note = (text) => lines.push({ type: "note", text });
+  if (mode === "asm") {
+    for (const object of assembly) {
+      note(`${object.target}`);
+      for (const text of object.text.replace(/\n$/, "").split("\n"))
+        lines.push({ type: "plain", text });
+    }
+  } else if (step.text === null) {
+    note(
+      `Removed by #${step.index + 1} ${describeEvent(event)}.` +
+        (assembly.length ? " Its code is now embedded in the enclosing binary; see the assembly tab." : ""),
+    );
+    if (mode === "diff" && before)
+      lines.push(...lineDiff(before, null));
+  } else if (mode === "diff" && before !== null) {
+    const diff = lineDiff(before, step.text);
+    const { added, removed } = diffStats(diff);
+    note(
+      added || removed
+        ? `+${added} −${removed} lines against the previous step`
+        : "Same text as the previous step",
+    );
+    lines.push(...diff);
+  } else {
+    if (mode === "diff") note("First appearance, so there is nothing to compare.");
+    for (const text of step.text.split("\n")) lines.push({ type: "same", text });
+  }
+
+  symbolViewStep.textContent = `#${step.index + 1} ${describeEvent(event)}`;
+  symbolViewCode.replaceChildren(
+    ...lines.map((line) => {
+      const div = document.createElement("div");
+      div.className = `line ${line.type}`;
+      if (line.type === "note" || line.type === "plain") {
+        // A space keeps blank lines one line tall.
+        div.textContent = line.text || " ";
+      } else {
+        const sign = line.type === "add" ? "+" : line.type === "del" ? "−" : " ";
+        div.innerHTML = `${sign} ${highlightMlir(line.text).slice(0, -1)}`;
+      }
+      return div;
+    }),
+  );
+  symbolViewCode.scrollTop = 0;
+}
+
+function setSymbolViewMode(mode) {
+  if (!symbolViewState) return;
+  if (mode === "asm" && symbolViewTabs.asm.hidden) return;
+  symbolViewState.mode = mode;
+  renderSymbolView();
+}
+
+function stepSymbolView(delta) {
+  if (!symbolViewState) return;
+  const next = symbolViewState.current + delta;
+  if (next < 0 || next >= symbolViewState.steps.length) return;
+  symbolViewState.current = next;
+  renderSymbolView();
+}
+
+for (const [mode, tab] of Object.entries(symbolViewTabs))
+  tab.addEventListener("click", () => setSymbolViewMode(mode));
+symbolView.addEventListener("keydown", (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const action = {
+    j: () => stepSymbolView(1),
+    ArrowDown: () => stepSymbolView(1),
+    k: () => stepSymbolView(-1),
+    ArrowUp: () => stepSymbolView(-1),
+    d: () => setSymbolViewMode("diff"),
+    i: () => setSymbolViewMode("ir"),
+    a: () => setSymbolViewMode("asm"),
+  }[e.key];
+  if (!action) return;
+  e.preventDefault();
+  action();
+});
+document.getElementById("symbol-view-go").addEventListener("click", () => {
+  const { record, steps, current } = symbolViewState;
+  // A removed symbol is shown in the last dump that still has it.
+  const step = steps[current];
+  const index =
+    step.text !== null
+      ? step.index
+      : record.lastDump >= 0 && record.lastDump < step.index
+        ? record.lastDump
+        : Math.max(0, step.index - 1);
+  symbolView.close();
+  showSymbol(record, index);
+});
+document.getElementById("symbol-view-back").addEventListener("click", () => {
+  symbolView.close();
+  openSymbols();
+});
+symbolView.addEventListener("click", (e) => {
+  if (e.target === symbolView) symbolView.close();
 });
 
 // ---- Export ----------------------------------------------------------------
