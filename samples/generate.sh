@@ -42,6 +42,11 @@ opt gpu-kernels.trace.txt gpu-kernels.mlir \
 opt gpu-tiled-matmul.trace.txt gpu-tiled-matmul.mlir \
   -pass-pipeline='builtin.module(gpu-kernel-outlining,canonicalize,nvvm-attach-target{chip=sm_80},gpu.module(convert-scf-to-cf,convert-gpu-to-nvvm),gpu-module-to-binary{format=isa})' \
   -mlir-print-ir-before=gpu-kernel-outlining -mlir-print-ir-after-all -mlir-print-ir-module-scope
+# A transpose three ways (naive, 32x32 shared tile, 32x33 padded tile) for the
+# GPU view's coalescing and bank-conflict verdicts.
+opt gpu-transpose.trace.txt gpu-transpose.mlir \
+  -pass-pipeline='builtin.module(gpu-kernel-outlining,canonicalize,nvvm-attach-target{chip=sm_80},gpu.module(convert-gpu-to-nvvm),gpu-module-to-binary{format=isa})' \
+  -mlir-print-ir-before=gpu-kernel-outlining -mlir-print-ir-after-all -mlir-print-ir-module-scope
 opt failed-transform.trace.txt matmul.mlir \
   -pass-pipeline='builtin.module(transform-preload-library{transform-library-paths=tile-wrong-op.transform.mlir},canonicalize,cse,transform-interpreter)' \
   -mlir-print-ir-after-all -mlir-print-ir-module-scope
