@@ -14,6 +14,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Document the accepted trace format and the parsed structure in `docs/trace-format.md`.
 - Test traces from out-of-tree `MlirOptMain` drivers with custom dialects (a `schema-opt` fixture), including namespace-qualified pass names.
 
+### Fixed
+
+- Label ops whose operands contain `=` by their op name: `scf.for %i = %c0 to ..` was labeled `%c0`, and `linalg.generic {indexing_maps = ..}` was labeled `[`. Values bound with `%x =` inside an op (induction variables, `iter_args`) are now definitions.
+- Stop treating a region op's trailing types (`} -> tensor<..>`, `} : ..`) as a separate `->` op.
+
 ## [0.3.0] - 2026-09-26
 
 ### Added
