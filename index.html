@@ -2011,6 +2011,48 @@
       .docs-content code {
         font: 0.9em var(--code);
       }
+      .docs-content ol {
+        padding-left: 22px;
+      }
+      .docs-content li + li {
+        margin-top: 4px;
+      }
+      .docs-callout {
+        padding: 10px 14px;
+        border-left: 3px solid var(--accent);
+        border-radius: 4px;
+        background: var(--panel);
+      }
+      .docs-terms {
+        display: grid;
+        grid-template-columns: minmax(120px, max-content) 1fr;
+        gap: 8px 18px;
+        max-width: 680px;
+        margin: 10px 0 0;
+      }
+      .docs-terms dt {
+        color: var(--fg);
+        font-weight: 600;
+      }
+      .docs-terms dd {
+        margin: 0;
+        color: var(--dim);
+      }
+      .docs-terms .good {
+        color: var(--good);
+      }
+      .docs-terms .bad {
+        color: var(--warn);
+      }
+      @media (max-width: 560px) {
+        .docs-terms {
+          grid-template-columns: 1fr;
+          gap: 2px;
+        }
+        .docs-terms dd {
+          margin-bottom: 8px;
+        }
+      }
       .docs-kicker {
         color: var(--dim);
         font-size: 13px;
@@ -2681,134 +2723,214 @@
       <section id="docs-view" hidden aria-labelledby="docs-title">
         <div class="docs-content">
           <div class="docs-kicker">VizMLIR / field guide</div>
-          <h2 id="docs-title">See how your MLIR runs on the GPU.</h2>
+          <h2 id="docs-title">See how your code runs on the GPU.</h2>
           <p>
-            VizMLIR follows your kernels from MLIR to PTX: how each launch
-            splits into blocks and warps, where its data lives, whether each
-            warp's memory accesses are coalesced or conflict-free, and which
-            pass produced them. Everything runs in your browser; your IR stays
-            local.
+            When you write a program for a GPU, a compiler reshapes it in many
+            small steps before the GPU ever sees it. VizMLIR lets you watch
+            those steps one at a time, and draws what the result will do on the
+            GPU: how the work is split up, where the data is kept, and whether
+            it is read in a way the GPU is good at.
           </p>
           <p>
-            It reads the IR; it does not run it. Launch sizes, buffers and
-            access patterns come from the code itself, so occupancy, caching and
-            real timings still need a profiler (you can import its results).
+            You don't need to be a compiler expert. If you know roughly what a
+            loop and an array are, you can follow along.
+          </p>
+          <p class="docs-callout">
+            <strong>A promise and a limit.</strong> VizMLIR only reads your
+            code. It never runs it, and nothing leaves your browser. That also
+            means it can't tell you exact speeds; a profiler measures those,
+            and you can bring its numbers in here.
           </p>
 
-          <h3>Start here</h3>
-          <ul>
+          <h3>Try it in a minute</h3>
+          <ol>
             <li>
-              Open the transpose sample. It is the same kernel three ways: a
-              naive one whose write is strided, one that stages a tile in shared
-              memory but reads it with a 32-way bank conflict, and the padded
-              fix.
+              Open the transpose sample. Transposing a table turns its rows into
+              columns. The sample does it three ways, and two of them contain a
+              classic GPU mistake.
             </li>
             <li>
-              The canvas opens in the <strong>GPU</strong> view whenever the IR
-              launches kernels. <kbd>g</kbd> switches to the op graph and back.
+              The big panel in the middle is the GPU view. Scroll to
+              <strong>Memory accesses</strong> and click a row marked in orange.
+              It explains what is wrong and how people usually fix it.
             </li>
             <li>
-              Step through the passes with <kbd>[</kbd> <kbd>]</kbd> to watch the
-              kernels get outlined, lowered to NVVM, and serialized to PTX.
+              Press <kbd>]</kbd> a few times to step through the compiler's
+              work. The code on the left changes, and the picture follows.
             </li>
-          </ul>
+          </ol>
           <div class="sample-actions">
             <button id="docs-gpu-sample">Open the transpose sample</button>
+            <span
+              ><kbd>g</kbd> swaps the GPU picture for a diagram of the code;
+              <kbd>?</kbd> lists every key.</span
+            >
           </div>
 
-          <h3>Read the GPU view</h3>
+          <h3>The GPU in four ideas</h3>
+          <p>These four ideas are all you need to read the GPU view.</p>
+          <dl class="docs-terms">
+            <dt>Threads</dt>
+            <dd>
+              A GPU runs the same small piece of code thousands of times at
+              once. Each copy is a thread, and each works on its own piece of
+              the data, like thousands of people each handed one cell of a huge
+              spreadsheet.
+            </dd>
+            <dt>Blocks and the grid</dt>
+            <dd>
+              Threads come in teams called blocks, and all the blocks together
+              make the grid. Teams don't wait for each other, so the GPU can
+              spread them over its many cores however it likes.
+            </dd>
+            <dt>Warps</dt>
+            <dd>
+              Inside a block, threads move in groups of 32 called warps. Picture
+              32 people who must take every step together: when one reaches for
+              memory, all 32 reach at the same moment. That is why the way
+              neighbors read memory matters so much.
+            </dd>
+            <dt>Memory</dt>
+            <dd>
+              <em>Global</em> memory is the big warehouse every thread can
+              reach, but it is far away. <em>Shared</em> memory is a small shelf
+              inside each block: quick to reach, shared by that team only.
+              <em>Private</em> memory belongs to a single thread.
+            </dd>
+          </dl>
+
+          <h3>Reading the GPU view</h3>
+          <p>
+            For every place your program starts work on the GPU (a
+            <em>launch</em>), you'll see three things.
+          </p>
           <ul>
             <li>
-              <strong>Launch:</strong> the grid of blocks, and one block opened
-              into warps of 32 threads, the groups that execute together. Sizes
-              come from constant <code>gpu.launch</code> operands; ones only
-              known at runtime show as ?.
+              <strong>The launch.</strong> A grid of squares, one per block. The
+              highlighted one is opened up below it so you can see its threads,
+              32 to a row: each row is one warp. Hover any square for its number.
             </li>
             <li>
-              <strong>Memory:</strong> the kernel's buffers as global (every
-              thread), shared (one copy per block, from
-              <code>workgroup</code> attributions or address space 3) and
-              private (one per thread), with sizes and how often each is loaded
-              and stored. After serialization, the PTX's register and shared
-              memory declarations.
+              <strong>Memory.</strong> Every array the code uses, sorted into
+              global, shared and private, with its size and how often it is
+              read or written.
             </li>
             <li>
-              <strong>Memory accesses:</strong> every <code>memref.load</code>
-              and <code>memref.store</code>, judged for the 32 threads of the
-              first warp. In global memory a warp moves 32-byte sectors:
-              <em>coalesced</em> means it moves the fewest possible,
-              <em>strided</em> means it moves more than it uses, and
-              <em>broadcast</em> means every thread reads one element. Shared
-              memory has 32 banks: a <em>bank conflict</em> makes the warp wait
-              for one pass per extra word in a bank. Pick an access to see its
-              lanes, the elements they touch, and the usual fix.
+              <strong>Memory accesses.</strong> Every place the code reads or
+              writes an array, with a verdict for the first warp.
+            </li>
+          </ul>
+          <dl class="docs-terms">
+            <dt><span class="good">coalesced</span></dt>
+            <dd>
+              The 32 threads read neighboring items, like people taking books
+              side by side from one shelf. The GPU fetches them in one trip.
+              This is what you want.
+            </dd>
+            <dt><span class="bad">strided</span></dt>
+            <dd>
+              The threads read items far apart, like 32 people each walking to a
+              different aisle. The GPU fetches much more than it uses and throws
+              the rest away. The panel says how much is wasted.
+            </dd>
+            <dt><span class="good">broadcast</span></dt>
+            <dd>
+              Every thread reads the same item. The GPU fetches it once and
+              hands out copies, which is perfectly fine.
+            </dd>
+            <dt><span class="bad">bank conflict</span></dt>
+            <dd>
+              Shared memory has 32 counters, called banks. If several threads
+              need different items from the same counter, they queue up.
+              "32-way" means 32 threads waiting in one line.
+            </dd>
+            <dt><span class="good">no bank conflicts</span></dt>
+            <dd>Everyone is served at their own counter at the same time.</dd>
+          </dl>
+          <p>
+            Click a row to see the warp's 32 threads as colored squares (the
+            same color means the same chunk of memory, or the same counter) and
+            to highlight that line in the code on the left.
+          </p>
+
+          <h3>Watch a kernel being built</h3>
+          <p>
+            A <em>kernel</em> is the part of your program that runs on the GPU.
+            The compiler builds it in steps called <em>passes</em>; the row of
+            cards along the top shows them in order.
+          </p>
+          <ul>
+            <li>
+              Press <kbd>h</kbd>, or click <strong>@ symbols</strong> at the
+              bottom, to see every function and kernel and which step created or
+              changed it. Click one to follow just that kernel, like a
+              time-lapse, all the way to the GPU assembly (PTX) at the end.
+            </li>
+            <li>
+              If you have timed your kernels with a profiler,
+              <strong>Import current…</strong> puts each time next to the steps
+              that built that kernel. Import an older run with
+              <strong>Import baseline…</strong> to see what got faster or
+              slower. The "GPU kernels + benchmarks (mock)" sample shows this
+              with made-up numbers.
             </li>
           </ul>
 
-          <h3>Follow a kernel through the passes</h3>
+          <h3>Use your own code</h3>
           <p>
-            Capture the pipeline with a dump before outlining, so VizMLIR can
-            tell which pass created each kernel:
+            VizMLIR reads the log <code>mlir-opt</code> writes when you ask it
+            to print your code after every step. Run your pipeline like this,
+            then open the file with <strong>Open…</strong>:
           </p>
           <p>
             <code
-              >mlir-opt input.mlir -pass-pipeline='builtin.module(gpu-kernel-outlining,…,gpu-module-to-binary{format=isa})'
+              >mlir-opt input.mlir -pass-pipeline='…'
               -mlir-print-ir-before=gpu-kernel-outlining -mlir-print-ir-after-all
               -mlir-print-ir-module-scope -mlir-disable-threading 2&gt;
               trace.txt</code
             >
           </p>
+          <p>What those flags ask for, in plain words:</p>
+          <ul>
+            <li>
+              <code>-mlir-print-ir-after-all</code>: a snapshot of the code after
+              every step.
+            </li>
+            <li>
+              <code>-mlir-print-ir-before=gpu-kernel-outlining</code>: one more
+              snapshot just before the GPU kernels are carved out, so VizMLIR
+              can tell you which step made them.
+            </li>
+            <li>
+              <code>-mlir-print-ir-module-scope</code>: the whole program in
+              every snapshot, not just the part that changed.
+            </li>
+            <li>
+              <code>-mlir-disable-threading</code>: keeps the log in order.
+            </li>
+          </ul>
           <p>
-            <kbd>h</kbd> (or <strong>@ symbols</strong> in the status bar) lists
-            every function and kernel with the passes that created, changed,
-            lowered, or removed it. Click one to step through just that kernel
-            as a diff, down to the PTX that <code>format=isa</code> embeds.
-            <strong>Import current…</strong> and
-            <strong>Import baseline…</strong> attach timings from Nsight
-            Systems, Nsight Compute, Google Benchmark, or your own CSV, so each
-            kernel's time sits next to the passes that built it.
+            Add <code>-mlir-timing</code> to see how long each step took (press
+            <kbd>p</kbd>). With <strong>Watch…</strong> (Chrome and Edge),
+            VizMLIR reloads the file every time you run the command again, so
+            you can keep it open beside your terminal. If a step fails, its card
+            is marked ✗ and the compiler's messages appear over the picture.
           </p>
 
-          <h3>Step through a pass pipeline</h3>
+          <h3>The code diagram and what changed</h3>
           <p>
-            Capture every pass boundary from <code>mlir-opt</code> and open the
-            log with <strong>Open…</strong>, or paste it into
-            <strong>Current</strong>:
+            For code without GPU parts, or when you press <kbd>g</kbd>, the
+            middle panel draws your code as a diagram: every operation is a
+            box, and arrows show where each value goes next. The panel on the
+            right lists what the current step added, removed or changed. Walk
+            through the list with <kbd>j</kbd> and <kbd>k</kbd>; each change is
+            highlighted in the diagram and in the code.
           </p>
           <p>
-            <code
-              >mlir-opt input.mlir -pass-pipeline='…' -mlir-print-ir-after-all
-              -mlir-print-ir-module-scope -mlir-disable-threading 2&gt;
-              trace.txt</code
-            >
-          </p>
-          <p>
-            Pick a pass from the timeline at the top (or press
-            <kbd>[</kbd> / <kbd>]</kbd>) to compare its IR with the IR it
-            received. Passes that failed are marked with ✗, and compiler errors,
-            warnings, notes, and remarks printed around a dump appear over the
-            graph. Without <code>-mlir-print-ir-module-scope</code>, nested
-            passes print only the function they ran on; VizMLIR rebuilds module
-            baselines from those dumps.
-          </p>
-          <p>
-            Add <code>-mlir-timing</code> to see how long each pass took: the
-            timeline shows each pass's wall time and IR size, and
-            <kbd>p</kbd> opens the full report. mlir-opt does not measure memory
-            per pass, so for peak memory run it under
-            <code>/usr/bin/time -l</code> (macOS) or
-            <code>/usr/bin/time -v</code> (Linux) and keep that output in the
-            log.
-          </p>
-
-          <h3>The op graph and the pass diff</h3>
-          <p>
-            For IR without GPU code, or with <kbd>g</kbd>, the canvas shows the
-            op graph: each operation a node, with edges for SSA data flow. Paste
-            earlier IR into <strong>Baseline</strong> and later IR into
-            <strong>Current</strong> (or open a trace) and the diff pane lists
-            what was added, removed, and changed. This example creates a tensor,
-            fills it, and multiplies it.
+            You can also compare any two versions by hand: paste the earlier
+            code into <strong>Baseline</strong> and the later one into
+            <strong>Current</strong>. This small example makes a table, fills
+            it, and multiplies it:
           </p>
           <div class="sample-editor">
             <div class="code-editor">
@@ -2828,36 +2950,7 @@
               <span>Then change <code>linalg.fill</code> and compare.</span>
             </div>
           </div>
-
-          <h3>Keep it live, save it, share it</h3>
-          <ul>
-            <li>
-              <strong>Watch…</strong> (Chrome and Edge) reloads a file every
-              time it changes. Point it at <code>trace.txt</code>, re-run
-              <code>mlir-opt</code> in your terminal, and VizMLIR updates on the
-              same pass.
-            </li>
-            <li>
-              Your workspace autosaves in this browser.
-              <strong>Sessions</strong>
-              keeps named snapshots and imports or downloads them as
-              <code>.json</code> files. Nothing is uploaded.
-            </li>
-            <li>
-              Export the whole graph as PNG or SVG from the toolbar over the
-              graph, and the diff as Markdown or JSON from the diff pane. Pick
-              changes with <kbd>x</kbd> or shift/⌘-click and press
-              <kbd>c</kbd> to copy them as a patch snippet.
-            </li>
-          </ul>
-
-          <h3>How to read the op graph</h3>
-          <p>
-            Follow the arrows from values being produced to operations that
-            consume them. Click a node to see its label and parent. The pass
-            diff on the right highlights what was added, removed, or changed
-            between the two snapshots.
-          </p>
+          <p>The colors of the boxes in the diagram:</p>
           <div class="legend" aria-label="Node color legend">
             <span
               class="legend-item"
@@ -2881,18 +2974,48 @@
             >
           </div>
 
+          <h3>Save and share</h3>
+          <ul>
+            <li>
+              Your work saves itself in this browser. Close the tab and it is
+              still there when you come back.
+            </li>
+            <li>
+              <strong>Sessions</strong> keeps named copies, and turns them into
+              <code>.json</code> files you can send to someone else. Nothing is
+              uploaded anywhere.
+            </li>
+            <li>
+              Save the diagram as a picture (PNG or SVG) from the buttons above
+              it, and the list of changes as Markdown or JSON from the right
+              panel. Pick changes with <kbd>x</kbd> and press <kbd>c</kbd> to
+              copy them.
+            </li>
+          </ul>
+
           <h3>Good to know</h3>
-          <p>
-            The parser currently focuses on the MLIR constructs supported by the
-            bundled WebAssembly engine. If a snippet does not render as
-            expected, please include it when
-            <a
-              href="https://github.com/joepothiboot/vizmlir/issues"
-              target="_blank"
-              rel="noreferrer"
-              >opening an issue</a
-            >.
-          </p>
+          <ul>
+            <li>
+              The memory verdicts look at the first warp of the first block, on
+              the first trip through any loop. That is usually representative,
+              but not always.
+            </li>
+            <li>
+              They follow how NVIDIA GPUs fetch memory (32-byte chunks and 32
+              banks). Other GPUs work in a similar but not identical way.
+            </li>
+            <li>
+              VizMLIR understands the most common MLIR code. If something
+              doesn't show up the way you expect, please
+              <a
+                href="https://github.com/joepothiboot/vizmlir/issues"
+                target="_blank"
+                rel="noreferrer"
+                >open an issue</a
+              >
+              with the snippet, and we'll look at it.
+            </li>
+          </ul>
           <p>
             <a
               href="https://github.com/joepothiboot/vizmlir#readme"

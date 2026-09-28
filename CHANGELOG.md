@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - VizMLIR is now framed as a tool for seeing how MLIR runs on the GPU. The canvas opens on the GPU view whenever the IR launches kernels, and remembers when you switch to the op graph instead (IR without GPU code always shows the graph). A first visit opens the transpose sample, the GPU samples come first in the Samples list, and the field guide, README, and page title lead with the GPU view. The op graph, pass diff, and trace tools are unchanged.
+- Rewrite the field guide and README for newcomers: a one-minute tour, "the GPU in four ideas" (threads, blocks and the grid, warps, memory) with everyday comparisons, what each memory verdict means and why it matters, and the `mlir-opt` flags explained in plain words.
 
 ### Added
 

@@ -2,53 +2,57 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**See how your MLIR runs on the GPU.** VizMLIR follows GPU kernels from MLIR to PTX, in your browser: how each launch splits into blocks and warps, where its data lives, whether each warp's loads and stores are coalesced or bank-conflicted, and which compiler pass produced them.
+**See how your code runs on the GPU.**
 
-**[Try VizMLIR live](https://joepothiboot.github.io/vizmlir/)**
+When you write a program for a GPU, a compiler reshapes it in many small steps before the GPU ever sees it. VizMLIR lets you watch those steps one at a time, and draws what the result will do on the GPU: how the work is split up, where the data is kept, and whether it's read in a way the GPU is good at. It runs in your browser, and your code never leaves it.
 
-![VizMLIR GPU view of a transpose kernel](public/demo/vizmlir-workspace.png)
+**[Try VizMLIR live](https://joepothiboot.github.io/vizmlir/)**: it opens on a small example with two classic GPU mistakes in it.
+
+![VizMLIR showing a transpose kernel whose writes are strided](public/demo/vizmlir-workspace.png)
 
 ![VizMLIR field guide](public/demo/vizmlir-docs.png)
 
 ## Why VizMLIR?
 
-Much of a kernel's GPU performance is settled in the compiler pipeline, long before a profiler sees it: a lowering that leaves neighboring threads writing memory 1024 elements apart, or a shared-memory tile laid out so that every thread of a warp hits the same bank. MLIR shows you the code and a profiler shows you the cost. VizMLIR sits between them: it reads the IR at every pass and draws the GPU shape of the kernel it describes, so you can see the problem, the pass that introduced it, and whether the fix worked.
+A GPU is fast when thousands of its threads work side by side and read memory in tidy, neighboring chunks. Whether that happens is often decided inside the compiler, long before you run anything, and the only evidence is pages of intermediate code that are hard to read.
 
-VizMLIR reads the IR; it does not run it. Launch sizes, buffers, and access patterns come from the code itself. Occupancy, caching, and real timings still need a profiler, and VizMLIR can import its results.
+VizMLIR turns that code into pictures. It shows your kernel as teams of threads, sorts its data into the GPU's kinds of memory, and checks each read and write: "these 32 threads read neighbors, good" or "these 32 threads each go to a different place, and the GPU fetches eight times more than it uses." Then it shows you which compiler step made it that way.
+
+One honest limit: VizMLIR only reads your code; it never runs it. It can spot the patterns that make a GPU slow, but it can't give you exact timings. A profiler does that, and you can bring its numbers into VizMLIR.
 
 ## Who is it for?
 
-- **GPU compiler engineers:** check what each lowering does to a kernel's launch shape, memory placement, and access patterns, pass by pass.
-- **Kernel authors on MLIR-based stacks:** see why a kernel is strided or bank-conflicted before reaching for a profiler, and line up profiler timings with the passes that built each kernel.
-- **Students and newcomers to GPU compilers:** build an intuition for blocks, warps, coalescing, and shared memory on real compiler output, with the IR next to the picture.
+- **People learning how GPUs and compilers work.** See threads, warps, coalescing and shared memory on real compiler output, with the code right next to the picture. You don't need to be a compiler expert.
+- **Engineers building GPU compilers on MLIR.** Check what each step does to a kernel's shape, memory, and access patterns, one step at a time.
+- **Kernel authors.** Find out why a kernel is slow before reaching for a profiler, and line up profiler timings with the steps that built each kernel.
 
-## Features
+## What you can do
 
-### On the GPU
+### See the GPU side
 
-- **GPU View:** The canvas opens on the GPU view whenever the IR launches kernels (`g` switches to the op graph). Each `gpu.launch` / `gpu.launch_func` is drawn as its grid of blocks, with one block opened into warps of 32 threads, and the kernel's buffers are grouped as global, shared per block, and private per thread, with sizes and load/store counts. After `gpu-module-to-binary{format=isa}`, the PTX register and shared-memory declarations.
-- **Memory Accesses:** Every `memref.load` and `memref.store` is judged for the 32 threads of the first warp: coalesced, strided (with the 32-byte sectors it moves against the minimum), or broadcast in global memory; conflict-free or an N-way bank conflict in shared memory. Pick one to see its lanes, the elements they touch, the usual fix, and its source line.
-- **Kernel History and PTX:** Press `h` to see which pass created, changed, lowered (`gpu.func` → `llvm.func`), or serialized each kernel. Click one to step through just that kernel as a diff, down to the PTX it became.
-- **Benchmarks:** Import kernel times from Nsight Systems, Nsight Compute, Google Benchmark, or your own CSV, and compare a baseline and a current run, so each kernel's time sits next to the passes that built it ([docs/benchmark-format.md](docs/benchmark-format.md)).
+- **The GPU view.** Whenever your code starts work on the GPU, the middle panel shows it as a grid of blocks, with one block opened up into its warps of 32 threads, and lists every array the kernel uses as global, shared, or private memory. Press `g` to switch to a diagram of the code instead.
+- **Memory checks.** Every read and write is checked for the first warp: are the threads reading neighbors (_coalesced_), far-apart places (_strided_), or the same item (_broadcast_)? In shared memory, are they queueing at the same bank (_bank conflict_)? Click one to see the 32 threads, the items they touch, and how people usually fix it.
+- **A kernel's life story.** Press `h` to see which compiler step created, changed, or finished each kernel, then follow one kernel step by step, all the way to the GPU assembly (PTX) at the end.
+- **Your measured timings.** Bring in results from Nsight Systems, Nsight Compute, Google Benchmark, or your own CSV, and compare two runs to see which kernels got faster or slower ([docs/benchmark-format.md](docs/benchmark-format.md)).
 
-### Through the MLIR pipeline
+### Follow the compiler
 
-- **Pass Traces:** Open `mlir-opt -mlir-print-ir-after-all` output (or from any out-of-tree `*-opt` driver) and step through each pass with its before/after diff, failures, and diagnostics. The accepted format is documented in [docs/trace-format.md](docs/trace-format.md).
-- **Op Graph and Diff:** Each operation as a node with its SSA data flow, and a structural diff of what a pass added, removed, or changed. Walk changes with `j` `k`; each is linked to its graph node and source line.
-- **Pass Timing:** Add `-mlir-timing` to see each pass's wall time and IR size in the timeline, and the full report with `p`. Run under `/usr/bin/time -l` / `-v` to add peak memory.
-- **Op Counts:** Press `o` to see how many of each op every pass leaves in the module, to spot a lowering that stopped firing or an op-count blow-up. Exports as CSV.
-- **Buffer Memory:** After bufferization, press `b` to see each `memref.alloc` as a live range with its size, the peak live bytes per function, and which buffers a pass added, removed, or now frees differently.
+- **Step through a pipeline.** Open the log `mlir-opt -mlir-print-ir-after-all` writes (or one from any `*-opt` tool built on MLIR) and move through each step with `[` `]`. Failed steps are marked, and compiler messages appear next to the code. The format is described in [docs/trace-format.md](docs/trace-format.md).
+- **See what changed.** Each operation is drawn as a box with arrows for where its values go, and a side panel lists what the current step added, removed, or changed. Walk through the list with `j` `k`.
+- **How long each step took**, with `-mlir-timing` (press `p`).
+- **How many of each operation** every step leaves behind (press `o`), to spot a step that stopped working or one that made the code blow up.
+- **Memory over time** after arrays are allocated (press `b`): when each one is alive, how big it is, and the peak.
 
-### Workflow
+### Work comfortably
 
-- **Live Reload:** Watch a trace file (Chrome/Edge) and the view refreshes each time `mlir-opt` rewrites it.
-- **Save & Export:** The workspace autosaves locally (IndexedDB), named sessions can be saved and shared as `.json`, graphs export as PNG/SVG, and diffs as Markdown/JSON.
-- **Keyboard-First:** Jump to any pass, op, or `@symbol` with ⌘K / Ctrl K, step passes with `[` `]`, and press `?` for the full list.
-- **Browser-Native:** Runs entirely on the client; your IR never leaves the browser.
+- **Live reload.** Watch a file (Chrome/Edge), and VizMLIR refreshes every time you rerun your compiler.
+- **Save and share.** Your work saves itself in the browser. Keep named sessions and share them as `.json`, save diagrams as PNG or SVG, and export changes as Markdown or JSON.
+- **Keyboard friendly.** Jump to any step, operation, or function with ⌘K / Ctrl K. Press `?` for every shortcut.
+- **Private by design.** Everything runs in your browser. Nothing is uploaded.
 
-## Quick Start
+## Quick start
 
-To run VizMLIR locally:
+To run VizMLIR on your own machine:
 
 ```bash
 git clone https://github.com/joepothiboot/vizmlir
@@ -57,13 +61,14 @@ npm install
 npm run dev
 ```
 
-1. Open your browser to the local dev address. The transpose sample opens in the GPU view.
-2. Step through its passes with `[` `]`, and pick a memory access to see its lanes.
-3. Open your own trace with **Open…**. To follow kernels from their creation, capture it with `-mlir-print-ir-before=gpu-kernel-outlining -mlir-print-ir-after-all -mlir-print-ir-module-scope`.
+1. Open the address it prints. The transpose example opens on the GPU view.
+2. Scroll to **Memory accesses** and click the orange row to see what went wrong and how it's usually fixed.
+3. Press `]` to step through the compiler's work and watch the picture change.
+4. When you're ready, open your own `mlir-opt` log with **Open…**. The field guide (the **Docs** link in the app) explains which flags to use and what each one does.
 
 ## Contributing
 
-Feedback and contributions are highly appreciated. See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup and project conventions. If you encounter a specific MLIR construct that doesn't render as expected, please open an issue with the snippet attached so we can improve the parser.
+Feedback and contributions are very welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to set up and work on the project. If some MLIR code doesn't show up the way you expect, please open an issue with the snippet, and we'll look at it.
 
 ## License
 
