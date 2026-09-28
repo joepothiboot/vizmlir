@@ -27,6 +27,8 @@ import {
   symbolTimeline,
 } from "./provenance.js";
 import { diffStats, lineDiff } from "./linediff.js";
+import { analyzeGpu } from "./gpu.js";
+import { renderGpuView } from "./gpu-view.js";
 import {
   changedBeyond,
   compareBenchmarks,
@@ -100,6 +102,12 @@ const timingOpen = document.getElementById("timing-open");
 const opCountOpen = document.getElementById("opcount-open");
 const buffersOpen = document.getElementById("buffers-open");
 const symbolsOpen = document.getElementById("symbols-open");
+const stage = document.getElementById("stage");
+const gpuViewEl = document.getElementById("gpu-view");
+const viewToggle = document.getElementById("view-toggle");
+const viewSep = document.getElementById("view-sep");
+const viewGraph = document.getElementById("view-graph");
+const viewGpu = document.getElementById("view-gpu");
 const TABS = [
   { tab: baselineTitle, textarea: baseline },
   { tab: currentTitle, textarea: input },
@@ -128,6 +136,10 @@ let traceCounts = null;
 // buffer totals for each trace event (computed when first shown).
 let viewBuffers = null;
 let traceBuffers = null;
+// What the canvas area shows ("graph" or "gpu"), and the GPU launches and
+// buffers of the rendered IR (null when it has no GPU code).
+let canvasView = "graph";
+let gpuModel = null;
 // Created / changed / lowered / removed passes for every symbol in the trace,
 // computed when first shown.
 let traceSymbols = null;
@@ -357,12 +369,14 @@ function run() {
     renderer.setSnapshot(null);
     setViewCounts(null);
     setViewBuffers(null);
+    setGpuModel(null);
     return;
   }
 
   const snap = after.snapshot;
   renderedText = current;
   renderer.setSnapshot(snap);
+  setGpuModel(analyzeGpu(current));
   setViewCounts({
     before: beforeCopy ? countOps(beforeCopy) : null,
     after: countOps(snap),
@@ -753,6 +767,15 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
     ["Show op counts per pass", "o", openOpCounts],
     ["Show buffers and peak memory", "b", openBuffers],
     ["Show symbol history (which pass made each kernel)", "h", openSymbols],
+    ...(gpuModel
+      ? [
+          [
+            canvasView === "gpu" ? "Show the op graph" : "Show the GPU view: launches and memory",
+            "g",
+            () => setCanvasView(canvasView === "gpu" ? "graph" : "gpu"),
+          ],
+        ]
+      : []),
     ["Import current kernel benchmarks…", "", () => importBenchmarks("current")],
     ["Import baseline kernel benchmarks…", "", () => importBenchmarks("baseline")],
     ...(canWatchFiles
@@ -845,6 +868,7 @@ const WORKSPACE_KEYS = {
   o: openOpCounts,
   b: openBuffers,
   h: openSymbols,
+  g: () => gpuModel && setCanvasView(canvasView === "gpu" ? "graph" : "gpu"),
   "[": () => trace && traceIndex > 0 && selectEvent(traceIndex - 1),
   "]": () =>
     trace &&
@@ -926,6 +950,7 @@ async function openSample(sample) {
   try {
     applyState(await loadSampleState(sample, fetchSampleText));
     statusEl.textContent = `loaded ${sample.title} · ${statusEl.textContent}`;
+    if (sample.canvas) setCanvasView(sample.canvas);
     if (sample.benchmarks) openSymbols();
   } catch (error) {
     setStatus(`could not load sample: ${error.message}`, { error: true });
@@ -1975,6 +2000,32 @@ symbolsMinChangeOn.addEventListener("change", renderSymbols);
 symbolsDialog.addEventListener("click", (e) => {
   if (e.target === symbolsDialog) symbolsDialog.close();
 });
+
+// ---- GPU view ----------------------------------------------------------------
+
+// Shows the Graph | GPU toggle only when the rendered IR has GPU code, and
+// redraws the GPU view when it is open. It stays open while stepping passes.
+function setGpuModel(model) {
+  gpuModel = model;
+  viewToggle.hidden = !model;
+  viewSep.hidden = !model;
+  if (!model && canvasView === "gpu") setCanvasView("graph");
+  else if (canvasView === "gpu") renderGpuView(gpuViewEl, gpuModel);
+}
+
+function setCanvasView(view) {
+  canvasView = view === "gpu" && gpuModel ? "gpu" : "graph";
+  const gpu = canvasView === "gpu";
+  stage.classList.toggle("gpu-mode", gpu);
+  gpuViewEl.hidden = !gpu;
+  viewGraph.setAttribute("aria-pressed", String(!gpu));
+  viewGpu.setAttribute("aria-pressed", String(gpu));
+  if (gpu) renderGpuView(gpuViewEl, gpuModel);
+  else renderer.requestDraw();
+}
+
+viewGraph.addEventListener("click", () => setCanvasView("graph"));
+viewGpu.addEventListener("click", () => setCanvasView("gpu"));
 
 // ---- Symbol view -----------------------------------------------------------
 

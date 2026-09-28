@@ -17,7 +17,8 @@ export const RENAME_SAMPLE = `module {
 /**
  * `baseline`/`current` name a before/after pair; `trace` names a pass trace,
  * and `benchmarks` optional baseline/current kernel results for it, which are
- * invented when `mock` is set. Paths are relative to the samples directory.
+ * invented when `mock` is set. `canvas: "gpu"` opens it in the GPU view.
+ * Paths are relative to the samples directory.
  */
 export const SAMPLES = [
   {
@@ -70,6 +71,14 @@ export const SAMPLES = [
       current: "gpu-kernels.current.mock.csv",
     },
     mock: true,
+  },
+  {
+    id: "gpu-tiled-matmul",
+    title: "Tiled matmul on the GPU",
+    blurb:
+      "An 8×8 grid of 16×16-thread blocks staging tiles of A and B in shared memory, from gpu.launch to PTX. Press g for the GPU view.",
+    trace: "gpu-tiled-matmul.trace.txt",
+    canvas: "gpu",
   },
 ];
 

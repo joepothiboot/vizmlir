@@ -21,6 +21,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Add a "GPU kernels + benchmarks (mock)" sample: a real `mlir-opt` trace of two kernels from outlining to PTX, with invented baseline and current timings that show the benchmark comparison. The Symbol history marks mock data with a note.
 - Open the Symbol history from the status bar while a trace is loaded (**@ symbols**, or **@ N slower** when two benchmark runs are compared). From the symbol view, **Show in graph** goes to that pass with the symbol's graph node selected and its line marked.
 - Follow one symbol through the trace: click a symbol in the Symbol history to see its IR at each pass that created, changed, lowered, or removed it, as a line diff against the previous step or as full IR (`j`/`k` to step, `d`/`i`/`a` to switch). When a kernel is serialized by `gpu-module-to-binary{format=isa}`, the embedded PTX (or other text assembly) is decoded and shown. Benchmark times for the symbol appear in the header.
+- Add a GPU view to the canvas (**Graph | GPU**, or `g`) whenever the IR has GPU code. For each `gpu.launch` / `gpu.launch_func` it shows the grid of blocks and one block opened into warps of 32 threads, with sizes read from constant launch operands, and the kernel's buffers by memory space: global, shared per block (`workgroup` attributions, address space 3), and private per thread, with sizes and load/store counts. After `gpu-module-to-binary{format=isa}` it reads PTX register and shared-memory declarations instead. Everything is read from the IR, and the view says so.
+- Add a "Tiled matmul on the GPU" sample: a real `mlir-opt` trace of an 8×8 grid of 16×16-thread blocks that stage tiles in shared memory, opened in the GPU view.
 
 ### Fixed
 

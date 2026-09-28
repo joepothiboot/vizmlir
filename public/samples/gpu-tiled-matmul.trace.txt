@@ -1,0 +1,428 @@
+// -----// IR Dump Before GpuKernelOutliningPass: gpu-kernel-outlining{data-layout-str=} ('builtin.module' operation) //----- //
+module attributes {gpu.container_module} {
+  func.func @matmul(%arg0: memref<128x128xf32>, %arg1: memref<128x128xf32>, %arg2: memref<128x128xf32>) {
+    %c0 = arith.constant 0 : index
+    %c1 = arith.constant 1 : index
+    %c8 = arith.constant 8 : index
+    %c16 = arith.constant 16 : index
+    %c128 = arith.constant 128 : index
+    %cst = arith.constant 0.000000e+00 : f32
+    gpu.launch blocks(%arg3, %arg4, %arg5) in (%arg9 = %c8, %arg10 = %c8, %arg11 = %c1) threads(%arg6, %arg7, %arg8) in (%arg12 = %c16, %arg13 = %c16, %arg14 = %c1) workgroup(%arg15 : memref<16x16xf32, #gpu.address_space<workgroup>>, %arg16 : memref<16x16xf32, #gpu.address_space<workgroup>>) {
+      %0 = arith.muli %arg4, %c16 : index
+      %1 = arith.addi %0, %arg7 : index
+      %2 = arith.muli %arg3, %c16 : index
+      %3 = arith.addi %2, %arg6 : index
+      %4 = scf.for %arg17 = %c0 to %c128 step %c16 iter_args(%arg18 = %cst) -> (f32) {
+        %5 = arith.addi %arg17, %arg6 : index
+        %6 = arith.addi %arg17, %arg7 : index
+        %7 = memref.load %arg0[%1, %5] : memref<128x128xf32>
+        %8 = memref.load %arg1[%6, %3] : memref<128x128xf32>
+        memref.store %7, %arg15[%arg7, %arg6] : memref<16x16xf32, #gpu.address_space<workgroup>>
+        memref.store %8, %arg16[%arg7, %arg6] : memref<16x16xf32, #gpu.address_space<workgroup>>
+        gpu.barrier
+        %9 = scf.for %arg19 = %c0 to %c16 step %c1 iter_args(%arg20 = %arg18) -> (f32) {
+          %10 = memref.load %arg15[%arg7, %arg19] : memref<16x16xf32, #gpu.address_space<workgroup>>
+          %11 = memref.load %arg16[%arg19, %arg6] : memref<16x16xf32, #gpu.address_space<workgroup>>
+          %12 = arith.mulf %10, %11 : f32
+          %13 = arith.addf %arg20, %12 : f32
+          scf.yield %13 : f32
+        }
+        gpu.barrier
+        scf.yield %9 : f32
+      }
+      memref.store %4, %arg2[%1, %3] : memref<128x128xf32>
+      gpu.terminator
+    }
+    return
+  }
+}
+
+
+// -----// IR Dump After GpuKernelOutliningPass: gpu-kernel-outlining{data-layout-str=} ('builtin.module' operation) //----- //
+module attributes {gpu.container_module} {
+  func.func @matmul(%arg0: memref<128x128xf32>, %arg1: memref<128x128xf32>, %arg2: memref<128x128xf32>) {
+    %c0 = arith.constant 0 : index
+    %c1 = arith.constant 1 : index
+    %c8 = arith.constant 8 : index
+    %c16 = arith.constant 16 : index
+    %c128 = arith.constant 128 : index
+    %cst = arith.constant 0.000000e+00 : f32
+    gpu.launch_func  @matmul_kernel::@matmul_kernel blocks in (%c8, %c8, %c1) threads in (%c16, %c16, %c1)  args(%c16 : index, %arg0 : memref<128x128xf32>, %arg1 : memref<128x128xf32>, %c0 : index, %c1 : index, %c128 : index, %cst : f32, %arg2 : memref<128x128xf32>)
+    return
+  }
+  gpu.module @matmul_kernel {
+    gpu.func @matmul_kernel(%arg0: index, %arg1: memref<128x128xf32>, %arg2: memref<128x128xf32>, %arg3: index, %arg4: index, %arg5: index, %arg6: f32, %arg7: memref<128x128xf32>) workgroup(%arg8 : memref<16x16xf32, #gpu.address_space<workgroup>>, %arg9 : memref<16x16xf32, #gpu.address_space<workgroup>>) kernel attributes {known_block_size = array<i32: 16, 16, 1>, known_grid_size = array<i32: 8, 8, 1>} {
+      %block_id_x = gpu.block_id x
+      %block_id_y = gpu.block_id y
+      %block_id_z = gpu.block_id z
+      %thread_id_x = gpu.thread_id x
+      %thread_id_y = gpu.thread_id y
+      %thread_id_z = gpu.thread_id z
+      %grid_dim_x = gpu.grid_dim x
+      %grid_dim_y = gpu.grid_dim y
+      %grid_dim_z = gpu.grid_dim z
+      %block_dim_x = gpu.block_dim x
+      %block_dim_y = gpu.block_dim y
+      %block_dim_z = gpu.block_dim z
+      %0 = arith.muli %block_id_y, %arg0 : index
+      %1 = arith.addi %0, %thread_id_y : index
+      %2 = arith.muli %block_id_x, %arg0 : index
+      %3 = arith.addi %2, %thread_id_x : index
+      %4 = scf.for %arg10 = %arg3 to %arg5 step %arg0 iter_args(%arg11 = %arg6) -> (f32) {
+        %5 = arith.addi %arg10, %thread_id_x : index
+        %6 = arith.addi %arg10, %thread_id_y : index
+        %7 = memref.load %arg1[%1, %5] : memref<128x128xf32>
+        %8 = memref.load %arg2[%6, %3] : memref<128x128xf32>
+        memref.store %7, %arg8[%thread_id_y, %thread_id_x] : memref<16x16xf32, #gpu.address_space<workgroup>>
+        memref.store %8, %arg9[%thread_id_y, %thread_id_x] : memref<16x16xf32, #gpu.address_space<workgroup>>
+        gpu.barrier
+        %9 = scf.for %arg12 = %arg3 to %arg0 step %arg4 iter_args(%arg13 = %arg11) -> (f32) {
+          %10 = memref.load %arg8[%thread_id_y, %arg12] : memref<16x16xf32, #gpu.address_space<workgroup>>
+          %11 = memref.load %arg9[%arg12, %thread_id_x] : memref<16x16xf32, #gpu.address_space<workgroup>>
+          %12 = arith.mulf %10, %11 : f32
+          %13 = arith.addf %arg13, %12 : f32
+          scf.yield %13 : f32
+        }
+        gpu.barrier
+        scf.yield %9 : f32
+      }
+      memref.store %4, %arg7[%1, %3] : memref<128x128xf32>
+      gpu.return
+    }
+  }
+}
+
+
+// -----// IR Dump After CanonicalizerPass: canonicalize{cse-between-iterations=false    max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true} ('builtin.module' operation) //----- //
+module attributes {gpu.container_module} {
+  func.func @matmul(%arg0: memref<128x128xf32>, %arg1: memref<128x128xf32>, %arg2: memref<128x128xf32>) {
+    %c0 = arith.constant 0 : index
+    %c1 = arith.constant 1 : index
+    %c8 = arith.constant 8 : index
+    %c16 = arith.constant 16 : index
+    %c128 = arith.constant 128 : index
+    %cst = arith.constant 0.000000e+00 : f32
+    gpu.launch_func  @matmul_kernel::@matmul_kernel blocks in (%c8, %c8, %c1) threads in (%c16, %c16, %c1)  args(%c16 : index, %arg0 : memref<128x128xf32>, %arg1 : memref<128x128xf32>, %c0 : index, %c1 : index, %c128 : index, %cst : f32, %arg2 : memref<128x128xf32>)
+    return
+  }
+  gpu.module @matmul_kernel {
+    gpu.func @matmul_kernel(%arg0: index, %arg1: memref<128x128xf32>, %arg2: memref<128x128xf32>, %arg3: index, %arg4: index, %arg5: index, %arg6: f32, %arg7: memref<128x128xf32>) workgroup(%arg8 : memref<16x16xf32, #gpu.address_space<workgroup>>, %arg9 : memref<16x16xf32, #gpu.address_space<workgroup>>) kernel attributes {known_block_size = array<i32: 16, 16, 1>, known_grid_size = array<i32: 8, 8, 1>} {
+      %block_id_x = gpu.block_id x
+      %block_id_y = gpu.block_id y
+      %thread_id_x = gpu.thread_id x
+      %thread_id_y = gpu.thread_id y
+      %0 = arith.muli %block_id_y, %arg0 : index
+      %1 = arith.addi %0, %thread_id_y : index
+      %2 = arith.muli %block_id_x, %arg0 : index
+      %3 = arith.addi %2, %thread_id_x : index
+      %4 = scf.for %arg10 = %arg3 to %arg5 step %arg0 iter_args(%arg11 = %arg6) -> (f32) {
+        %5 = arith.addi %arg10, %thread_id_x : index
+        %6 = arith.addi %arg10, %thread_id_y : index
+        %7 = memref.load %arg1[%1, %5] : memref<128x128xf32>
+        %8 = memref.load %arg2[%6, %3] : memref<128x128xf32>
+        memref.store %7, %arg8[%thread_id_y, %thread_id_x] : memref<16x16xf32, #gpu.address_space<workgroup>>
+        memref.store %8, %arg9[%thread_id_y, %thread_id_x] : memref<16x16xf32, #gpu.address_space<workgroup>>
+        gpu.barrier
+        %9 = scf.for %arg12 = %arg3 to %arg0 step %arg4 iter_args(%arg13 = %arg11) -> (f32) {
+          %10 = memref.load %arg8[%thread_id_y, %arg12] : memref<16x16xf32, #gpu.address_space<workgroup>>
+          %11 = memref.load %arg9[%arg12, %thread_id_x] : memref<16x16xf32, #gpu.address_space<workgroup>>
+          %12 = arith.mulf %10, %11 : f32
+          %13 = arith.addf %arg13, %12 : f32
+          scf.yield %13 : f32
+        }
+        gpu.barrier
+        scf.yield %9 : f32
+      }
+      memref.store %4, %arg7[%1, %3] : memref<128x128xf32>
+      gpu.return
+    }
+  }
+}
+
+
+// -----// IR Dump After GpuNVVMAttachTarget: nvvm-attach-target{O=2 chip=sm_80 collect-compiler-diagnostics=false fast=false features= ftz=false  module= ptxas-cmd-options= triple=nvptx64-nvidia-cuda verify-target-arch=true} ('builtin.module' operation) //----- //
+module attributes {gpu.container_module} {
+  func.func @matmul(%arg0: memref<128x128xf32>, %arg1: memref<128x128xf32>, %arg2: memref<128x128xf32>) {
+    %c0 = arith.constant 0 : index
+    %c1 = arith.constant 1 : index
+    %c8 = arith.constant 8 : index
+    %c16 = arith.constant 16 : index
+    %c128 = arith.constant 128 : index
+    %cst = arith.constant 0.000000e+00 : f32
+    gpu.launch_func  @matmul_kernel::@matmul_kernel blocks in (%c8, %c8, %c1) threads in (%c16, %c16, %c1)  args(%c16 : index, %arg0 : memref<128x128xf32>, %arg1 : memref<128x128xf32>, %c0 : index, %c1 : index, %c128 : index, %cst : f32, %arg2 : memref<128x128xf32>)
+    return
+  }
+  gpu.module @matmul_kernel [#nvvm.target<chip = "sm_80">] {
+    gpu.func @matmul_kernel(%arg0: index, %arg1: memref<128x128xf32>, %arg2: memref<128x128xf32>, %arg3: index, %arg4: index, %arg5: index, %arg6: f32, %arg7: memref<128x128xf32>) workgroup(%arg8 : memref<16x16xf32, #gpu.address_space<workgroup>>, %arg9 : memref<16x16xf32, #gpu.address_space<workgroup>>) kernel attributes {known_block_size = array<i32: 16, 16, 1>, known_grid_size = array<i32: 8, 8, 1>} {
+      %block_id_x = gpu.block_id x
+      %block_id_y = gpu.block_id y
+      %thread_id_x = gpu.thread_id x
+      %thread_id_y = gpu.thread_id y
+      %0 = arith.muli %block_id_y, %arg0 : index
+      %1 = arith.addi %0, %thread_id_y : index
+      %2 = arith.muli %block_id_x, %arg0 : index
+      %3 = arith.addi %2, %thread_id_x : index
+      %4 = scf.for %arg10 = %arg3 to %arg5 step %arg0 iter_args(%arg11 = %arg6) -> (f32) {
+        %5 = arith.addi %arg10, %thread_id_x : index
+        %6 = arith.addi %arg10, %thread_id_y : index
+        %7 = memref.load %arg1[%1, %5] : memref<128x128xf32>
+        %8 = memref.load %arg2[%6, %3] : memref<128x128xf32>
+        memref.store %7, %arg8[%thread_id_y, %thread_id_x] : memref<16x16xf32, #gpu.address_space<workgroup>>
+        memref.store %8, %arg9[%thread_id_y, %thread_id_x] : memref<16x16xf32, #gpu.address_space<workgroup>>
+        gpu.barrier
+        %9 = scf.for %arg12 = %arg3 to %arg0 step %arg4 iter_args(%arg13 = %arg11) -> (f32) {
+          %10 = memref.load %arg8[%thread_id_y, %arg12] : memref<16x16xf32, #gpu.address_space<workgroup>>
+          %11 = memref.load %arg9[%arg12, %thread_id_x] : memref<16x16xf32, #gpu.address_space<workgroup>>
+          %12 = arith.mulf %10, %11 : f32
+          %13 = arith.addf %arg13, %12 : f32
+          scf.yield %13 : f32
+        }
+        gpu.barrier
+        scf.yield %9 : f32
+      }
+      memref.store %4, %arg7[%1, %3] : memref<128x128xf32>
+      gpu.return
+    }
+  }
+}
+
+
+// -----// IR Dump After SCFToControlFlowPass: convert-scf-to-cf{allow-pattern-rollback=true} ('gpu.module' operation: @matmul_kernel) //----- //
+module attributes {gpu.container_module} {
+  func.func @matmul(%arg0: memref<128x128xf32>, %arg1: memref<128x128xf32>, %arg2: memref<128x128xf32>) {
+    %c0 = arith.constant 0 : index
+    %c1 = arith.constant 1 : index
+    %c8 = arith.constant 8 : index
+    %c16 = arith.constant 16 : index
+    %c128 = arith.constant 128 : index
+    %cst = arith.constant 0.000000e+00 : f32
+    gpu.launch_func  @matmul_kernel::@matmul_kernel blocks in (%c8, %c8, %c1) threads in (%c16, %c16, %c1)  args(%c16 : index, %arg0 : memref<128x128xf32>, %arg1 : memref<128x128xf32>, %c0 : index, %c1 : index, %c128 : index, %cst : f32, %arg2 : memref<128x128xf32>)
+    return
+  }
+  gpu.module @matmul_kernel [#nvvm.target<chip = "sm_80">] {
+    gpu.func @matmul_kernel(%arg0: index, %arg1: memref<128x128xf32>, %arg2: memref<128x128xf32>, %arg3: index, %arg4: index, %arg5: index, %arg6: f32, %arg7: memref<128x128xf32>) workgroup(%arg8 : memref<16x16xf32, #gpu.address_space<workgroup>>, %arg9 : memref<16x16xf32, #gpu.address_space<workgroup>>) kernel attributes {known_block_size = array<i32: 16, 16, 1>, known_grid_size = array<i32: 8, 8, 1>} {
+      %block_id_x = gpu.block_id x
+      %block_id_y = gpu.block_id y
+      %thread_id_x = gpu.thread_id x
+      %thread_id_y = gpu.thread_id y
+      %0 = arith.muli %block_id_y, %arg0 : index
+      %1 = arith.addi %0, %thread_id_y : index
+      %2 = arith.muli %block_id_x, %arg0 : index
+      %3 = arith.addi %2, %thread_id_x : index
+      cf.br ^bb1(%arg3, %arg6 : index, f32)
+    ^bb1(%4: index, %5: f32):  // 2 preds: ^bb0, ^bb5
+      %6 = arith.cmpi slt, %4, %arg5 : index
+      cf.cond_br %6, ^bb2, ^bb6
+    ^bb2:  // pred: ^bb1
+      %7 = arith.addi %4, %thread_id_x : index
+      %8 = arith.addi %4, %thread_id_y : index
+      %9 = memref.load %arg1[%1, %7] : memref<128x128xf32>
+      %10 = memref.load %arg2[%8, %3] : memref<128x128xf32>
+      memref.store %9, %arg8[%thread_id_y, %thread_id_x] : memref<16x16xf32, #gpu.address_space<workgroup>>
+      memref.store %10, %arg9[%thread_id_y, %thread_id_x] : memref<16x16xf32, #gpu.address_space<workgroup>>
+      gpu.barrier
+      cf.br ^bb3(%arg3, %5 : index, f32)
+    ^bb3(%11: index, %12: f32):  // 2 preds: ^bb2, ^bb4
+      %13 = arith.cmpi slt, %11, %arg0 : index
+      cf.cond_br %13, ^bb4, ^bb5
+    ^bb4:  // pred: ^bb3
+      %14 = memref.load %arg8[%thread_id_y, %11] : memref<16x16xf32, #gpu.address_space<workgroup>>
+      %15 = memref.load %arg9[%11, %thread_id_x] : memref<16x16xf32, #gpu.address_space<workgroup>>
+      %16 = arith.mulf %14, %15 : f32
+      %17 = arith.addf %12, %16 : f32
+      %18 = arith.addi %11, %arg4 : index
+      cf.br ^bb3(%18, %17 : index, f32)
+    ^bb5:  // pred: ^bb3
+      gpu.barrier
+      %19 = arith.addi %4, %arg0 : index
+      cf.br ^bb1(%19, %12 : index, f32)
+    ^bb6:  // pred: ^bb1
+      memref.store %5, %arg7[%1, %3] : memref<128x128xf32>
+      gpu.return
+    }
+  }
+}
+
+
+// -----// IR Dump After ConvertGpuOpsToNVVMOps: convert-gpu-to-nvvm{allow-pattern-rollback=true  has-redux=false index-bitwidth=0 use-bare-ptr-memref-call-conv=false} ('gpu.module' operation: @matmul_kernel) //----- //
+module attributes {gpu.container_module} {
+  func.func @matmul(%arg0: memref<128x128xf32>, %arg1: memref<128x128xf32>, %arg2: memref<128x128xf32>) {
+    %c0 = arith.constant 0 : index
+    %c1 = arith.constant 1 : index
+    %c8 = arith.constant 8 : index
+    %c16 = arith.constant 16 : index
+    %c128 = arith.constant 128 : index
+    %cst = arith.constant 0.000000e+00 : f32
+    gpu.launch_func  @matmul_kernel::@matmul_kernel blocks in (%c8, %c8, %c1) threads in (%c16, %c16, %c1)  args(%c16 : index, %arg0 : memref<128x128xf32>, %arg1 : memref<128x128xf32>, %c0 : index, %c1 : index, %c128 : index, %cst : f32, %arg2 : memref<128x128xf32>)
+    return
+  }
+  gpu.module @matmul_kernel [#nvvm.target<chip = "sm_80">] {
+    llvm.mlir.global internal @__wg_matmul_kernel_0() {addr_space = 3 : i32} : !llvm.array<256 x f32>
+    llvm.mlir.global internal @__wg_matmul_kernel_1() {addr_space = 3 : i32} : !llvm.array<256 x f32>
+    llvm.func @matmul_kernel(%arg0: i64, %arg1: !llvm.ptr, %arg2: !llvm.ptr, %arg3: i64, %arg4: i64, %arg5: i64, %arg6: i64, %arg7: i64, %arg8: !llvm.ptr, %arg9: !llvm.ptr, %arg10: i64, %arg11: i64, %arg12: i64, %arg13: i64, %arg14: i64, %arg15: i64, %arg16: i64, %arg17: i64, %arg18: f32, %arg19: !llvm.ptr, %arg20: !llvm.ptr, %arg21: i64, %arg22: i64, %arg23: i64, %arg24: i64, %arg25: i64) attributes {gpu.kernel, gpu.known_block_size = array<i32: 16, 16, 1>, gpu.known_grid_size = array<i32: 8, 8, 1>, nvvm.kernel, nvvm.maxntid = array<i32: 16, 16, 1>} {
+      %0 = llvm.mlir.poison : !llvm.struct<(ptr, ptr, i64, array<2 x i64>, array<2 x i64>)>
+      %1 = llvm.insertvalue %arg19, %0[0] : !llvm.struct<(ptr, ptr, i64, array<2 x i64>, array<2 x i64>)> 
+      %2 = llvm.insertvalue %arg20, %1[1] : !llvm.struct<(ptr, ptr, i64, array<2 x i64>, array<2 x i64>)> 
+      %3 = llvm.insertvalue %arg21, %2[2] : !llvm.struct<(ptr, ptr, i64, array<2 x i64>, array<2 x i64>)> 
+      %4 = llvm.insertvalue %arg22, %3[3, 0] : !llvm.struct<(ptr, ptr, i64, array<2 x i64>, array<2 x i64>)> 
+      %5 = llvm.insertvalue %arg24, %4[4, 0] : !llvm.struct<(ptr, ptr, i64, array<2 x i64>, array<2 x i64>)> 
+      %6 = llvm.insertvalue %arg23, %5[3, 1] : !llvm.struct<(ptr, ptr, i64, array<2 x i64>, array<2 x i64>)> 
+      %7 = llvm.insertvalue %arg25, %6[4, 1] : !llvm.struct<(ptr, ptr, i64, array<2 x i64>, array<2 x i64>)> 
+      %8 = llvm.mlir.poison : !llvm.struct<(ptr, ptr, i64, array<2 x i64>, array<2 x i64>)>
+      %9 = llvm.insertvalue %arg8, %8[0] : !llvm.struct<(ptr, ptr, i64, array<2 x i64>, array<2 x i64>)> 
+      %10 = llvm.insertvalue %arg9, %9[1] : !llvm.struct<(ptr, ptr, i64, array<2 x i64>, array<2 x i64>)> 
+      %11 = llvm.insertvalue %arg10, %10[2] : !llvm.struct<(ptr, ptr, i64, array<2 x i64>, array<2 x i64>)> 
+      %12 = llvm.insertvalue %arg11, %11[3, 0] : !llvm.struct<(ptr, ptr, i64, array<2 x i64>, array<2 x i64>)> 
+      %13 = llvm.insertvalue %arg13, %12[4, 0] : !llvm.struct<(ptr, ptr, i64, array<2 x i64>, array<2 x i64>)> 
+      %14 = llvm.insertvalue %arg12, %13[3, 1] : !llvm.struct<(ptr, ptr, i64, array<2 x i64>, array<2 x i64>)> 
+      %15 = llvm.insertvalue %arg14, %14[4, 1] : !llvm.struct<(ptr, ptr, i64, array<2 x i64>, array<2 x i64>)> 
+      %16 = llvm.mlir.poison : !llvm.struct<(ptr, ptr, i64, array<2 x i64>, array<2 x i64>)>
+      %17 = llvm.insertvalue %arg1, %16[0] : !llvm.struct<(ptr, ptr, i64, array<2 x i64>, array<2 x i64>)> 
+      %18 = llvm.insertvalue %arg2, %17[1] : !llvm.struct<(ptr, ptr, i64, array<2 x i64>, array<2 x i64>)> 
+      %19 = llvm.insertvalue %arg3, %18[2] : !llvm.struct<(ptr, ptr, i64, array<2 x i64>, array<2 x i64>)> 
+      %20 = llvm.insertvalue %arg4, %19[3, 0] : !llvm.struct<(ptr, ptr, i64, array<2 x i64>, array<2 x i64>)> 
+      %21 = llvm.insertvalue %arg6, %20[4, 0] : !llvm.struct<(ptr, ptr, i64, array<2 x i64>, array<2 x i64>)> 
+      %22 = llvm.insertvalue %arg5, %21[3, 1] : !llvm.struct<(ptr, ptr, i64, array<2 x i64>, array<2 x i64>)> 
+      %23 = llvm.insertvalue %arg7, %22[4, 1] : !llvm.struct<(ptr, ptr, i64, array<2 x i64>, array<2 x i64>)> 
+      %24 = llvm.mlir.addressof @__wg_matmul_kernel_0 : !llvm.ptr<3>
+      %25 = llvm.getelementptr %24[0, 0] : (!llvm.ptr<3>) -> !llvm.ptr<3>, !llvm.array<256 x f32>
+      %26 = llvm.mlir.poison : !llvm.struct<(ptr<3>, ptr<3>, i64, array<2 x i64>, array<2 x i64>)>
+      %27 = llvm.insertvalue %25, %26[0] : !llvm.struct<(ptr<3>, ptr<3>, i64, array<2 x i64>, array<2 x i64>)> 
+      %28 = llvm.insertvalue %25, %27[1] : !llvm.struct<(ptr<3>, ptr<3>, i64, array<2 x i64>, array<2 x i64>)> 
+      %29 = llvm.mlir.constant(0 : index) : i64
+      %30 = llvm.insertvalue %29, %28[2] : !llvm.struct<(ptr<3>, ptr<3>, i64, array<2 x i64>, array<2 x i64>)> 
+      %31 = llvm.mlir.constant(16 : index) : i64
+      %32 = llvm.insertvalue %31, %30[3, 0] : !llvm.struct<(ptr<3>, ptr<3>, i64, array<2 x i64>, array<2 x i64>)> 
+      %33 = llvm.mlir.constant(16 : index) : i64
+      %34 = llvm.insertvalue %33, %32[4, 0] : !llvm.struct<(ptr<3>, ptr<3>, i64, array<2 x i64>, array<2 x i64>)> 
+      %35 = llvm.mlir.constant(16 : index) : i64
+      %36 = llvm.insertvalue %35, %34[3, 1] : !llvm.struct<(ptr<3>, ptr<3>, i64, array<2 x i64>, array<2 x i64>)> 
+      %37 = llvm.mlir.constant(1 : index) : i64
+      %38 = llvm.insertvalue %37, %36[4, 1] : !llvm.struct<(ptr<3>, ptr<3>, i64, array<2 x i64>, array<2 x i64>)> 
+      %39 = llvm.mlir.addressof @__wg_matmul_kernel_1 : !llvm.ptr<3>
+      %40 = llvm.getelementptr %39[0, 0] : (!llvm.ptr<3>) -> !llvm.ptr<3>, !llvm.array<256 x f32>
+      %41 = llvm.mlir.poison : !llvm.struct<(ptr<3>, ptr<3>, i64, array<2 x i64>, array<2 x i64>)>
+      %42 = llvm.insertvalue %40, %41[0] : !llvm.struct<(ptr<3>, ptr<3>, i64, array<2 x i64>, array<2 x i64>)> 
+      %43 = llvm.insertvalue %40, %42[1] : !llvm.struct<(ptr<3>, ptr<3>, i64, array<2 x i64>, array<2 x i64>)> 
+      %44 = llvm.mlir.constant(0 : index) : i64
+      %45 = llvm.insertvalue %44, %43[2] : !llvm.struct<(ptr<3>, ptr<3>, i64, array<2 x i64>, array<2 x i64>)> 
+      %46 = llvm.mlir.constant(16 : index) : i64
+      %47 = llvm.insertvalue %46, %45[3, 0] : !llvm.struct<(ptr<3>, ptr<3>, i64, array<2 x i64>, array<2 x i64>)> 
+      %48 = llvm.mlir.constant(16 : index) : i64
+      %49 = llvm.insertvalue %48, %47[4, 0] : !llvm.struct<(ptr<3>, ptr<3>, i64, array<2 x i64>, array<2 x i64>)> 
+      %50 = llvm.mlir.constant(16 : index) : i64
+      %51 = llvm.insertvalue %50, %49[3, 1] : !llvm.struct<(ptr<3>, ptr<3>, i64, array<2 x i64>, array<2 x i64>)> 
+      %52 = llvm.mlir.constant(1 : index) : i64
+      %53 = llvm.insertvalue %52, %51[4, 1] : !llvm.struct<(ptr<3>, ptr<3>, i64, array<2 x i64>, array<2 x i64>)> 
+      %54 = nvvm.read.ptx.sreg.ctaid.x range <i32, 0, 8> : i32
+      %55 = llvm.sext %54 : i32 to i64
+      %56 = nvvm.read.ptx.sreg.ctaid.y range <i32, 0, 8> : i32
+      %57 = llvm.sext %56 : i32 to i64
+      %58 = nvvm.read.ptx.sreg.tid.x range <i32, 0, 16> : i32
+      %59 = llvm.sext %58 : i32 to i64
+      %60 = nvvm.read.ptx.sreg.tid.y range <i32, 0, 16> : i32
+      %61 = llvm.sext %60 : i32 to i64
+      %62 = llvm.mul %57, %arg0 : i64
+      %63 = llvm.add %62, %61 : i64
+      %64 = llvm.mul %55, %arg0 : i64
+      %65 = llvm.add %64, %59 : i64
+      llvm.br ^bb1(%arg15, %arg18 : i64, f32)
+    ^bb1(%66: i64, %67: f32):  // 2 preds: ^bb0, ^bb5
+      %68 = llvm.icmp "slt" %66, %arg17 : i64
+      llvm.cond_br %68, ^bb2, ^bb6
+    ^bb2:  // pred: ^bb1
+      %69 = llvm.add %66, %59 : i64
+      %70 = llvm.add %66, %61 : i64
+      %71 = llvm.extractvalue %23[1] : !llvm.struct<(ptr, ptr, i64, array<2 x i64>, array<2 x i64>)> 
+      %72 = llvm.mlir.constant(128 : index) : i64
+      %73 = llvm.mul %63, %72 overflow<nsw, nuw> : i64
+      %74 = llvm.add %73, %69 overflow<nsw, nuw> : i64
+      %75 = llvm.getelementptr inbounds|nuw %71[%74] : (!llvm.ptr, i64) -> !llvm.ptr, f32
+      %76 = llvm.load %75 : !llvm.ptr -> f32
+      %77 = llvm.extractvalue %15[1] : !llvm.struct<(ptr, ptr, i64, array<2 x i64>, array<2 x i64>)> 
+      %78 = llvm.mlir.constant(128 : index) : i64
+      %79 = llvm.mul %70, %78 overflow<nsw, nuw> : i64
+      %80 = llvm.add %79, %65 overflow<nsw, nuw> : i64
+      %81 = llvm.getelementptr inbounds|nuw %77[%80] : (!llvm.ptr, i64) -> !llvm.ptr, f32
+      %82 = llvm.load %81 : !llvm.ptr -> f32
+      %83 = llvm.extractvalue %38[1] : !llvm.struct<(ptr<3>, ptr<3>, i64, array<2 x i64>, array<2 x i64>)> 
+      %84 = llvm.mlir.constant(16 : index) : i64
+      %85 = llvm.mul %61, %84 overflow<nsw, nuw> : i64
+      %86 = llvm.add %85, %59 overflow<nsw, nuw> : i64
+      %87 = llvm.getelementptr inbounds|nuw %83[%86] : (!llvm.ptr<3>, i64) -> !llvm.ptr<3>, f32
+      llvm.store %76, %87 : f32, !llvm.ptr<3>
+      %88 = llvm.extractvalue %53[1] : !llvm.struct<(ptr<3>, ptr<3>, i64, array<2 x i64>, array<2 x i64>)> 
+      %89 = llvm.mlir.constant(16 : index) : i64
+      %90 = llvm.mul %61, %89 overflow<nsw, nuw> : i64
+      %91 = llvm.add %90, %59 overflow<nsw, nuw> : i64
+      %92 = llvm.getelementptr inbounds|nuw %88[%91] : (!llvm.ptr<3>, i64) -> !llvm.ptr<3>, f32
+      llvm.store %82, %92 : f32, !llvm.ptr<3>
+      nvvm.barrier
+      llvm.br ^bb3(%arg15, %67 : i64, f32)
+    ^bb3(%93: i64, %94: f32):  // 2 preds: ^bb2, ^bb4
+      %95 = llvm.icmp "slt" %93, %arg0 : i64
+      llvm.cond_br %95, ^bb4, ^bb5
+    ^bb4:  // pred: ^bb3
+      %96 = llvm.extractvalue %38[1] : !llvm.struct<(ptr<3>, ptr<3>, i64, array<2 x i64>, array<2 x i64>)> 
+      %97 = llvm.mlir.constant(16 : index) : i64
+      %98 = llvm.mul %61, %97 overflow<nsw, nuw> : i64
+      %99 = llvm.add %98, %93 overflow<nsw, nuw> : i64
+      %100 = llvm.getelementptr inbounds|nuw %96[%99] : (!llvm.ptr<3>, i64) -> !llvm.ptr<3>, f32
+      %101 = llvm.load %100 : !llvm.ptr<3> -> f32
+      %102 = llvm.extractvalue %53[1] : !llvm.struct<(ptr<3>, ptr<3>, i64, array<2 x i64>, array<2 x i64>)> 
+      %103 = llvm.mlir.constant(16 : index) : i64
+      %104 = llvm.mul %93, %103 overflow<nsw, nuw> : i64
+      %105 = llvm.add %104, %59 overflow<nsw, nuw> : i64
+      %106 = llvm.getelementptr inbounds|nuw %102[%105] : (!llvm.ptr<3>, i64) -> !llvm.ptr<3>, f32
+      %107 = llvm.load %106 : !llvm.ptr<3> -> f32
+      %108 = llvm.fmul %101, %107 : f32
+      %109 = llvm.fadd %94, %108 : f32
+      %110 = llvm.add %93, %arg16 : i64
+      llvm.br ^bb3(%110, %109 : i64, f32)
+    ^bb5:  // pred: ^bb3
+      nvvm.barrier
+      %111 = llvm.add %66, %arg0 : i64
+      llvm.br ^bb1(%111, %94 : i64, f32)
+    ^bb6:  // pred: ^bb1
+      %112 = llvm.extractvalue %7[1] : !llvm.struct<(ptr, ptr, i64, array<2 x i64>, array<2 x i64>)> 
+      %113 = llvm.mlir.constant(128 : index) : i64
+      %114 = llvm.mul %63, %113 overflow<nsw, nuw> : i64
+      %115 = llvm.add %114, %65 overflow<nsw, nuw> : i64
+      %116 = llvm.getelementptr inbounds|nuw %112[%115] : (!llvm.ptr, i64) -> !llvm.ptr, f32
+      llvm.store %67, %116 : f32, !llvm.ptr
+      llvm.return
+    }
+  }
+}
+
+
+// -----// IR Dump After GpuModuleToBinaryPass: gpu-module-to-binary{format=isa  opts= section= toolkit=} ('builtin.module' operation) //----- //
+module attributes {gpu.container_module} {
+  func.func @matmul(%arg0: memref<128x128xf32>, %arg1: memref<128x128xf32>, %arg2: memref<128x128xf32>) {
+    %c0 = arith.constant 0 : index
+    %c1 = arith.constant 1 : index
+    %c8 = arith.constant 8 : index
+    %c16 = arith.constant 16 : index
+    %c128 = arith.constant 128 : index
+    %cst = arith.constant 0.000000e+00 : f32
+    gpu.launch_func  @matmul_kernel::@matmul_kernel blocks in (%c8, %c8, %c1) threads in (%c16, %c16, %c1)  args(%c16 : index, %arg0 : memref<128x128xf32>, %arg1 : memref<128x128xf32>, %c0 : index, %c1 : index, %c128 : index, %cst : f32, %arg2 : memref<128x128xf32>)
+    return
+  }
+  gpu.binary @matmul_kernel  [#gpu.object<#nvvm.target<chip = "sm_80">, properties = {LLVMIRToISATimeInMs = 38 : i64, O = 2 : i32}, assembly = "//\0A// Generated by LLVM NVPTX Back-End\0A//\0A\0A.version 7.0\0A.target sm_80\0A.address_size 64\0A\0A\09// .globl\09matmul_kernel\0A// __wg_matmul_kernel_0 has been demoted\0A// __wg_matmul_kernel_1 has been demoted\0A\0A.visible .entry matmul_kernel(\0A\09.param .u64 matmul_kernel_param_0,\0A\09.param .u64 .ptr .align 1 matmul_kernel_param_1,\0A\09.param .u64 .ptr .align 1 matmul_kernel_param_2,\0A\09.param .u64 matmul_kernel_param_3,\0A\09.param .u64 matmul_kernel_param_4,\0A\09.param .u64 matmul_kernel_param_5,\0A\09.param .u64 matmul_kernel_param_6,\0A\09.param .u64 matmul_kernel_param_7,\0A\09.param .u64 .ptr .align 1 matmul_kernel_param_8,\0A\09.param .u64 .ptr .align 1 matmul_kernel_param_9,\0A\09.param .u64 matmul_kernel_param_10,\0A\09.param .u64 matmul_kernel_param_11,\0A\09.param .u64 matmul_kernel_param_12,\0A\09.param .u64 matmul_kernel_param_13,\0A\09.param .u64 matmul_kernel_param_14,\0A\09.param .u64 matmul_kernel_param_15,\0A\09.param .u64 matmul_kernel_param_16,\0A\09.param .u64 matmul_kernel_param_17,\0A\09.param .f32 matmul_kernel_param_18,\0A\09.param .u64 .ptr .align 1 matmul_kernel_param_19,\0A\09.param .u64 .ptr .align 1 matmul_kernel_param_20,\0A\09.param .u64 matmul_kernel_param_21,\0A\09.param .u64 matmul_kernel_param_22,\0A\09.param .u64 matmul_kernel_param_23,\0A\09.param .u64 matmul_kernel_param_24,\0A\09.param .u64 matmul_kernel_param_25\0A)\0A.maxntid 16, 16, 1\0A{\0A\09.reg .pred \09%p<5>;\0A\09.reg .b32 \09%r<11>;\0A\09.reg .b64 \09%rd<48>;\0A\09// demoted variable\0A\09.shared .align 4 .b8 __wg_matmul_kernel_0[1024];\0A\09// demoted variable\0A\09.shared .align 4 .b8 __wg_matmul_kernel_1[1024];\0A\09ld.param.b32 \09%r10, [matmul_kernel_param_18];\0A\09ld.param.b64 \09%rd18, [matmul_kernel_param_17];\0A\09ld.param.b64 \09%rd16, [matmul_kernel_param_15];\0A\09ld.param.b64 \09%rd15, [matmul_kernel_param_0];\0A\09ld.param.b64 \09%rd19, [matmul_kernel_param_9];\0A\09cvta.to.global.u64 \09%rd20, %rd19;\0A\09ld.param.b64 \09%rd21, [matmul_kernel_param_2];\0A\09cvta.to.global.u64 \09%rd1, %rd21;\0A\09ld.param.b64 \09%rd22, [matmul_kernel_param_20];\0A\09cvta.to.global.u64 \09%rd2, %rd22;\0A\09mov.u32 \09%r1, %ctaid.x;\0A\09cvt.u64.u32 \09%rd23, %r1;\0A\09mov.u32 \09%r2, %ctaid.y;\0A\09cvt.u64.u32 \09%rd24, %r2;\0A\09mov.u32 \09%r3, %tid.x;\0A\09cvt.u64.u32 \09%rd3, %r3;\0A\09mov.u32 \09%r4, %tid.y;\0A\09cvt.u64.u32 \09%rd4, %r4;\0A\09mad.lo.s64 \09%rd25, %rd15, %rd24, %rd4;\0A\09mad.lo.s64 \09%rd5, %rd15, %rd23, %rd3;\0A\09shl.b64 \09%rd26, %rd5, 2;\0A\09setp.ge.s64 \09%p1, %rd16, %rd18;\0A\09shl.b64 \09%rd7, %rd25, 9;\0A\09@%p1 bra \09$L__BB0_6;\0A\09ld.param.b64 \09%rd17, [matmul_kernel_param_16];\0A\09add.s64 \09%rd6, %rd20, %rd26;\0A\09add.s64 \09%rd27, %rd1, %rd7;\0A\09shl.b64 \09%rd28, %rd3, 2;\0A\09add.s64 \09%rd8, %rd27, %rd28;\0A\09shl.b64 \09%rd29, %rd4, 6;\0A\09or.b64 \09%rd30, %rd29, %rd28;\0A\09mov.b64 \09%rd31, __wg_matmul_kernel_0;\0A\09add.s64 \09%rd9, %rd31, %rd30;\0A\09mov.b64 \09%rd32, __wg_matmul_kernel_1;\0A\09add.s64 \09%rd10, %rd32, %rd30;\0A\09shl.b64 \09%rd33, %rd16, 2;\0A\09add.s64 \09%rd34, %rd29, %rd33;\0A\09add.s64 \09%rd11, %rd31, %rd34;\0A\09shl.b64 \09%rd12, %rd17, 2;\0A\09shl.b64 \09%rd35, %rd16, 6;\0A\09or.b64 \09%rd36, %rd35, %rd28;\0A\09add.s64 \09%rd13, %rd32, %rd36;\0A\09shl.b64 \09%rd14, %rd17, 6;\0A\09setp.ge.s64 \09%p2, %rd16, %rd15;\0A\09mov.b64 \09%rd44, %rd16;\0A\09bra.uni \09$L__BB0_2;\0A$L__BB0_5:\0A\09bar.sync \090;\0A\09add.s64 \09%rd44, %rd44, %rd15;\0A\09setp.lt.s64 \09%p4, %rd44, %rd18;\0A\09@!%p4 bra \09$L__BB0_6;\0A$L__BB0_2:\0A\09add.s64 \09%rd37, %rd44, %rd4;\0A\09shl.b64 \09%rd38, %rd44, 2;\0A\09add.s64 \09%rd39, %rd8, %rd38;\0A\09ld.global.b32 \09%r5, [%rd39];\0A\09shl.b64 \09%rd40, %rd37, 9;\0A\09add.s64 \09%rd41, %rd6, %rd40;\0A\09ld.global.b32 \09%r6, [%rd41];\0A\09st.shared.b32 \09[%rd9], %r5;\0A\09st.shared.b32 \09[%rd10], %r6;\0A\09bar.sync \090;\0A\09@%p2 bra \09$L__BB0_5;\0A\09mov.b64 \09%rd45, %rd13;\0A\09mov.b64 \09%rd46, %rd11;\0A\09mov.b64 \09%rd47, %rd16;\0A$L__BB0_4:\0A\09ld.shared.b32 \09%r7, [%rd46];\0A\09ld.shared.b32 \09%r8, [%rd45];\0A\09mul.rn.f32 \09%r9, %r7, %r8;\0A\09add.rn.f32 \09%r10, %r10, %r9;\0A\09add.s64 \09%rd47, %rd47, %rd17;\0A\09add.s64 \09%rd46, %rd46, %rd12;\0A\09add.s64 \09%rd45, %rd45, %rd14;\0A\09setp.lt.s64 \09%p3, %rd47, %rd15;\0A\09@%p3 bra \09$L__BB0_4;\0A\09bra.uni \09$L__BB0_5;\0A$L__BB0_6:\0A\09add.s64 \09%rd42, %rd2, %rd7;\0A\09add.s64 \09%rd43, %rd42, %rd26;\0A\09st.global.b32 \09[%rd43], %r10;\0A\09ret;\0A\0A}\0A">]
+}
+
+
+module attributes {gpu.container_module} {
+  func.func @matmul(%arg0: memref<128x128xf32>, %arg1: memref<128x128xf32>, %arg2: memref<128x128xf32>) {
+    %c0 = arith.constant 0 : index
+    %c1 = arith.constant 1 : index
+    %c8 = arith.constant 8 : index
+    %c16 = arith.constant 16 : index
+    %c128 = arith.constant 128 : index
+    %cst = arith.constant 0.000000e+00 : f32
+    gpu.launch_func  @matmul_kernel::@matmul_kernel blocks in (%c8, %c8, %c1) threads in (%c16, %c16, %c1)  args(%c16 : index, %arg0 : memref<128x128xf32>, %arg1 : memref<128x128xf32>, %c0 : index, %c1 : index, %c128 : index, %cst : f32, %arg2 : memref<128x128xf32>)
+    return
+  }
+  gpu.binary @matmul_kernel  [#gpu.object<#nvvm.target<chip = "sm_80">, properties = {LLVMIRToISATimeInMs = 38 : i64, O = 2 : i32}, assembly = "//\0A// Generated by LLVM NVPTX Back-End\0A//\0A\0A.version 7.0\0A.target sm_80\0A.address_size 64\0A\0A\09// .globl\09matmul_kernel\0A// __wg_matmul_kernel_0 has been demoted\0A// __wg_matmul_kernel_1 has been demoted\0A\0A.visible .entry matmul_kernel(\0A\09.param .u64 matmul_kernel_param_0,\0A\09.param .u64 .ptr .align 1 matmul_kernel_param_1,\0A\09.param .u64 .ptr .align 1 matmul_kernel_param_2,\0A\09.param .u64 matmul_kernel_param_3,\0A\09.param .u64 matmul_kernel_param_4,\0A\09.param .u64 matmul_kernel_param_5,\0A\09.param .u64 matmul_kernel_param_6,\0A\09.param .u64 matmul_kernel_param_7,\0A\09.param .u64 .ptr .align 1 matmul_kernel_param_8,\0A\09.param .u64 .ptr .align 1 matmul_kernel_param_9,\0A\09.param .u64 matmul_kernel_param_10,\0A\09.param .u64 matmul_kernel_param_11,\0A\09.param .u64 matmul_kernel_param_12,\0A\09.param .u64 matmul_kernel_param_13,\0A\09.param .u64 matmul_kernel_param_14,\0A\09.param .u64 matmul_kernel_param_15,\0A\09.param .u64 matmul_kernel_param_16,\0A\09.param .u64 matmul_kernel_param_17,\0A\09.param .f32 matmul_kernel_param_18,\0A\09.param .u64 .ptr .align 1 matmul_kernel_param_19,\0A\09.param .u64 .ptr .align 1 matmul_kernel_param_20,\0A\09.param .u64 matmul_kernel_param_21,\0A\09.param .u64 matmul_kernel_param_22,\0A\09.param .u64 matmul_kernel_param_23,\0A\09.param .u64 matmul_kernel_param_24,\0A\09.param .u64 matmul_kernel_param_25\0A)\0A.maxntid 16, 16, 1\0A{\0A\09.reg .pred \09%p<5>;\0A\09.reg .b32 \09%r<11>;\0A\09.reg .b64 \09%rd<48>;\0A\09// demoted variable\0A\09.shared .align 4 .b8 __wg_matmul_kernel_0[1024];\0A\09// demoted variable\0A\09.shared .align 4 .b8 __wg_matmul_kernel_1[1024];\0A\09ld.param.b32 \09%r10, [matmul_kernel_param_18];\0A\09ld.param.b64 \09%rd18, [matmul_kernel_param_17];\0A\09ld.param.b64 \09%rd16, [matmul_kernel_param_15];\0A\09ld.param.b64 \09%rd15, [matmul_kernel_param_0];\0A\09ld.param.b64 \09%rd19, [matmul_kernel_param_9];\0A\09cvta.to.global.u64 \09%rd20, %rd19;\0A\09ld.param.b64 \09%rd21, [matmul_kernel_param_2];\0A\09cvta.to.global.u64 \09%rd1, %rd21;\0A\09ld.param.b64 \09%rd22, [matmul_kernel_param_20];\0A\09cvta.to.global.u64 \09%rd2, %rd22;\0A\09mov.u32 \09%r1, %ctaid.x;\0A\09cvt.u64.u32 \09%rd23, %r1;\0A\09mov.u32 \09%r2, %ctaid.y;\0A\09cvt.u64.u32 \09%rd24, %r2;\0A\09mov.u32 \09%r3, %tid.x;\0A\09cvt.u64.u32 \09%rd3, %r3;\0A\09mov.u32 \09%r4, %tid.y;\0A\09cvt.u64.u32 \09%rd4, %r4;\0A\09mad.lo.s64 \09%rd25, %rd15, %rd24, %rd4;\0A\09mad.lo.s64 \09%rd5, %rd15, %rd23, %rd3;\0A\09shl.b64 \09%rd26, %rd5, 2;\0A\09setp.ge.s64 \09%p1, %rd16, %rd18;\0A\09shl.b64 \09%rd7, %rd25, 9;\0A\09@%p1 bra \09$L__BB0_6;\0A\09ld.param.b64 \09%rd17, [matmul_kernel_param_16];\0A\09add.s64 \09%rd6, %rd20, %rd26;\0A\09add.s64 \09%rd27, %rd1, %rd7;\0A\09shl.b64 \09%rd28, %rd3, 2;\0A\09add.s64 \09%rd8, %rd27, %rd28;\0A\09shl.b64 \09%rd29, %rd4, 6;\0A\09or.b64 \09%rd30, %rd29, %rd28;\0A\09mov.b64 \09%rd31, __wg_matmul_kernel_0;\0A\09add.s64 \09%rd9, %rd31, %rd30;\0A\09mov.b64 \09%rd32, __wg_matmul_kernel_1;\0A\09add.s64 \09%rd10, %rd32, %rd30;\0A\09shl.b64 \09%rd33, %rd16, 2;\0A\09add.s64 \09%rd34, %rd29, %rd33;\0A\09add.s64 \09%rd11, %rd31, %rd34;\0A\09shl.b64 \09%rd12, %rd17, 2;\0A\09shl.b64 \09%rd35, %rd16, 6;\0A\09or.b64 \09%rd36, %rd35, %rd28;\0A\09add.s64 \09%rd13, %rd32, %rd36;\0A\09shl.b64 \09%rd14, %rd17, 6;\0A\09setp.ge.s64 \09%p2, %rd16, %rd15;\0A\09mov.b64 \09%rd44, %rd16;\0A\09bra.uni \09$L__BB0_2;\0A$L__BB0_5:\0A\09bar.sync \090;\0A\09add.s64 \09%rd44, %rd44, %rd15;\0A\09setp.lt.s64 \09%p4, %rd44, %rd18;\0A\09@!%p4 bra \09$L__BB0_6;\0A$L__BB0_2:\0A\09add.s64 \09%rd37, %rd44, %rd4;\0A\09shl.b64 \09%rd38, %rd44, 2;\0A\09add.s64 \09%rd39, %rd8, %rd38;\0A\09ld.global.b32 \09%r5, [%rd39];\0A\09shl.b64 \09%rd40, %rd37, 9;\0A\09add.s64 \09%rd41, %rd6, %rd40;\0A\09ld.global.b32 \09%r6, [%rd41];\0A\09st.shared.b32 \09[%rd9], %r5;\0A\09st.shared.b32 \09[%rd10], %r6;\0A\09bar.sync \090;\0A\09@%p2 bra \09$L__BB0_5;\0A\09mov.b64 \09%rd45, %rd13;\0A\09mov.b64 \09%rd46, %rd11;\0A\09mov.b64 \09%rd47, %rd16;\0A$L__BB0_4:\0A\09ld.shared.b32 \09%r7, [%rd46];\0A\09ld.shared.b32 \09%r8, [%rd45];\0A\09mul.rn.f32 \09%r9, %r7, %r8;\0A\09add.rn.f32 \09%r10, %r10, %r9;\0A\09add.s64 \09%rd47, %rd47, %rd17;\0A\09add.s64 \09%rd46, %rd46, %rd12;\0A\09add.s64 \09%rd45, %rd45, %rd14;\0A\09setp.lt.s64 \09%p3, %rd47, %rd15;\0A\09@%p3 bra \09$L__BB0_4;\0A\09bra.uni \09$L__BB0_5;\0A$L__BB0_6:\0A\09add.s64 \09%rd42, %rd2, %rd7;\0A\09add.s64 \09%rd43, %rd42, %rd26;\0A\09st.global.b32 \09[%rd43], %r10;\0A\09ret;\0A\0A}\0A">]
+}
+
