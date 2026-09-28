@@ -8,6 +8,18 @@ import {
   opCountTable,
   totalOps,
 } from "./opcount.js";
+import {
+  analyzeBuffers,
+  bufferTotals,
+  buffersToJSON,
+  compareBuffers,
+} from "./buffers.js";
+import {
+  renderFunctions,
+  renderPasses,
+  renderSummary,
+  signedBytes,
+} from "./buffers-view.js";
 import { bindHighlighting } from "./mlir-highlight.js";
 import { CommandPalette } from "./palette.js";
 import { loadSampleState, RENAME_SAMPLE, SAMPLES } from "./samples.js";
@@ -69,6 +81,7 @@ const helpDialog = document.getElementById("help");
 const zoomLevel = document.getElementById("zoom-level");
 const timingOpen = document.getElementById("timing-open");
 const opCountOpen = document.getElementById("opcount-open");
+const buffersOpen = document.getElementById("buffers-open");
 const TABS = [
   { tab: baselineTitle, textarea: baseline },
   { tab: currentTitle, textarea: input },
@@ -93,6 +106,10 @@ let viewCounts = null;
 let renderedText = "";
 // Whole-module op counts for each trace event, computed when first shown.
 let traceCounts = null;
+// Buffer analyses of the rendered baseline and current IR, and whole-module
+// buffer totals for each trace event (computed when first shown).
+let viewBuffers = null;
+let traceBuffers = null;
 
 const renderer = new CanvasRenderer(canvas, {
   onSelect(index, snap) {
@@ -294,6 +311,7 @@ function run() {
     if (before.status !== STATUS.OK) {
       setStatus(`baseline error: ${engine.statusText}`, { error: true });
       setViewCounts(null);
+      setViewBuffers(null);
       return;
     }
     beforeCopy = copySnapshot(before.snapshot);
@@ -313,6 +331,7 @@ function run() {
     setStatus(`current error: ${engine.statusText}`, { error: true });
     renderer.setSnapshot(null);
     setViewCounts(null);
+    setViewBuffers(null);
     return;
   }
 
@@ -322,6 +341,10 @@ function run() {
   setViewCounts({
     before: beforeCopy ? countOps(beforeCopy) : null,
     after: countOps(snap),
+  });
+  setViewBuffers({
+    before: beforeCopy ? analyzeBuffers(baseline.value) : null,
+    after: analyzeBuffers(current),
   });
   const diags = snap.diagnostics();
   const rows = diffSnapshots(beforeCopy, snap);
@@ -340,6 +363,7 @@ function loadTrace(text, { keepIndex = false } = {}) {
   traceText = text;
   trace = parsePassTrace(text);
   traceCounts = null;
+  traceBuffers = null;
   if (!trace.events.length) {
     clearTrace();
     setStatus("no IR dumps found in trace", { error: true });
@@ -445,6 +469,7 @@ function selectEvent(index) {
 function clearTrace() {
   trace = null;
   traceCounts = null;
+  traceBuffers = null;
   traceText = "";
   traceNote = "";
   traceIndex = -1;
@@ -568,6 +593,12 @@ function markSourceLine(index) {
     const lines = input.value.split("\n");
     markedLine = lines.findIndex((line) => pattern.test(line) && nth-- === 0);
   }
+  showSourceLine(markedLine);
+}
+
+// Marks a 0-based line of the current source and scrolls it into view.
+function showSourceLine(line) {
+  markedLine = line;
   if (markedLine >= 0) {
     if (!sourcePane.classList.contains("split")) showTab(input);
     const lineHeight = parseFloat(getComputedStyle(input).lineHeight);
@@ -690,6 +721,7 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
     ["Export diff as JSON", "", () => exportDiff("json")],
     ["Show pass timing and memory", "p", openTiming],
     ["Show op counts per pass", "o", openOpCounts],
+    ["Show buffers and peak memory", "b", openBuffers],
     ...(canWatchFiles
       ? [
           watcher.watching
@@ -778,6 +810,7 @@ const WORKSPACE_KEYS = {
   s: toggleSplit,
   p: openTiming,
   o: openOpCounts,
+  b: openBuffers,
   "[": () => trace && traceIndex > 0 && selectEvent(traceIndex - 1),
   "]": () =>
     trace &&
@@ -1416,6 +1449,104 @@ document
   .addEventListener("click", exportOpCounts);
 opCountDialog.addEventListener("click", (e) => {
   if (e.target === opCountDialog) opCountDialog.close();
+});
+
+// ---- Buffers ---------------------------------------------------------------
+
+const buffersDialog = document.getElementById("buffers");
+const buffersSummary = document.getElementById("buffers-summary");
+const buffersEmpty = document.getElementById("buffers-empty");
+const buffersFunctions = document.getElementById("buffers-functions");
+const buffersPasses = document.getElementById("buffers-passes");
+const buffersPassTable = document.getElementById("buffers-pass-table");
+const buffersChangedPasses = document.getElementById("buffers-changed-passes");
+const buffersPassShown = document.getElementById("buffers-pass-shown");
+let buffersModel = null;
+
+function setViewBuffers(analyses) {
+  viewBuffers = analyses;
+  const after = analyses && bufferTotals(analyses.after);
+  const before = analyses?.before && bufferTotals(analyses.before);
+  buffersOpen.hidden = !after || (!after.buffers && !before?.buffers);
+  if (buffersOpen.hidden) return;
+  const delta = before ? after.peak - before.peak : 0;
+  buffersOpen.textContent =
+    `▦ ${formatBytes(after.peak)}` + (delta ? ` (${signedBytes(delta)})` : "");
+}
+
+// Text only: no engine parse, so the graph's snapshot is left alone.
+function computeTraceBuffers() {
+  return trace.events.map((_, i) =>
+    bufferTotals(analyzeBuffers(moduleStateAt(trace.events, i))),
+  );
+}
+
+function openBuffers() {
+  goToWorkspace();
+  if (!viewBuffers) {
+    setStatus("no parsed IR to analyze", { error: true });
+    return;
+  }
+  const { before, after } = viewBuffers;
+  const comparison = compareBuffers(before, after);
+  if (trace) traceBuffers ??= computeTraceBuffers();
+  buffersModel = { comparison, passes: trace ? traceBuffers : null };
+
+  renderSummary(buffersSummary, {
+    before: before && bufferTotals(before),
+    after: bufferTotals(after),
+    globals: after.globals,
+  });
+  const shown = renderFunctions(buffersFunctions, comparison, {
+    hasBaseline: !!before,
+    onLine(line) {
+      buffersDialog.close();
+      showSourceLine(line);
+    },
+  });
+  buffersEmpty.hidden = shown > 0;
+  buffersPasses.hidden = !trace;
+  if (trace) renderBufferPasses();
+  buffersDialog.showModal();
+}
+
+function renderBufferPasses() {
+  const rows = trace.events.map((event, i) => ({
+    header: `#${event.index + 1}`,
+    title: describeEvent(event),
+    totals: traceBuffers[i],
+  }));
+  const { shown, changed } = renderPasses(buffersPassTable, rows, {
+    current: traceIndex,
+    onlyChanged: buffersChangedPasses.checked,
+    onPass(i) {
+      buffersDialog.close();
+      selectEvent(i);
+    },
+  });
+  buffersPassShown.textContent = `${shown} of ${rows.length} dumps · ${changed} change buffers`;
+}
+
+function exportBuffers() {
+  if (!buffersModel) return;
+  const passes = buffersModel.passes?.map((totals, i) => ({
+    pass: describeEvent(trace.events[i]),
+    ...totals,
+  }));
+  download(
+    `${slug(sourceName.textContent.replace(/ ●$/, ""))}-buffers.json`,
+    buffersToJSON(sourceName.textContent, buffersModel.comparison, passes),
+    "application/json",
+  );
+}
+
+buffersOpen.addEventListener("click", openBuffers);
+buffersChangedPasses.addEventListener("change", renderBufferPasses);
+document
+  .getElementById("buffers-export")
+  .addEventListener("click", exportBuffers);
+buffersDialog.addEventListener("click", (e) => {
+  if (e.target === buffersDialog) buffersDialog.close();
 });
 
 // ---- Export ----------------------------------------------------------------
