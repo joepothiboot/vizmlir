@@ -1057,6 +1057,120 @@
       #timing-table .link-btn:hover {
         color: var(--accent);
       }
+      #opcount {
+        width: min(1100px, calc(100vw - 32px));
+        padding: 18px 20px;
+      }
+      #opcount h2 {
+        margin: 0 0 6px;
+        font-size: 14px;
+      }
+      #opcount-summary {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 4px 16px;
+        margin: 0 0 12px;
+      }
+      #opcount-summary dt {
+        color: var(--dim);
+      }
+      #opcount-summary dd {
+        margin: 0;
+      }
+      .opcount-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 14px;
+        margin: 0 0 10px;
+        font-size: 11px;
+      }
+      .opcount-controls input[type="search"] {
+        width: 200px;
+      }
+      .opcount-controls label {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        color: var(--dim);
+      }
+      .opcount-controls label[hidden],
+      #opcount-open[hidden] {
+        display: none;
+      }
+      #opcount-shown {
+        margin: 0;
+      }
+      .opcount-scroll {
+        max-height: min(520px, 60vh);
+        margin: 0 0 14px;
+        overflow: auto;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+      }
+      #opcount-table {
+        border-collapse: separate;
+        border-spacing: 0;
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+      }
+      #opcount-table th,
+      #opcount-table td {
+        padding: 4px 8px;
+        border-top: 1px solid var(--line);
+        background: var(--panel);
+        text-align: right;
+        white-space: nowrap;
+      }
+      #opcount-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        border-top: 0;
+        background: var(--raised);
+        color: var(--dim);
+        font-weight: 600;
+      }
+      #opcount-table .op {
+        position: sticky;
+        left: 0;
+        z-index: 1;
+        max-width: 260px;
+        overflow: hidden;
+        border-right: 1px solid var(--line);
+        font-family: var(--code);
+        text-align: left;
+        text-overflow: ellipsis;
+      }
+      #opcount-table thead .op {
+        z-index: 2;
+      }
+      #opcount-table tr.total td {
+        font-weight: 600;
+      }
+      #opcount-table td.same {
+        color: var(--faint);
+      }
+      #opcount-table td.up {
+        color: var(--warn);
+      }
+      #opcount-table td.down {
+        color: var(--good);
+      }
+      #opcount-table .current {
+        box-shadow: inset 0 -2px 0 var(--accent);
+      }
+      #opcount-table .delta {
+        border-left: 1px solid var(--line);
+      }
+      #opcount-table .link-btn {
+        padding: 0;
+        color: inherit;
+        font: inherit;
+      }
+      #opcount-table .link-btn:hover {
+        color: var(--accent);
+      }
       .timing-scroll[hidden],
       #timing-open[hidden] {
         display: none;
@@ -1503,6 +1617,12 @@
           >
             ⏱
           </button>
+          <button
+            id="opcount-open"
+            class="link-btn"
+            title="Op counts per pass (o)"
+            hidden
+          ></button>
           <span id="detail">—</span>
           <span id="abi"></span>
         </div>
@@ -1582,6 +1702,8 @@
           <dd>Split: show both sources</dd>
           <dt><kbd>p</kbd></dt>
           <dd>Pass timing and memory</dd>
+          <dt><kbd>o</kbd></dt>
+          <dd>Op counts per pass</dd>
           <dt><kbd>m</kbd></dt>
           <dd>Show / hide the menu</dd>
           <dt><kbd>shift</kbd> <kbd>L</kbd></dt>
@@ -1613,6 +1735,38 @@
         </div>
         <div class="dialog-actions">
           <button id="timing-export">Download .json</button>
+          <span class="sp"></span>
+          <form method="dialog"><button>Close</button></form>
+        </div>
+      </dialog>
+
+      <dialog id="opcount" aria-labelledby="opcount-title">
+        <h2 id="opcount-title">Op counts</h2>
+        <p id="opcount-note" class="dialog-note"></p>
+        <dl id="opcount-summary"></dl>
+        <div class="opcount-controls">
+          <input
+            id="opcount-filter"
+            type="search"
+            placeholder="Filter ops…"
+            aria-label="Filter ops by name"
+            autocomplete="off"
+          />
+          <label
+            ><input id="opcount-changed-ops" type="checkbox" checked /> Only ops
+            that change</label
+          >
+          <label id="opcount-changed-passes-label"
+            ><input id="opcount-changed-passes" type="checkbox" checked /> Only
+            passes that change counts</label
+          >
+          <span id="opcount-shown" class="dialog-note"></span>
+        </div>
+        <div class="opcount-scroll">
+          <table id="opcount-table"></table>
+        </div>
+        <div class="dialog-actions">
+          <button id="opcount-export">Download .csv</button>
           <span class="sp"></span>
           <form method="dialog"><button>Close</button></form>
         </div>
