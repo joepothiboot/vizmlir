@@ -1,10 +1,47 @@
 import { describe, expect, it } from "vitest";
 import {
   changesAt,
+  findSymbolNode,
   historyToJSON,
   scanSymbols,
   symbolHistory,
 } from "../../src/provenance.js";
+
+describe("findSymbolNode", () => {
+  // [label, parent] shaped like MlirEngine#snapshot().
+  const snapshot = (nodes) => ({
+    nodeCount: nodes.length,
+    labelOf: (i) => nodes[i][0],
+    parentOf: (i) => nodes[i][1],
+  });
+  const module = snapshot([
+    ["module", -1],
+    ["func.func @main", 0],
+    ["gpu.launch_func @k::@k", 1],
+    ["gpu.module @k", 0],
+    ["gpu.func @k", 3],
+    ["gpu.return", 4],
+  ]);
+
+  it("finds a nested kernel rather than its module", () => {
+    expect(findSymbolNode(module, "@k::@k")).toBe(4);
+    expect(findSymbolNode(module, "@k")).toBe(3);
+    expect(findSymbolNode(module, "@main")).toBe(1);
+  });
+
+  it("finds a kernel in a dump of its module alone", () => {
+    const nested = snapshot([
+      ["gpu.module @k", -1],
+      ["llvm.func @k", 0],
+    ]);
+    expect(findSymbolNode(nested, "@k::@k")).toBe(1);
+  });
+
+  it("returns -1 when the symbol is not drawn", () => {
+    expect(findSymbolNode(module, "@other")).toBe(-1);
+    expect(findSymbolNode(null, "@k")).toBe(-1);
+  });
+});
 import { describeEvent, parsePassTrace } from "../../src/trace.js";
 
 const header = (pass, arg, anchor) =>
@@ -159,6 +196,13 @@ describe("symbolHistory", () => {
   it("reports removed symbols", () => {
     expect(kinds("@helper")).toEqual([[4, "removed", "func.func"]]);
     expect(byPath["@helper"].removed).toBe(true);
+  });
+
+  it("records the last dump that shows each symbol", () => {
+    // #3 dumps only the gpu.module; #5 serializes the kernel away.
+    expect(byPath["@main_kernel::@main_kernel"].lastDump).toBe(3);
+    expect(byPath["@main_kernel"].lastDump).toBe(4);
+    expect(byPath["@helper"].lastDump).toBe(3);
   });
 
   it("exports changes with pass names", () => {

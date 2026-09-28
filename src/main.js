@@ -20,7 +20,11 @@ import {
   renderSummary,
   signedBytes,
 } from "./buffers-view.js";
-import { historyToJSON, symbolHistory } from "./provenance.js";
+import {
+  findSymbolNode,
+  historyToJSON,
+  symbolHistory,
+} from "./provenance.js";
 import {
   changedBeyond,
   compareBenchmarks,
@@ -93,6 +97,7 @@ const zoomLevel = document.getElementById("zoom-level");
 const timingOpen = document.getElementById("timing-open");
 const opCountOpen = document.getElementById("opcount-open");
 const buffersOpen = document.getElementById("buffers-open");
+const symbolsOpen = document.getElementById("symbols-open");
 const TABS = [
   { tab: baselineTitle, textarea: baseline },
   { tab: currentTitle, textarea: input },
@@ -438,6 +443,7 @@ function loadTrace(text, { keepIndex = false } = {}) {
         ? firstFailure
         : 0,
   );
+  updateSymbolsOpen();
 }
 
 function selectEvent(index) {
@@ -501,6 +507,7 @@ function clearTrace() {
   baselineTitle.textContent = "Baseline";
   currentTitle.textContent = "Current";
   renderDiagnostics([]);
+  updateSymbolsOpen();
 }
 
 function renderDiagnostics(diagnostics) {
@@ -1001,6 +1008,7 @@ function applyState(state) {
         setBenchmarks(slot, saved[slot].name, saved[slot].text, saved[slot].mock);
       } catch {}
     }
+    updateSymbolsOpen();
   } else {
     baseline.value = state.baseline ?? "";
     input.value = state.current ?? "";
@@ -1801,10 +1809,21 @@ function renderSymbols() {
   for (const record of rows) {
     const tr = document.createElement("tr");
     if (record.removed) tr.className = "gone";
-    const sym = cell("td", record.path, "sym");
-    sym.title = record.initial
-      ? "In the first dump"
-      : "Created during the trace";
+    const sym = cell("td", "", "sym");
+    const show = document.createElement("button");
+    show.className = "link-btn";
+    show.textContent = record.path;
+    show.disabled = record.lastDump < 0;
+    show.title =
+      (record.initial ? "In the first dump" : "Created during the trace") +
+      (record.lastDump < 0
+        ? "\nNo dump shows it on its own"
+        : `\nShow it in #${record.lastDump + 1} ${describeEvent(trace.events[record.lastDump])}`);
+    show.addEventListener("click", () => {
+      symbolsDialog.close();
+      showSymbol(record);
+    });
+    sym.append(show);
     const steps = document.createElement("div");
     steps.className = "steps";
     if (!record.changes.length)
@@ -1865,6 +1884,35 @@ function renderSymbols() {
     tbody.append(tr);
   }
   symbolsTable.replaceChildren(thead, tbody);
+  updateSymbolsOpen();
+}
+
+// Goes to the last pass whose dump shows the symbol and selects its node,
+// which also marks its line in the source.
+function showSymbol(record) {
+  if (record.lastDump < 0) return;
+  goToWorkspace();
+  selectEvent(record.lastDump);
+  const node = findSymbolNode(renderer.snapshot, record.path);
+  if (node >= 0) renderer.select(node, { center: true });
+  else setStatus(`${record.path} is not drawn in this pass`, { error: true });
+}
+
+// The status-bar entry: "@ symbols", or how many kernels got slower when a
+// baseline and current run are compared.
+function updateSymbolsOpen() {
+  symbolsOpen.hidden = !trace;
+  if (!trace) return;
+  const view = benchmarkView();
+  if (!view?.both) {
+    symbolsOpen.textContent = "@ symbols";
+    return;
+  }
+  const threshold = Number(symbolsMinChange.value) || 0;
+  const slower = [...view.comparison.values()].filter(
+    (row) => row.change !== null && row.change * 100 > threshold,
+  ).length;
+  symbolsOpen.textContent = `@ ${slower} slower`;
 }
 
 function renderUnmatched(unmatched, labelSlots) {
@@ -1906,6 +1954,7 @@ function exportSymbols() {
   );
 }
 
+symbolsOpen.addEventListener("click", openSymbols);
 symbolsFilter.addEventListener("input", renderSymbols);
 symbolsChanged.addEventListener("change", renderSymbols);
 symbolsAtPass.addEventListener("change", renderSymbols);

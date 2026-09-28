@@ -1425,6 +1425,13 @@
         font-family: var(--code);
         white-space: nowrap;
       }
+      #symbols-table .sym .link-btn {
+        font-family: inherit;
+        text-align: left;
+      }
+      #symbols-table .sym .link-btn:disabled {
+        cursor: default;
+      }
       #symbols-table tr.gone .sym {
         color: var(--faint);
         text-decoration: line-through;
@@ -1496,6 +1503,7 @@
         font-size: 11px;
       }
       .mock-note[hidden],
+      #symbols-open[hidden],
       #symbols-bench[hidden],
       #symbols-bench-error[hidden],
       #symbols-bench-clear[hidden] {
@@ -1960,6 +1968,12 @@
             id="buffers-open"
             class="link-btn"
             title="Buffers and peak memory (b)"
+            hidden
+          ></button>
+          <button
+            id="symbols-open"
+            class="link-btn"
+            title="Symbol history: which pass made each kernel (h)"
             hidden
           ></button>
           <span id="detail">—</span>
