@@ -2037,8 +2037,16 @@ symbolsDialog.addEventListener("click", (e) => {
 
 // ---- GPU view ----------------------------------------------------------------
 
-// Picking an access marks its line (1-based) in the current source.
-const GPU_VIEW_OPTIONS = { onLine: (line) => showSourceLine(line - 1) };
+// Picking an access marks its line (1-based) in the current source. With a
+// pass trace open, the answer card follows the picked access across passes
+// and a click on a pass selects it.
+const GPU_VIEW_OPTIONS = {
+  onLine: (line) => showSourceLine(line - 1),
+  passes: () =>
+    trace?.events.length > 1
+      ? { events: trace.events, current: traceIndex, select: selectEvent, describe: describeEvent }
+      : null,
+};
 
 // The side panel shows the pass diff, or the GPU path of the picked line.
 // It follows the canvas (GPU view → GPU path) until the person picks a tab.

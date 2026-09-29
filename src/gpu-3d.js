@@ -176,6 +176,8 @@ function palette() {
     warpA: mix(t.good, t.raised, 0.5),
     warpB: mix(t.good, t.raised, 0.32),
     faded: mix(t.good, t.raised, 0.14),
+    provenGood: mix(t.good, t.bg, 0.35),
+    provenBad: mix(t.warn, t.bg, 0.35),
     // Same order as the lane strip in Memory accesses (.g0 … .g3).
     groups: [
       mix(t.good, t.raised, 0.8),
@@ -427,8 +429,12 @@ export function gpuScene(launch, kernel, { onLine } = {}) {
               : mix(colors.dim, colors.bg, 0.3);
       return slice && !slice.has(node.id) ? mix(base, colors.bg, 0.25) : base;
     }
-    if (cube.kind === "block")
-      return cube === selected ? colors.open : colors.block;
+    if (cube.kind === "block") {
+      if (cube === selected) return colors.open;
+      // A proven verdict holds in every block: tint them all with it.
+      if (access?.proven) return access.good ? colors.provenGood : colors.provenBad;
+      return colors.block;
+    }
     const lane = access?.lanes.get(cube.id.join(","));
     if (lane) return colors.groups[lane.order % 4];
     if (access) return colors.faded;
@@ -720,7 +726,9 @@ export function gpuScene(launch, kernel, { onLine } = {}) {
     };
     const top = Math.max(gridBox.max[1], threadBox?.max[1] ?? 0) + 1.2;
     title(
-      [`Grid · ${dimText(layout.grid)} blocks`],
+      access?.proven
+        ? [`Grid · ${dimText(layout.grid)} blocks`, "Same pattern in every block: proven"]
+        : [`Grid · ${dimText(layout.grid)} blocks`],
       [(gridBox.min[0] + gridBox.max[0]) / 2, top, gridBox.max[2] + 1.6],
     );
     if (threadBox) {
@@ -952,6 +960,8 @@ export function gpuScene(launch, kernel, { onLine } = {}) {
         access = {
           buffer: judged.access.buffer,
           unit,
+          proven: result.proof?.status === "proven",
+          good: ["coalesced", "broadcast", "conflict-free"].includes(result.verdict),
           text: `${judged.access.kind === "load" ? "load" : "store"} ${judged.access.buffer} · ${groups.length} ${unit}${groups.length > 1 ? "s" : ""}`,
           lanes: new Map(
             result.lanes.map((l) => [
