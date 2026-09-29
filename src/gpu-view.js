@@ -85,7 +85,9 @@ function launchSection(launch, kernel, options) {
   section.append(scene.figure);
   const onPick = (judged) => {
     answer.show(judged);
-    scene.showAccess(judged);
+    scene.showAccess(judged, { formula: depth === "compiler" });
+    // Compiler mode also writes the offset's formula in the 3D view.
+    answer.onDepth = () => scene.showAccess(judged, { formula: depth === "compiler" });
     scene.showElements(
       judged.result.analyzed
         ? elementMap(judged.access, judged.result, judged.memref, groupOrder(judged.result))
@@ -318,7 +320,14 @@ function answerCard(kernel, options) {
         } catch {
           // Remembering is a nicety.
         }
-        for (const other of cards) other.isConnected ? other.render() : cards.delete(other);
+        for (const other of cards) {
+          if (!other.isConnected) {
+            cards.delete(other);
+            continue;
+          }
+          other.render();
+          other.onDepth?.();
+        }
       });
       toggle.append(button);
     }
