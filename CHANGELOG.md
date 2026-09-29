@@ -49,6 +49,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Label ops whose operands contain `=` by their op name: `scf.for %i = %c0 to ..` was labeled `%c0`, and `linalg.generic {indexing_maps = ..}` was labeled `[`. Values bound with `%x =` inside an op (induction variables, `iter_args`) are now definitions.
 - Stop treating a region op's trailing types (`} -> tensor<..>`, `} : ..`) as a separate `->` op.
+- Function arguments (`func.func @f(%arg0: T)`), the ids and buffers `gpu.launch` binds in `blocks(..)`, `threads(..)`, `clusters(..)`, `workgroup(..)` and `private(..)`, and the induction variables of `scf.forall` and `scf.parallel` are now definitions. They were reported as undefined SSA values (60 warnings on the transpose sample), and their uses had no edges in the graph.
+- The launch facts write the warp count with a thousands separator ("32,768 warps"), like the rest of the GPU view.
 
 ## [0.3.0] - 2026-09-26
 
