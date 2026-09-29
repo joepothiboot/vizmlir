@@ -3,11 +3,13 @@
 // kernel's buffers by memory space (global, shared per block, private per
 // thread). After gpu-module-to-binary{format=isa}, the PTX register and shared
 // memory declarations are read too. Nothing here runs the kernel, so launch
-// sizes that are only known at runtime stay null.
+// sizes that are only known at runtime stay null. Triton GPU IR is read by
+// src/triton.js into the same model.
 
 import { parseMemref } from "./buffers.js";
 import { affineAliases, buildDefs, findAccesses } from "./gpu-access.js";
 import { embeddedAssembly, scanSymbols } from "./provenance.js";
+import { analyzeTriton, isTriton } from "./triton.js";
 
 const LAUNCH_FUNC =
   /\bgpu\.launch_func\b.*?@([\w$.-]+|"[^"]*")::@([\w$.-]+|"[^"]*")/;
@@ -263,6 +265,7 @@ export function loweredArgs(operands, params, valueOf) {
 }
 
 export function analyzeGpu(ir) {
+  if (isTriton(ir)) return analyzeTriton(ir);
   if (!/\bgpu\./.test(ir)) return null;
   const lines = ir.split("\n");
   const maps = affineAliases(ir);
