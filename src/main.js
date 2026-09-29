@@ -999,7 +999,9 @@ sampleList.replaceChildren(
     kind.textContent = sample.benchmarks
       ? "trace + mock benchmarks"
       : sample.trace
-        ? "pass trace"
+        ? sample.handwritten
+          ? "pass trace (hand-written)"
+          : "pass trace"
         : "before / after";
     const blurb = document.createElement("span");
     blurb.className = "blurb";

@@ -119,6 +119,9 @@ pub fn parse(src: &str, interner: &mut Interner, ast: &mut Ast) {
                     }
                     depth += 1;
                 }
+                // A brace nested in a type or attribute (`#ttg.slice<{dim = 1}>`)
+                // pairs with its `}` below.
+                Tok::LBrace => depth += 1,
                 Tok::RBrace if depth == 0 => break,
                 Tok::RBrace => depth -= 1,
                 Tok::Newline if depth <= 0 => {
@@ -317,6 +320,21 @@ mod tests {
     fn forall_induction_variables_are_defined() {
         let src = "func.func @f(%a: memref<8xf32>) {\n  scf.forall (%i) in (8) {\n    %v = memref.load %a[%i] : memref<8xf32>\n  }\n  return\n}\n";
         assert!(undefined(src).is_empty(), "{:?}", undefined(src));
+    }
+
+    // Triton types nest braces in angle brackets: `#ttg.slice<{dim = 1, ..}>`.
+    #[test]
+    fn braces_inside_types_stay_balanced() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../public/samples/triton-coalesce.trace.txt");
+        let trace = std::fs::read_to_string(path).unwrap();
+        for dump in trace.split("// -----// IR Dump").skip(1) {
+            let ir: String = dump.lines().skip(1).collect::<Vec<_>>().join("\n");
+            let mut interner = Interner::new();
+            let mut ast = Ast::new();
+            parse(&ir, &mut interner, &mut ast);
+            let lines: Vec<u32> = ast.diags.iter().map(|d| d.line).collect();
+            assert!(lines.is_empty(), "diagnostics on lines {:?}", lines);
+        }
     }
 
     #[test]
