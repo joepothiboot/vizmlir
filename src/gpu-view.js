@@ -4,7 +4,7 @@
 
 import { parseMemref } from "./buffers.js";
 import { warpAccess } from "./gpu-access.js";
-import { memorySpace } from "./gpu.js";
+import { analyzeGpu, memorySpace } from "./gpu.js";
 import { formatBytes } from "./timing.js";
 import { gpuScene } from "./gpu-3d.js";
 
@@ -66,7 +66,7 @@ function launchSection(launch, kernel, options) {
       "Threads",
       launch.threads === null
         ? "some sizes are only known at runtime"
-        : `${launch.threads.toLocaleString()} in ${Math.ceil((perBlock ?? 0) / WARP) * (blocks ?? 0)} warps of ${WARP}`,
+        : `${launch.threads.toLocaleString("en-US")} in ${(Math.ceil((perBlock ?? 0) / WARP) * (blocks ?? 0)).toLocaleString("en-US")} warps of ${WARP}`,
     ],
   ]) {
     // Each term and value wrap together in the overlay's single line.
@@ -78,9 +78,22 @@ function launchSection(launch, kernel, options) {
   // Picking a row in Memory accesses colors warp 0 in it; hovering a buffer
   // outlines its memory's floor plate.
   const scene = gpuScene(launch, kernel, { onLine: options.onLine });
+  // The answer for the picked access sits above the scene; picking also
+  // colors warp 0 in the scene and sets its elements-from-above layer.
+  const answer = kernel?.accesses?.length ? answerCard(kernel, options) : null;
+  if (answer) section.append(answer);
   section.append(scene.figure);
+  const onPick = (judged) => {
+    answer.show(judged);
+    scene.showAccess(judged);
+    scene.showElements(
+      judged.result.analyzed
+        ? elementMap(judged.access, judged.result, judged.memref, groupOrder(judged.result))
+        : null,
+    );
+  };
   const accesses = kernel?.accesses?.length
-    ? accessSection(kernel, launch, { ...options, onPick: scene.showAccess })
+    ? accessSection(kernel, launch, { ...options, onPick })
     : null;
   const memory = kernel
     ? memorySection(kernel, launch, {
@@ -262,6 +275,293 @@ function verdictChip(result) {
   );
 }
 
+// Plain words or the index math in the answer card; remembered per browser.
+let depth = "plain";
+try {
+  if (localStorage.getItem("vizmlir-depth") === "compiler") depth = "compiler";
+} catch {
+  // Storage can be blocked; plain words it is.
+}
+const cards = new Set();
+
+// The answer for the picked access: its verdict, how far that verdict was
+// checked, and either one plain sentence with the share of useful traffic or
+// the index math behind it. `card.show(judged)` fills it for a Memory
+// accesses row. `options.passes()` (a pass trace) adds the verdict at every
+// pass.
+function answerCard(kernel, options) {
+  const card = el("div", "gpu-answer");
+  let judged = null;
+  const render = () => {
+    if (!judged) return;
+    const { access, result, space } = judged;
+    const head = el("div", "gpu-answer-top");
+    head.append(
+      el("span", "gpu-kicker", `Line ${access.line} · ${access.kind} ${access.buffer}`),
+      verdictChip(result),
+    );
+    if (result.analyzed) head.append(reachChip(result.proof));
+    const toggle = el("div", "gpu-depth");
+    toggle.setAttribute("role", "group");
+    toggle.setAttribute("aria-label", "Explain in");
+    for (const [value, label] of [
+      ["plain", "Plain"],
+      ["compiler", "Compiler"],
+    ]) {
+      const button = el("button", "", label);
+      button.type = "button";
+      button.setAttribute("aria-pressed", String(depth === value));
+      button.addEventListener("click", () => {
+        depth = value;
+        try {
+          localStorage.setItem("vizmlir-depth", value);
+        } catch {
+          // Remembering is a nicety.
+        }
+        for (const other of cards) other.isConnected ? other.render() : cards.delete(other);
+      });
+      toggle.append(button);
+    }
+    head.append(toggle);
+    const body =
+      depth === "compiler" && result.analyzed ? compilerBody(judged) : plainBody(result, space);
+    const passes = options.passes?.();
+    const history = passes
+      ? passStrip(passes, acrossPasses(passes, options.launchIndex, kernel, judged))
+      : [];
+    card.replaceChildren(head, ...body, ...history);
+  };
+  card.render = render;
+  card.show = (next) => {
+    judged = next;
+    render();
+  };
+  cards.add(card);
+  return card;
+}
+
+function reachChip(proof) {
+  if (proof?.status === "proven") return el("span", "gpu-chip proven", `✓ ${reach(proof)}`);
+  if (proof?.status === "varies") return el("span", "gpu-chip bad", "varies across warps");
+  return el("span", "gpu-chip muted", "warp 0 only");
+}
+
+// One sentence a beginner can act on, and a bar for how much of the memory
+// traffic (global) or how many bank passes (shared) are useful.
+function plainBody(result, space) {
+  if (!result.analyzed) return [el("p", "gpu-answer-line", `Not analyzed: ${result.reason}.`)];
+  const used = result.distinct * result.elementBytes;
+  let line;
+  let meter = null;
+  switch (result.verdict) {
+    case "broadcast":
+      line = "Every thread of the warp uses the same element, so it is fetched once and shared.";
+      break;
+    case "coalesced":
+      line = `The warp's ${result.distinct} elements sit together in ${result.sectors} chunk${result.sectors > 1 ? "s" : ""} of 32 bytes, so every byte moved is used.`;
+      break;
+    case "strided": {
+      const times = Math.round((result.sectors * 32) / used);
+      line = `Each warp touches ${result.sectors} separate 32-byte chunks, so the GPU moves ${times > 1 ? `${times}× ` : ""}more data than it uses.`;
+      break;
+    }
+    case "conflict-free":
+      line = `Each thread uses its own bank of ${space} memory, so the warp is served in one pass.`;
+      break;
+    case "bank-conflict":
+      line = `Up to ${result.ways} threads need the same bank, so the warp is served in ${result.ways} passes instead of one.`;
+      break;
+  }
+  if (result.sectors !== undefined && result.verdict !== "broadcast") {
+    const moved = result.sectors * 32;
+    meter = trafficMeter(
+      "Useful traffic",
+      `${formatBytes(used)} used of ${formatBytes(moved)} moved · ${Math.round((used / moved) * 100)}%`,
+      used / moved,
+      result.verdict === "coalesced",
+    );
+  } else if (result.ways !== undefined && result.verdict !== "broadcast") {
+    meter = trafficMeter(
+      "Bank passes",
+      `1 needed, ${result.ways} taken`,
+      1 / result.ways,
+      result.ways === 1,
+    );
+  }
+  const fix = FIX_TEXT[result.verdict];
+  return [
+    el("p", "gpu-answer-line", line),
+    ...(meter ? [meter] : []),
+    ...(fix ? [el("p", "gpu-answer-fix", `Usual fix: ${fix}`)] : []),
+  ];
+}
+
+const FIX_TEXT = {
+  strided:
+    "make thread x walk the last (contiguous) index, or read a tile into shared memory and write it out row by row.",
+  "bank-conflict": "pad the inner dimension of the shared buffer by one element.",
+};
+
+function trafficMeter(label, value, share, good) {
+  const meter = el("div", "gpu-meter");
+  const labels = el("div", "gpu-meter-labels");
+  labels.append(el("span", "", label), el("span", "gpu-dim", value));
+  const bar = el("div", `gpu-meter-bar ${good ? "good" : "bad"}`);
+  const fill = el("div");
+  fill.style.width = `${Math.max(2, Math.min(100, share * 100))}%`;
+  bar.append(fill);
+  meter.append(labels, bar);
+  return meter;
+}
+
+// The index math: the element offset as a function of the ids, how far apart
+// neighboring threads land, and how far the verdict was checked.
+function compilerBody({ access, result, memref }) {
+  const proof = result.proof;
+  const rows = [];
+  if (proof?.formula) {
+    rows.push(["offset", `${proof.formula}   (elements of ${access.buffer})`]);
+    const bytes = proof.laneStride * result.elementBytes;
+    rows.push([
+      "∂/∂tx",
+      `${proof.laneStride} element${Math.abs(proof.laneStride) === 1 ? "" : "s"} = ${bytes} B between neighboring threads`,
+    ]);
+  }
+  rows.push([
+    "warp 0",
+    result.sectors !== undefined
+      ? `${result.distinct} elements in ${result.sectors} sector${result.sectors > 1 ? "s" : ""} of 32 B (${result.needed} needed)`
+      : `${result.distinct} words, most crowded bank ${result.ways}-way`,
+  ]);
+  if (proof?.status === "proven")
+    rows.push([
+      "holds for",
+      `${proof.warps === null ? "every warp" : `${proof.warps.toLocaleString("en-US")} warps`}${proof.iterations ? " × every loop iteration" : ""}: affine index, every warp shape and alignment checked`,
+    ]);
+  else if (proof?.status === "varies")
+    rows.push([
+      "varies",
+      proof.outcomes
+        .map((o) => `${VERDICT_TEXT[o.verdict]} ${o.sectors ?? `${o.ways}-way`} in ${o.cases}/${proof.cases}`)
+        .join(" · "),
+    ]);
+  else if (proof) rows.push(["warp 0 only", proof.reason]);
+  const math = el("dl", "gpu-math");
+  for (const [term, value] of rows) {
+    const pair = el("div");
+    pair.append(el("dt", "", term), el("dd", "", value));
+    math.append(pair);
+  }
+  return [math];
+}
+
+// analyzeGpu for each pass's IR, worked out once per text.
+const passModels = new Map();
+function passModel(ir) {
+  if (!passModels.has(ir)) {
+    if (passModels.size > 200) passModels.clear();
+    passModels.set(ir, analyzeGpu(ir));
+  }
+  return passModels.get(ir);
+}
+
+// The picked access in every pass of the trace. Passes rename values and
+// outline kernels, so it is matched by position: the same launch, the same
+// number of loads and stores in its kernel, and a load or store of the same
+// kind at the same place. Passes where nothing matches (after lowering to
+// LLVM, memref loads and stores are gone) get a null result.
+export function acrossPasses(passes, launchIndex, kernel, judged) {
+  return passes.events.map((event) => {
+    const model = event.ir ? passModel(event.ir) : null;
+    const launch = model?.launches[launchIndex];
+    const other = launch ? model.kernels[launch.kernel] : null;
+    const access = other?.accesses?.[judged.index];
+    if (!access || other.accesses.length !== kernel.accesses.length || access.kind !== judged.access.kind)
+      return { event, result: null };
+    return { event, access, ...judge(access, other, launch) };
+  });
+}
+
+// One small cell per pass, colored by its verdict, with a sentence on what
+// the passes did to it. A click selects that pass.
+function passStrip(passes, history) {
+  const wrap = el("div", "gpu-passes");
+  const cells = el("div", "gpu-pass-cells");
+  const width = Math.max(2, String(history.length).length);
+  history.forEach(({ event, result }, i) => {
+    const state = !result?.analyzed ? "none" : GOOD.has(result.verdict) ? "good" : "bad";
+    const cell = el("button", `gpu-pass ${state}`, String(i + 1).padStart(width, "0"));
+    cell.type = "button";
+    if (i === passes.current) cell.setAttribute("aria-current", "step");
+    cell.title =
+      `${i + 1}. ${passes.describe(event)}
+` +
+      (result?.analyzed
+        ? verdictText(result)
+        : result
+          ? `not analyzed: ${result.reason}`
+          : "not found: lowered past memref loads and stores, or the kernel changed shape");
+    cell.addEventListener("click", () => passes.select(i));
+    cells.append(cell);
+  });
+  wrap.append(el("span", "gpu-kicker", "Across passes"), cells);
+  wrap.append(el("p", "gpu-note", passSummary(history)));
+  return [wrap];
+}
+
+const verdictText = (result) =>
+  VERDICT_TEXT[result.verdict] +
+  (result.sectors !== undefined ? ` · ${result.sectors} sectors` : result.ways > 1 ? ` · ${result.ways}-way` : "");
+
+// "1–3" for a run of pass numbers (0-based in), "5" for one.
+const span = (first, last) => (first === last ? `${first + 1}` : `${first + 1}–${last + 1}`);
+
+export function passSummary(history) {
+  const seen = history
+    .map((h, i) => ({ i, text: h.result?.analyzed ? verdictText(h.result) : null }))
+    .filter((h) => h.text);
+  if (!seen.length) return "Not readable in any pass.";
+  const first = seen[0].i;
+  const last = seen.at(-1).i;
+  const lowered =
+    last < history.length - 1 ? ` From pass ${last + 2} on it is lowered past memref loads and stores, so it is not read.` : "";
+  const changes = seen.filter((h, k) => k && h.text !== seen[k - 1].text);
+  if (!changes.length)
+    return `${seen[0].text[0].toUpperCase()}${seen[0].text.slice(1)} in passes ${span(first, last)}: no pass changes it, so a fix belongs in the source.${lowered}`;
+  const steps = changes.map((h) => {
+    const before = seen[seen.indexOf(h) - 1];
+    return `pass ${h.i + 1} turns ${before.text} into ${h.text}`;
+  });
+  return `${steps.join("; ")}.${lowered}`.replace(/^./, (c) => c.toUpperCase());
+}
+
+// Sector or bank → its color slot, in the order lanes first meet them.
+function groupOrder(result) {
+  const groups = [...new Set(result.lanes.map((l) => l.group))];
+  return new Map(groups.map((g, i) => [g, i]));
+}
+
+// How far the verdict reaches: "all 32,768 warps", "varies" or "warp 0 only".
+function reach(proof) {
+  if (proof?.status === "varies") return "varies";
+  if (proof?.status !== "proven") return "warp 0 only";
+  const warps = proof.warps === null ? "every warp" : `all ${proof.warps.toLocaleString("en-US")} warps`;
+  return proof.iterations ? `${warps}, every iteration` : warps;
+}
+
+// One sentence on why the warp shown may not speak for the whole launch (a
+// proven verdict says so on the answer card instead).
+function explainProof(proof) {
+  if (proof?.status === "varies") {
+    const parts = proof.outcomes.map(
+      (o) =>
+        `${VERDICT_TEXT[o.verdict]}${o.sectors !== undefined ? ` (${o.sectors} sectors)` : o.ways > 1 ? ` (${o.ways}-way)` : ""} in ${o.cases} of ${proof.cases}`,
+    );
+    return `This warp is not the whole story. Across every warp and loop iteration the address lands on different alignments: ${parts.join(", ")}.`;
+  }
+  return proof ? `Only this warp was checked: ${proof.reason}.` : "";
+}
+
 // One sentence on what the verdict means for this warp.
 function explain(result, space) {
   if (!result.analyzed) return `Not analyzed: ${result.reason}.`;
@@ -297,10 +597,14 @@ function accessSection(kernel, launch, options) {
     el(
       "p",
       "gpu-note",
-      "For warp 0 of block (0, 0, 0): which element each of its 32 threads touches. Global memory is judged by 32-byte sectors, shared memory by its 32 banks. Accesses inside a loop are shown for the first iteration.",
+      "The lanes shown are warp 0 of block (0, 0, 0) on the first loop iteration: which element each of its 32 threads touches. Global memory is judged by 32-byte sectors, shared memory by its 32 banks. When an index is a linear function of the thread ids, block ids and loop counters, the verdict is also checked for every warp and iteration.",
     ),
   );
-  const judged = kernel.accesses.map((access) => ({ access, ...judge(access, kernel, launch) }));
+  const judged = kernel.accesses.map((access, index) => ({
+    access,
+    index,
+    ...judge(access, kernel, launch),
+  }));
   // Start on the access asked for, else the first one worth a look.
   const focused = judged.findIndex((j) => j.access.line === options.focusLine);
   let picked =
@@ -312,7 +616,7 @@ function accessSection(kernel, launch, options) {
 
   const table = el("table", "gpu-access-table");
   const head = el("tr");
-  for (const title of ["Line", "Access", "Space", "Warp 0"]) head.append(el("th", "", title));
+  for (const title of ["Line", "Access", "Space", "Verdict", "Checked"]) head.append(el("th", "", title));
   const thead = el("thead");
   thead.append(head);
   const tbody = el("tbody");
@@ -336,9 +640,16 @@ function accessSection(kernel, launch, options) {
     );
     const verdict = el("td");
     verdict.append(verdictChip(j.result));
-    row.append(verdict);
+    const checked = j.result.analyzed
+      ? j.result.proof?.status === "varies"
+        ? el("span", "gpu-chip bad", "varies")
+        : el("span", "gpu-dim", reach(j.result.proof))
+      : el("span", "gpu-dim", "");
+    const reachCell = el("td");
+    reachCell.append(checked);
+    row.append(verdict, reachCell);
     row.title =
-      (j.access.inLoop ? "Inside a loop: first iteration shown\n" : "") +
+      (j.access.inLoop && j.result.proof?.status !== "proven" ? "Inside a loop: first iteration shown\n" : "") +
       "Show its lanes and mark its line in the source";
     row.addEventListener("click", () => pick(i, { mark: true }));
     row.addEventListener("keydown", (e) => {
@@ -372,14 +683,17 @@ function accessSection(kernel, launch, options) {
 // Group colors cycle so neighboring sectors or banks are told apart.
 const groupClass = (order) => `g${order % 4}`;
 
-function renderLaneDetail(container, { access, result, space, memref }) {
+function renderLaneDetail(container, { access, result, space }) {
   const children = [el("p", "gpu-explain", explain(result, space))];
+  // A proven verdict is already on the answer card; the rest need saying.
+  if (result.analyzed && result.proof?.status !== "proven")
+    children.push(el("p", "gpu-note", explainProof(result.proof)));
   if (!result.analyzed) {
     container.replaceChildren(...children);
     return;
   }
-  const groups = [...new Set(result.lanes.map((l) => l.group))];
-  const order = new Map(groups.map((g, i) => [g, i]));
+  const order = groupOrder(result);
+  const groups = [...order.keys()];
   const unit = space === "shared" ? "bank" : "sector";
 
   // The 32 lanes, colored by the sector or bank they hit.
@@ -419,11 +733,10 @@ function renderLaneDetail(container, { access, result, space, memref }) {
     el(
       "figcaption",
       "",
-      `Lanes 0–${result.lanes.length - 1}, colored by the ${unit} they hit: ${groups.length} ${unit}${groups.length > 1 ? "s" : ""}. Hover a lane for its thread and element.`,
+      `Lanes 0–${result.lanes.length - 1}, colored by the ${unit} they hit: ${groups.length} ${unit}${groups.length > 1 ? "s" : ""}. Hover a lane for its thread and element; Elements in the 3D view shows them in the buffer from above.`,
     ),
   );
   children.push(lanesFigure);
-  children.push(elementMap(access, result, memref, order));
   container.replaceChildren(...children);
 }
 
@@ -447,10 +760,15 @@ function elementMap(access, result, memref, order) {
   const cols = Math.min(width - colStart, MAX_COLS);
   const cell = 9;
   const pad = 30;
+  const mapWidth = pad + cols * (cell + 1);
+  const mapHeight = 14 + rows * (cell + 1);
+  // Sized by its container (the 3D view's Elements layer); the viewBox keeps
+  // the cells square.
   const map = svg("svg", {
     class: "gpu-elements",
-    width: pad + cols * (cell + 1),
-    height: 14 + rows * (cell + 1),
+    viewBox: `0 0 ${mapWidth} ${mapHeight}`,
+    width: mapWidth,
+    height: mapHeight,
     role: "img",
     "aria-label": `Elements of ${access.buffer} touched by warp 0`,
   });
@@ -724,10 +1042,10 @@ export function renderGpuView(container, model, options = {}) {
     return;
   }
   const launched = new Set();
-  for (const launch of model.launches) {
+  model.launches.forEach((launch, launchIndex) => {
     launched.add(launch.kernel);
-    children.push(launchSection(launch, model.kernels[launch.kernel], options));
-  }
+    children.push(launchSection(launch, model.kernels[launch.kernel], { ...options, launchIndex }));
+  });
   // Kernels with no launch in this IR (a gpu.module dumped on its own).
   model.kernels.forEach((kernel, i) => {
     if (launched.has(i)) return;

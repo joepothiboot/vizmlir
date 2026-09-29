@@ -2,14 +2,20 @@
 // and memref.store in a kernel, and whether the warp's accesses are coalesced
 // (global memory) or conflict-free (shared memory).
 //
-// Indices are evaluated, not solved: for one thread at a time, the SSA values
-// an index is computed from are interpreted with that thread's ids, the launch
-// sizes, and constants. Loop induction variables take their first value, so
-// an access inside a loop is judged on its first iteration. An index built
-// from anything else (a loaded value, a block argument after lowering to cf,
-// affine.apply) is reported as not analyzed rather than guessed.
+// The lanes shown are evaluated, not solved: for one thread at a time, the SSA
+// values an index is computed from are interpreted with that thread's ids, the
+// launch sizes, and constants. Loop induction variables take their first
+// value, so the lanes are those of warp 0 of block (0, 0, 0) on the first
+// iteration. An index built from anything else (a loaded value, a block
+// argument after lowering to cf, affine.apply) is reported as not analyzed
+// rather than guessed.
+//
+// When the index is affine in the thread ids, block ids and loop counters
+// (src/gpu-affine.js), proveAccess() checks the verdict for every warp of the
+// launch and every iteration, not just the one shown.
 
 import { elementBytes as elementSize } from "./buffers.js";
+import { add, constant, formatAffine, linearize, scale } from "./gpu-affine.js";
 
 export const WARP = 32;
 // Global memory moves 32-byte sectors; shared memory has 32 banks of 4 bytes.
@@ -19,6 +25,7 @@ const BANK_BYTES = 4;
 
 const DEF = /^\s*(%[\w$.-]+)(?::\d+)?\s*=\s*"?([\w.]+)"?\s*(.*)$/;
 const FOR = /\bscf\.for\s+(%[\w$.-]+)\s*=\s*(%[\w$.-]+|-?\d+)\s+to\b/;
+const FOR_BOUNDS = /\bto\s+(%[\w$.-]+|-?\d+)\s+step\s+(%[\w$.-]+|-?\d+)/;
 const ACCESS =
   /\b(memref\.load|memref\.store)\s+(?:(%[\w$.-]+)\s*,\s*)?(%[\w$.-]+)\[([^\]]*)\]\s*:\s*(memref<.*>)\s*$/;
 const LAUNCH_IDS = {
@@ -65,14 +72,18 @@ const CASTS = new Set([
 ]);
 
 // Definitions of SSA values in `lines`: Map(name → { op, operands, rest }).
-// scf.for induction variables are "loop" (their lower bound), and the ids
-// and sizes a gpu.launch binds are "env" values.
+// scf.for induction variables are "loop" with operands [lower, upper, step],
+// and the ids and sizes a gpu.launch binds are "env" values.
 export function buildDefs(lines, firstLine = 1) {
   const defs = new Map();
   for (const [i, line] of lines.entries()) {
     const at = firstLine + i;
     const loop = FOR.exec(line);
-    if (loop) defs.set(loop[1], { op: "loop", operands: [loop[2]], rest: "", line: at });
+    if (loop) {
+      const bounds = FOR_BOUNDS.exec(line.slice(loop.index));
+      const operands = bounds ? [loop[2], bounds[1], bounds[2]] : [loop[2]];
+      defs.set(loop[1], { op: "loop", operands, rest: "", line: at });
+    }
     if (/\bgpu\.launch\b(?!_)/.test(line) || /^\s*threads\(/.test(line)) {
       for (const [keyword, ids] of Object.entries(LAUNCH_IDS)) {
         const match = new RegExp(`\\b${keyword}\\(([^)]*)\\)\\s+in\\s+\\(([^)]*)\\)`).exec(line);
@@ -171,9 +182,47 @@ export function warpLanes(block, warp = 0) {
   return lanes;
 }
 
+// Judges one warp from the byte address each lane touches: global memory by
+// the 32-byte sectors it moves, shared memory by its most crowded bank.
+// `groups` is each lane's sector or bank, for coloring.
+function judgeWarp(bytes, elementBytes, space) {
+  const distinct = new Set(bytes).size;
+  if (space === "shared") {
+    // Lanes that read the same word share it (broadcast); different words in
+    // one bank are served one after another.
+    const banks = new Map();
+    const groups = bytes.map((byte) => {
+      const word = Math.floor(byte / BANK_BYTES);
+      const bank = ((word % BANKS) + BANKS) % BANKS;
+      if (!banks.has(bank)) banks.set(bank, new Set());
+      banks.get(bank).add(word);
+      return bank;
+    });
+    const ways = Math.max(...[...banks.values()].map((words) => words.size));
+    return {
+      distinct,
+      groups,
+      ways,
+      verdict: distinct === 1 ? "broadcast" : ways === 1 ? "conflict-free" : "bank-conflict",
+    };
+  }
+  const groups = bytes.map((byte) => Math.floor(byte / SECTOR));
+  const sectors = new Set(groups).size;
+  const needed = Math.ceil((distinct * elementBytes) / SECTOR);
+  return {
+    distinct,
+    groups,
+    sectors,
+    needed,
+    efficiency: (distinct * elementBytes) / (sectors * SECTOR),
+    verdict: distinct === 1 ? "broadcast" : sectors <= needed ? "coalesced" : "strided",
+  };
+}
+
 // Evaluates `access` for every lane of the first warp of block (0, 0, 0) and
 // judges it. `memref` is parseMemref(access.type) and `space` its memory
-// space name. Returns { analyzed, reason, lanes, verdict, ... }.
+// space name. Returns { analyzed, reason, lanes, verdict, proof, ... }; see
+// proveAccess() for `proof`.
 export function warpAccess(access, memref, space, { defs, args, block, grid }) {
   if (!block || block.some((d) => d === null))
     return { analyzed: false, reason: "the block size is only known at runtime" };
@@ -202,40 +251,110 @@ export function warpAccess(access, memref, space, { defs, args, block, grid }) {
   }
   if (!lanes.length) return { analyzed: false, reason: "the block has no threads" };
 
-  const distinct = new Set(lanes.map((l) => l.offset));
-  const result = { analyzed: true, lanes, elementBytes, distinct: distinct.size };
-  if (space === "shared") {
-    // Lanes that read the same word share it (broadcast); different words in
-    // one bank are served one after another.
-    const banks = new Map();
-    for (const lane of lanes) {
-      const word = Math.floor(lane.byte / BANK_BYTES);
-      lane.group = word % BANKS;
-      if (!banks.has(lane.group)) banks.set(lane.group, new Set());
-      banks.get(lane.group).add(word);
-    }
-    const ways = Math.max(...[...banks.values()].map((words) => words.size));
-    return {
-      ...result,
-      ways,
-      verdict:
-        distinct.size === 1 ? "broadcast" : ways === 1 ? "conflict-free" : "bank-conflict",
-    };
+  const judged = judgeWarp(
+    lanes.map((l) => l.byte),
+    elementBytes,
+    space,
+  );
+  lanes.forEach((lane, i) => (lane.group = judged.groups[i]));
+  delete judged.groups;
+  const result = { analyzed: true, lanes, elementBytes, ...judged };
+  result.proof = proveAccess(access, memref, space, result, { defs, args, block, grid });
+  return result;
+}
+
+const mod = (a, n) => ((a % n) + n) % n;
+
+// Whether the verdict of the warp shown holds for every warp of the launch and
+// every loop iteration. `sample` is warpAccess()'s result for that warp.
+//
+// The byte address is c + Σ k·v over thread ids, block ids, loop counters and
+// unknown arguments. Thread ids differ within a warp, so each warp shape of
+// the block (at most 32) is checked lane by lane. Everything else moves the
+// whole warp by the same amount, and a verdict only depends on that amount
+// modulo a period: 32 bytes for global sectors, 128 bytes (32 banks of 4
+// bytes) for shared memory. So it is enough to check each residue those
+// values can reach, found by stepping each one over its range (a block id
+// over its grid size, a loop counter over its trip count; every residue when
+// the range is unknown). Unknown ranges may add residues that never occur, so
+// "varies" can be pessimistic; "proven" is always exact.
+//
+// Returns one of
+//   { status: "proven", verdict, sectors | ways, warps, iterations, formula, laneStride }
+//   { status: "varies", outcomes: [{ verdict, sectors | ways, cases }], cases, formula, laneStride }
+//   { status: "sampled", reason }
+// where `warps` counts the warps of the launch (null when the grid is only
+// known at runtime), `iterations` says whether loop iterations were covered,
+// `cases` counts the (warp shape, alignment) pairs checked, `formula` is the
+// element offset as text, and `laneStride` is how many elements apart
+// neighboring threads in x land.
+export function proveAccess(access, memref, space, sample, { defs, args, block, grid }) {
+  const [bdx, bdy, bdz] = block;
+  const [gdx, gdy, gdz] = grid ?? [null, null, null];
+  const ctx = {};
+  let offset = constant(0);
+  for (const [k, name] of access.indices.entries()) {
+    const index = linearize(name, defs, { bdx, bdy, bdz, gdx, gdy, gdz, args }, ctx);
+    if (!index)
+      return {
+        status: "sampled",
+        reason: `${ctx.stuck ?? name} is not affine in the thread ids, block ids and loop counters`,
+      };
+    offset = add(scale(offset, memref.dims[k] ?? 1), index);
   }
-  for (const lane of lanes) lane.group = Math.floor(lane.byte / SECTOR);
-  const sectors = new Set(lanes.map((l) => l.group)).size;
-  const needed = Math.ceil((distinct.size * elementBytes) / SECTOR);
-  const efficiency = (distinct.size * elementBytes) / (sectors * SECTOR);
+  const bytes = scale(offset, sample.elementBytes);
+  const period = space === "shared" ? BANKS * BANK_BYTES : SECTOR;
+
+  const range = { bx: gdx, by: gdy, bz: gdz, ...Object.fromEntries(ctx.loops) };
+  let residues = new Set([mod(bytes.c, period)]);
+  for (const [v, k] of bytes.t) {
+    if (v === "tx" || v === "ty" || v === "tz") continue;
+    const steps = Math.max(1, Math.min(range[v] ?? period, period));
+    const next = new Set();
+    for (const r of residues) for (let i = 0; i < steps; i++) next.add(mod(r + k * i, period));
+    residues = next;
+  }
+
+  const lane = ["tx", "ty", "tz"].map((v) => bytes.t.get(v) ?? 0);
+  const perBlock = Math.ceil((bdx * bdy * bdz) / WARP);
+  const count = (judged) => judged.sectors ?? judged.ways;
+  const outcomes = new Map();
+  let cases = 0;
+  for (let w = 0; w < perBlock; w++) {
+    const shift = warpLanes(block, w).map((l) => lane[0] * l.tx + lane[1] * l.ty + lane[2] * l.tz);
+    for (const r of residues) {
+      const judged = judgeWarp(
+        shift.map((x) => r + x),
+        sample.elementBytes,
+        space,
+      );
+      const key = `${judged.verdict}:${count(judged)}`;
+      if (!outcomes.has(key))
+        outcomes.set(key, {
+          verdict: judged.verdict,
+          [space === "shared" ? "ways" : "sectors"]: count(judged),
+          cases: 0,
+        });
+      outcomes.get(key).cases++;
+      cases++;
+    }
+  }
+  const math = { formula: formatAffine(offset, ctx.ivs), laneStride: offset.t.get("tx") ?? 0 };
+  if (outcomes.size > 1)
+    return {
+      status: "varies",
+      outcomes: [...outcomes.values()].sort((a, b) => b.cases - a.cases),
+      cases,
+      ...math,
+    };
+  const { verdict, sectors, ways } = [...outcomes.values()][0];
+  const blocks = gdx !== null && gdy !== null && gdz !== null ? gdx * gdy * gdz : null;
   return {
-    ...result,
-    sectors,
-    needed,
-    efficiency,
-    verdict:
-      distinct.size === 1
-        ? "broadcast"
-        : sectors <= needed
-          ? "coalesced"
-          : "strided",
+    status: "proven",
+    verdict,
+    ...(sectors !== undefined ? { sectors } : { ways }),
+    warps: blocks === null ? null : blocks * perBlock,
+    iterations: ctx.loops.size > 0,
+    ...math,
   };
 }
