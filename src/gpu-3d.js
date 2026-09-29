@@ -14,6 +14,8 @@ const GRID_MAX = [16, 16, 4];
 const THREAD_MAX = 1024;
 const BLOCK = { size: 1, pitch: 1.35 };
 const THREAD = { size: 0.52, pitch: 0.68 };
+// Elements of the picked access on the memory plate.
+const TILE = { size: 0.4, pitch: 0.48, rows: 32, cols: 32 };
 // Gap between the grid and the opened block, in world units.
 const GAP = 6;
 // Distance from the camera to the scene's center: smaller is more perspective.
@@ -97,6 +99,42 @@ export function layoutLaunch(grid, block) {
     },
     shownGrid: shown,
   };
+}
+
+// The window of the picked access's buffer drawn on the memory plate: rows by
+// the first index (rows of 32 for a 1-D buffer), at most TILE.rows × TILE.cols
+// around the elements warp 0 touches. `cells` maps a tile to the lane that
+// touches it, `of` a lane to its tile, and `shade(r, c)` alternates by 32-byte
+// sector (global) or by 128-byte row of the 32 banks (shared).
+export function elementTiles({ access, memref, space }, result, order) {
+  const dims = memref?.dims ?? [];
+  const width = dims.length >= 2 ? dims.at(-1) : 32;
+  if (!width) return null;
+  const at = (offset) => [Math.floor(offset / width), offset % width];
+  const points = result.lanes.map((l) => at(l.offset));
+  const rowStart = Math.min(...points.map((p) => p[0]));
+  const rowEnd = Math.max(...points.map((p) => p[0]));
+  const colMin = Math.min(...points.map((p) => p[1]));
+  const colMax = Math.max(...points.map((p) => p[1]));
+  const rows = Math.min(rowEnd - rowStart + 1, TILE.rows);
+  const colStart = Math.max(0, Math.min(colMin, colMax - TILE.cols + 1, width - TILE.cols));
+  const cols = Math.min(width - colStart, TILE.cols);
+  const cells = new Map();
+  const of = new Map();
+  result.lanes.forEach((lane, k) => {
+    const [r, c] = [points[k][0] - rowStart, points[k][1] - colStart];
+    if (r < 0 || r >= rows || c < 0 || c >= cols) return;
+    cells.set(r * cols + c, { ...lane, order: order.get(lane.group) });
+    of.set(lane.lane, [r, c]);
+  });
+  const unit = space === "shared" ? 128 : 32;
+  const shade = (r, c) =>
+    Math.floor((((rowStart + r) * width + colStart + c) * result.elementBytes) / unit) % 2 === 1;
+  const label =
+    dims.length >= 2
+      ? `${access.buffer} · rows ${rowStart}–${rowStart + rows - 1} × columns ${colStart}–${colStart + cols - 1}`
+      : `${access.buffer} · elements ${rowStart * width}–${(rowStart + rows) * width - 1}`;
+  return { rows, cols, cells, of, shade, label };
 }
 
 // The box [min, max] around a list of cubes.
@@ -228,6 +266,22 @@ export function gpuScene(launch, kernel, { onLine } = {}) {
   // The floor: blocks and threads, which the memory plates sit under.
   const { min, max } = bounds(floor);
   const threadBox = layout.threads.length ? bounds(layout.threads) : null;
+  // The picked access's elements lie on the memory plate right of the opened
+  // block, row 0 level with the block's far row (warp 0), in a window of up
+  // to 32 × 32 that is reserved whenever the kernel has loads or stores, so
+  // picking another one does not refit the view.
+  const tileArea =
+    threadBox && kernel?.accesses?.length
+      ? { x: threadBox.max[0] + 2, far: threadBox.max[2] }
+      : null;
+  const tileBounds = tileArea
+    ? [
+        { at: [tileArea.x, 0, tileArea.far - TILE.rows * TILE.pitch], size: 0 },
+        { at: [tileArea.x + TILE.cols * TILE.pitch, 0, tileArea.far], size: 0 },
+      ]
+    : [];
+  const plateBox = bounds([...floor, ...tileBounds]);
+  const threadCube = new Map(layout.threads.map((cube) => [cube.id.join(","), cube]));
 
   // The kernel IR as cubes on the board, one per flow node.
   const flow = kernelFlow(kernel);
@@ -263,7 +317,7 @@ export function gpuScene(launch, kernel, { onLine } = {}) {
   let box;
   const rebuild = () => {
     all = showIR ? [...floor, ...nodes] : floor;
-    box = bounds(all);
+    box = bounds([...all, ...tileBounds]);
     center = box.min.map((v, i) => (v + box.max[i]) / 2);
   };
   rebuild();
@@ -483,8 +537,8 @@ export function gpuScene(launch, kernel, { onLine } = {}) {
     const pad = 1.2;
     plate(
       "global",
-      [min[0] - pad, 0, min[2] - pad],
-      [max[0] + pad, 0, max[2] + pad],
+      [plateBox.min[0] - pad, 0, plateBox.min[2] - pad],
+      [plateBox.max[0] + pad, 0, plateBox.max[2] + pad],
       -0.35,
       colors.global,
       `Global memory${memory.global ? ` · ${formatBytes(memory.global)}` : ""} · every thread`,
@@ -498,6 +552,37 @@ export function gpuScene(launch, kernel, { onLine } = {}) {
         colors.shared,
         `Shared memory · ${formatBytes(memory.shared)} · this block's threads`,
       );
+
+    // The picked access's buffer around the elements warp 0 touches, as tiles
+    // on the plate (row 0 farthest, level with warp 0), touched ones colored
+    // like their lanes and the rest shaded by 32-byte sector or by bank.
+    const tileAt = (r, c) => [
+      tileArea.x + c * TILE.pitch,
+      -0.3,
+      tileArea.far - (r + 1) * TILE.pitch,
+    ];
+    if (access?.tiles && tileArea) {
+      const { rows, cols, cells, shade } = access.tiles;
+      for (let r = 0; r < rows; r++)
+        for (let c = 0; c < cols; c++) {
+          const [x, y, z] = tileAt(r, c);
+          const poly = [
+            [x, y, z],
+            [x + TILE.size, y, z],
+            [x + TILE.size, y, z + TILE.size],
+            [x, y, z + TILE.size],
+          ].map(point);
+          const lane = cells.get(r * cols + c);
+          ctx.beginPath();
+          poly.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)));
+          ctx.closePath();
+          ctx.fillStyle = lane
+            ? css(colors.groups[lane.order % 4])
+            : css(mix(colors.dim, colors.bg, shade(r, c) ? 0.3 : 0.2));
+          ctx.fill();
+        }
+      plateLabels.push([access.tiles.label, point(tileAt(-1, 0))]);
+    }
 
     // The IR board under its nodes.
     if (showIR) {
@@ -592,6 +677,29 @@ export function gpuScene(launch, kernel, { onLine } = {}) {
         ctx.stroke();
       }
       ctx.setLineDash([]);
+    }
+
+    // From each thread of warp 0 down to the element it touches: a row of
+    // threads fanning out to a column of elements is a strided access.
+    if (access?.tiles && tileArea) {
+      ctx.lineWidth = 1;
+      for (const [key, lane] of access.lanes) {
+        const cube = threadCube.get(key);
+        const tile = access.tiles.of.get(lane.lane);
+        if (!cube || !tile) continue;
+        const from = point([
+          cube.at[0] + cube.size / 2,
+          cube.at[1] + 0.3 + cube.size,
+          cube.at[2] + cube.size / 2,
+        ]);
+        const [x, y, z] = tileAt(tile[0], tile[1]);
+        const to = point([x + TILE.size / 2, y, z + TILE.size / 2]);
+        ctx.strokeStyle = css(colors.groups[lane.order % 4], 0.55);
+        ctx.beginPath();
+        ctx.moveTo(from[0], from[1]);
+        ctx.lineTo(to[0], to[1]);
+        ctx.stroke();
+      }
     }
 
     // The IR's edges: value → user along the wall, and dashed drops from the
@@ -708,7 +816,11 @@ export function gpuScene(launch, kernel, { onLine } = {}) {
     ctx.font = `11px ${colors.font}`;
     ctx.textAlign = "left";
     ctx.fillStyle = css(colors.dim);
-    for (const [text, [x, y]] of plateLabels) ctx.fillText(text, x + 4, y + 14);
+    // Kept inside the canvas, like the titles.
+    for (const [text, [x, y]] of plateLabels) {
+      const right = size[0] - ctx.measureText(text).width - 8;
+      ctx.fillText(text, Math.max(8, Math.min(x + 4, right)), y + 14);
+    }
 
     // Titles over the grid and the opened block; a second line says what
     // warp 0's colors mean.
@@ -737,6 +849,7 @@ export function gpuScene(launch, kernel, { onLine } = {}) {
       ];
       if (access)
         lines.push(`Warp 0 raised, colored by ${access.unit}: ${access.text}`);
+      if (access?.formula) lines.push(`offset = ${access.formula}`);
       if (memory.private)
         lines.push(`Private: ${formatBytes(memory.private)} per thread`);
       title(lines, [
@@ -949,7 +1062,9 @@ export function gpuScene(launch, kernel, { onLine } = {}) {
       toggleElements(showTop);
     },
     // `judged` is a Memory accesses row: { access, result, space }.
-    showAccess(judged) {
+    // `formula` also writes the offset's formula under the opened block
+    // (Compiler mode).
+    showAccess(judged, { formula = false } = {}) {
       const result = judged?.result;
       if (!result?.analyzed) {
         access = null;
@@ -962,6 +1077,7 @@ export function gpuScene(launch, kernel, { onLine } = {}) {
           unit,
           proven: result.proof?.status === "proven",
           good: ["coalesced", "broadcast", "conflict-free"].includes(result.verdict),
+          formula: formula ? (result.proof?.formula ?? null) : null,
           text: `${judged.access.kind === "load" ? "load" : "store"} ${judged.access.buffer} · ${groups.length} ${unit}${groups.length > 1 ? "s" : ""}`,
           lanes: new Map(
             result.lanes.map((l) => [
@@ -969,6 +1085,7 @@ export function gpuScene(launch, kernel, { onLine } = {}) {
               { ...l, order: order.get(l.group) },
             ]),
           ),
+          tiles: elementTiles(judged, result, order),
         };
       }
       schedule();

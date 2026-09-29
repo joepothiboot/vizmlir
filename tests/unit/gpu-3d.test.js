@@ -1,5 +1,34 @@
 import { describe, expect, it } from "vitest";
-import { camera, layoutLaunch } from "../../src/gpu-3d.js";
+import { camera, elementTiles, layoutLaunch } from "../../src/gpu-3d.js";
+
+describe("elementTiles", () => {
+  // Warp 0 of a 32-wide block over a 1024 × 1024 buffer of f32.
+  const memref = { dims: [1024, 1024], element: "f32" };
+  const tiles = (offsetOf, space = "global") => {
+    const lanes = Array.from({ length: 32 }, (_, lane) => ({ lane, offset: offsetOf(lane), group: lane }));
+    return elementTiles(
+      { access: { buffer: "%out" }, memref, space },
+      { lanes, elementBytes: 4 },
+      new Map(lanes.map((l) => [l.group, l.lane])),
+    );
+  };
+
+  it("lays a coalesced warp along one row", () => {
+    const t = tiles((lane) => lane);
+    expect([t.rows, t.cols]).toEqual([1, 32]);
+    expect(t.of.get(5)).toEqual([0, 5]);
+    expect(t.label).toBe("%out · rows 0–0 × columns 0–31");
+  });
+
+  it("lays a strided warp down one column", () => {
+    const t = tiles((lane) => lane * 1024);
+    expect([t.rows, t.cols]).toEqual([32, 32]);
+    expect(t.of.get(5)).toEqual([5, 0]);
+    expect(t.cells.get(5 * 32).lane).toBe(5);
+    // Shading alternates every 32-byte sector (8 floats) along a row.
+    expect([t.shade(0, 7), t.shade(0, 8)]).toEqual([false, true]);
+  });
+});
 
 describe("layoutLaunch", () => {
   it("places blocks by id and threads by id, with warps of 32", () => {
