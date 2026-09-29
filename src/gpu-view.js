@@ -468,8 +468,9 @@ function passModel(ir) {
 // The picked access in every pass of the trace. Passes rename values and
 // outline kernels, so it is matched by position: the same launch, the same
 // number of loads and stores in its kernel, and a load or store of the same
-// kind at the same place. Passes where nothing matches (after lowering to
-// LLVM, memref loads and stores are gone) get a null result.
+// kind at the same place (LLVM loads and stores count, so the match survives
+// lowering). Passes where nothing matches, as once the kernel is compiled to a
+// binary, get a null result.
 export function acrossPasses(passes, launchIndex, kernel, judged) {
   return passes.events.map((event) => {
     const model = event.ir ? passModel(event.ir) : null;
@@ -494,13 +495,12 @@ function passStrip(passes, history) {
     cell.type = "button";
     if (i === passes.current) cell.setAttribute("aria-current", "step");
     cell.title =
-      `${i + 1}. ${passes.describe(event)}
-` +
+      `${i + 1}. ${passes.describe(event)}\n` +
       (result?.analyzed
         ? verdictText(result)
         : result
           ? `not analyzed: ${result.reason}`
-          : "not found: lowered past memref loads and stores, or the kernel changed shape");
+          : "not found: the kernel was compiled to a binary, or its loads and stores changed");
     cell.addEventListener("click", () => passes.select(i));
     cells.append(cell);
   });
@@ -524,7 +524,9 @@ export function passSummary(history) {
   const first = seen[0].i;
   const last = seen.at(-1).i;
   const lowered =
-    last < history.length - 1 ? ` From pass ${last + 2} on it is lowered past memref loads and stores, so it is not read.` : "";
+    last < history.length - 1
+      ? ` From pass ${last + 2} on it can't be found: the kernel was compiled to a binary, or its loads and stores changed.`
+      : "";
   const changes = seen.filter((h, k) => k && h.text !== seen[k - 1].text);
   if (!changes.length)
     return `${seen[0].text[0].toUpperCase()}${seen[0].text.slice(1)} in passes ${span(first, last)}: no pass changes it, so a fix belongs in the source.${lowered}`;
