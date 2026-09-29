@@ -418,13 +418,24 @@ export function judgeWarp(bytes, elementBytes, space) {
   const groups = bytes.map((byte) => Math.floor(byte / SECTOR));
   const sectors = new Set(groups).size;
   const needed = Math.ceil((distinct * elementBytes) / SECTOR);
+  // Elements side by side (no gaps) that still take an extra sector start
+  // partway into one: misaligned, not strided.
+  const span = Math.max(...bytes) - Math.min(...bytes) + elementBytes;
+  const dense = span === distinct * elementBytes;
   return {
     distinct,
     groups,
     sectors,
     needed,
     efficiency: (distinct * elementBytes) / (sectors * SECTOR),
-    verdict: distinct === 1 ? "broadcast" : sectors <= needed ? "coalesced" : "strided",
+    verdict:
+      distinct === 1
+        ? "broadcast"
+        : sectors <= needed
+          ? "coalesced"
+          : dense
+            ? "misaligned"
+            : "strided",
   };
 }
 

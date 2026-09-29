@@ -3869,6 +3869,13 @@
                     sector to use 4 bytes of it: 32 sectors instead of four,
                     eight times the traffic.
                   </dd>
+                  <dt><span class="bad">misaligned</span></dt>
+                  <dd>
+                    Neighbors read neighbors, but the row starts partway into a
+                    sector, so it spills into one more: five sectors instead of
+                    four. Cheaper than strided, and fixed by starting on a
+                    multiple of 32 bytes.
+                  </dd>
                   <dt><span class="good">broadcast</span></dt>
                   <dd>
                     Every thread reads the same item. The GPU fetches it once

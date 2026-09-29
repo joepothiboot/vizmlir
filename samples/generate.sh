@@ -47,6 +47,11 @@ opt gpu-tiled-matmul.trace.txt gpu-tiled-matmul.mlir \
 opt gpu-transpose.trace.txt gpu-transpose.mlir \
   -pass-pipeline='builtin.module(gpu-kernel-outlining,canonicalize,nvvm-attach-target{chip=sm_80},gpu.module(convert-gpu-to-nvvm),gpu-module-to-binary{format=isa})' \
   -mlir-print-ir-before=gpu-kernel-outlining -mlir-print-ir-after-all -mlir-print-ir-module-scope
+# Six small kernels, one memory pattern each (stride 2, misaligned, a loop
+# that drifts, broadcast, 16x16 blocks), followed down to PTX.
+opt gpu-patterns.trace.txt gpu-patterns.mlir \
+  -pass-pipeline='builtin.module(gpu-kernel-outlining,canonicalize,nvvm-attach-target{chip=sm_80},gpu.module(convert-scf-to-cf,convert-gpu-to-nvvm),gpu-module-to-binary{format=isa})' \
+  -mlir-print-ir-before=gpu-kernel-outlining -mlir-print-ir-after-all -mlir-print-ir-module-scope
 opt failed-transform.trace.txt matmul.mlir \
   -pass-pipeline='builtin.module(transform-preload-library{transform-library-paths=tile-wrong-op.transform.mlir},canonicalize,cse,transform-interpreter)' \
   -mlir-print-ir-after-all -mlir-print-ir-module-scope
