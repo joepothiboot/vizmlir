@@ -4,7 +4,7 @@
 
 import { parseMemref } from "./buffers.js";
 import { warpAccess } from "./gpu-access.js";
-import { memorySpace } from "./gpu.js";
+import { analyzeGpu, memorySpace } from "./gpu.js";
 import { formatBytes } from "./timing.js";
 import { gpuScene } from "./gpu-3d.js";
 
@@ -80,7 +80,7 @@ function launchSection(launch, kernel, options) {
   const scene = gpuScene(launch, kernel, { onLine: options.onLine });
   // The answer for the picked access sits above the scene; picking also
   // colors warp 0 in the scene and sets its elements-from-above layer.
-  const answer = kernel?.accesses?.length ? answerCard() : null;
+  const answer = kernel?.accesses?.length ? answerCard(kernel, options) : null;
   if (answer) section.append(answer);
   section.append(scene.figure);
   const onPick = (judged) => {
@@ -287,8 +287,9 @@ const cards = new Set();
 // The answer for the picked access: its verdict, how far that verdict was
 // checked, and either one plain sentence with the share of useful traffic or
 // the index math behind it. `card.show(judged)` fills it for a Memory
-// accesses row.
-function answerCard() {
+// accesses row. `options.passes()` (a pass trace) adds the verdict at every
+// pass.
+function answerCard(kernel, options) {
   const card = el("div", "gpu-answer");
   let judged = null;
   const render = () => {
@@ -324,7 +325,11 @@ function answerCard() {
     head.append(toggle);
     const body =
       depth === "compiler" && result.analyzed ? compilerBody(judged) : plainBody(result, space);
-    card.replaceChildren(head, ...body);
+    const passes = options.passes?.();
+    const history = passes
+      ? passStrip(passes, acrossPasses(passes, options.launchIndex, kernel, judged))
+      : [];
+    card.replaceChildren(head, ...body, ...history);
   };
   card.render = render;
   card.show = (next) => {
@@ -383,8 +388,19 @@ function plainBody(result, space) {
       result.ways === 1,
     );
   }
-  return [el("p", "gpu-answer-line", line), ...(meter ? [meter] : [])];
+  const fix = FIX_TEXT[result.verdict];
+  return [
+    el("p", "gpu-answer-line", line),
+    ...(meter ? [meter] : []),
+    ...(fix ? [el("p", "gpu-answer-fix", `Usual fix: ${fix}`)] : []),
+  ];
 }
+
+const FIX_TEXT = {
+  strided:
+    "make thread x walk the last (contiguous) index, or read a tile into shared memory and write it out row by row.",
+  "bank-conflict": "pad the inner dimension of the shared buffer by one element.",
+};
 
 function trafficMeter(label, value, share, good) {
   const meter = el("div", "gpu-meter");
@@ -437,6 +453,86 @@ function compilerBody({ access, result, memref }) {
     math.append(pair);
   }
   return [math];
+}
+
+// analyzeGpu for each pass's IR, worked out once per text.
+const passModels = new Map();
+function passModel(ir) {
+  if (!passModels.has(ir)) {
+    if (passModels.size > 200) passModels.clear();
+    passModels.set(ir, analyzeGpu(ir));
+  }
+  return passModels.get(ir);
+}
+
+// The picked access in every pass of the trace. Passes rename values and
+// outline kernels, so it is matched by position: the same launch, the same
+// number of loads and stores in its kernel, and a load or store of the same
+// kind at the same place. Passes where nothing matches (after lowering to
+// LLVM, memref loads and stores are gone) get a null result.
+function acrossPasses(passes, launchIndex, kernel, judged) {
+  return passes.events.map((event) => {
+    const model = event.ir ? passModel(event.ir) : null;
+    const launch = model?.launches[launchIndex];
+    const other = launch ? model.kernels[launch.kernel] : null;
+    const access = other?.accesses?.[judged.index];
+    if (!access || other.accesses.length !== kernel.accesses.length || access.kind !== judged.access.kind)
+      return { event, result: null };
+    return { event, ...judge(access, other, launch) };
+  });
+}
+
+// One small cell per pass, colored by its verdict, with a sentence on what
+// the passes did to it. A click selects that pass.
+function passStrip(passes, history) {
+  const wrap = el("div", "gpu-passes");
+  const cells = el("div", "gpu-pass-cells");
+  const width = Math.max(2, String(history.length).length);
+  history.forEach(({ event, result }, i) => {
+    const state = !result?.analyzed ? "none" : GOOD.has(result.verdict) ? "good" : "bad";
+    const cell = el("button", `gpu-pass ${state}`, String(i + 1).padStart(width, "0"));
+    cell.type = "button";
+    if (i === passes.current) cell.setAttribute("aria-current", "step");
+    cell.title =
+      `${i + 1}. ${passes.describe(event)}
+` +
+      (result?.analyzed
+        ? verdictText(result)
+        : result
+          ? `not analyzed: ${result.reason}`
+          : "not found: lowered past memref loads and stores, or the kernel changed shape");
+    cell.addEventListener("click", () => passes.select(i));
+    cells.append(cell);
+  });
+  wrap.append(el("span", "gpu-kicker", "Across passes"), cells);
+  wrap.append(el("p", "gpu-note", passSummary(history)));
+  return [wrap];
+}
+
+const verdictText = (result) =>
+  VERDICT_TEXT[result.verdict] +
+  (result.sectors !== undefined ? ` · ${result.sectors} sectors` : result.ways > 1 ? ` · ${result.ways}-way` : "");
+
+// "1–3" for a run of pass numbers (0-based in), "5" for one.
+const span = (first, last) => (first === last ? `${first + 1}` : `${first + 1}–${last + 1}`);
+
+function passSummary(history) {
+  const seen = history
+    .map((h, i) => ({ i, text: h.result?.analyzed ? verdictText(h.result) : null }))
+    .filter((h) => h.text);
+  if (!seen.length) return "Not readable in any pass.";
+  const first = seen[0].i;
+  const last = seen.at(-1).i;
+  const lowered =
+    last < history.length - 1 ? ` From pass ${last + 2} on it is lowered past memref loads and stores, so it is not read.` : "";
+  const changes = seen.filter((h, k) => k && h.text !== seen[k - 1].text);
+  if (!changes.length)
+    return `${seen[0].text[0].toUpperCase()}${seen[0].text.slice(1)} in passes ${span(first, last)}: no pass changes it, so a fix belongs in the source.${lowered}`;
+  const steps = changes.map((h) => {
+    const before = seen[seen.indexOf(h) - 1];
+    return `pass ${h.i + 1} turns ${before.text} into ${h.text}`;
+  });
+  return `${steps.join("; ")}.${lowered}`.replace(/^./, (c) => c.toUpperCase());
 }
 
 // Sector or bank → its color slot, in the order lanes first meet them.
@@ -504,7 +600,11 @@ function accessSection(kernel, launch, options) {
       "The lanes shown are warp 0 of block (0, 0, 0) on the first loop iteration: which element each of its 32 threads touches. Global memory is judged by 32-byte sectors, shared memory by its 32 banks. When an index is a linear function of the thread ids, block ids and loop counters, the verdict is also checked for every warp and iteration.",
     ),
   );
-  const judged = kernel.accesses.map((access) => ({ access, ...judge(access, kernel, launch) }));
+  const judged = kernel.accesses.map((access, index) => ({
+    access,
+    index,
+    ...judge(access, kernel, launch),
+  }));
   // Start on the access asked for, else the first one worth a look.
   const focused = judged.findIndex((j) => j.access.line === options.focusLine);
   let picked =
@@ -942,10 +1042,10 @@ export function renderGpuView(container, model, options = {}) {
     return;
   }
   const launched = new Set();
-  for (const launch of model.launches) {
+  model.launches.forEach((launch, launchIndex) => {
     launched.add(launch.kernel);
-    children.push(launchSection(launch, model.kernels[launch.kernel], options));
-  }
+    children.push(launchSection(launch, model.kernels[launch.kernel], { ...options, launchIndex }));
+  });
   // Kernels with no launch in this IR (a gpu.module dumped on its own).
   model.kernels.forEach((kernel, i) => {
     if (launched.has(i)) return;
