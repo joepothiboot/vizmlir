@@ -221,7 +221,7 @@ describe("proofs", () => {
     expect(drifting).toMatchObject({
       status: "varies",
       outcomes: [
-        { verdict: "strided", sectors: 5, cases: 7 },
+        { verdict: "misaligned", sectors: 5, cases: 7 },
         { verdict: "coalesced", sectors: 4, cases: 1 },
       ],
       cases: 8,
@@ -392,7 +392,7 @@ describe("lowered kernels", () => {
       status: "varies",
       formula: "%i + tx",
       outcomes: [
-        { verdict: "strided", sectors: 5, cases: 7 },
+        { verdict: "misaligned", sectors: 5, cases: 7 },
         { verdict: "coalesced", sectors: 4, cases: 1 },
       ],
     });
@@ -414,6 +414,50 @@ describe("lowered kernels", () => {
 });
 
 describe("the GPU samples", () => {
+  it("the memory patterns sample shows one pattern per kernel, from the first pass to LLVM", () => {
+    const expected = [
+      // aos_x: x of {x, y} pairs, every other float
+      ["load", "strided", "8/4 sectors", "proven"],
+      ["store", "coalesced", "4/4 sectors", "proven"],
+      // soa_x
+      ["load", "coalesced", "4/4 sectors", "proven"],
+      ["store", "coalesced", "4/4 sectors", "proven"],
+      // diff: in[i] and the shifted in[i + 1]
+      ["load", "coalesced", "4/4 sectors", "proven"],
+      ["load", "misaligned", "5/4 sectors", "proven"],
+      ["store", "coalesced", "4/4 sectors", "proven"],
+      // window_sum: the loop shifts the warp by one element per trip
+      ["load", "coalesced", "4/4 sectors", "varies"],
+      ["store", "coalesced", "4/4 sectors", "proven"],
+      // add_bias: bias[0] for every thread
+      ["load", "coalesced", "4/4 sectors", "proven"],
+      ["load", "broadcast", "1/1 sectors", "proven"],
+      ["store", "coalesced", "4/4 sectors", "proven"],
+      // tile_copy_16x16: a warp covers two half rows
+      ["load", "coalesced", "4/4 sectors", "proven"],
+      ["store", "coalesced", "4/4 sectors", "proven"],
+    ];
+    const trace = events("gpu-patterns.trace.txt");
+    // Inline launches, outlined kernels, and the kernels lowered to NVVM.
+    for (const pass of [0, 1, trace.length - 2]) {
+      const model = analyzeGpu(trace[pass].ir);
+      const rows = model.launches.flatMap((launch) => {
+        const k = model.kernels[launch.kernel];
+        return k.accesses.map((access) => {
+          const memref = parseMemref(access.type);
+          const result = warpAccess(access, memref, memorySpace(memref.space), {
+            defs: k.defs,
+            args: k.args,
+            block: launch.block,
+            grid: launch.grid,
+          });
+          return [access.kind, result.verdict, `${result.sectors}/${result.needed} sectors`, result.proof.status];
+        });
+      });
+      expect(rows).toEqual(expected);
+    }
+  });
+
   it("saxpy's loads and store are coalesced", () => {
     expect(verdicts(events("gpu-kernels.trace.txt")[1].ir)).toEqual([
       ["load", "%arg1", "coalesced", "4/4 sectors"],
