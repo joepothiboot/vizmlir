@@ -66,7 +66,7 @@ function launchSection(launch, kernel, options) {
       "Threads",
       launch.threads === null
         ? "some sizes are only known at runtime"
-        : `${launch.threads.toLocaleString()} in ${Math.ceil((perBlock ?? 0) / WARP) * (blocks ?? 0)} warps of ${WARP}`,
+        : `${launch.threads.toLocaleString("en-US")} in ${(Math.ceil((perBlock ?? 0) / WARP) * (blocks ?? 0)).toLocaleString("en-US")} warps of ${WARP}`,
     ],
   ]) {
     // Each term and value wrap together in the overlay's single line.

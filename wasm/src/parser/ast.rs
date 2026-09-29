@@ -211,12 +211,39 @@ pub fn parse(src: &str, interner: &mut Interner, ast: &mut Ast) {
             line: head.line,
         });
 
-        // `%i = ..` inside an op (`scf.for %i = ..`, `iter_args(%acc = ..)`)
-        // defines a region argument rather than using a value.
-        let binds = |k: usize| rhs[k].kind == Tok::Ssa && rhs.get(k + 1).is_some_and(|t| t.kind == Tok::Equal);
+        // Values an op's header defines rather than uses: region arguments
+        // bound with `=` (`scf.for %i = ..`, `iter_args(%acc = ..)`), function
+        // arguments (`func.func @f(%arg0: T)`), the ids and buffers gpu.launch
+        // names in `blocks(..)`, `threads(..)`, `clusters(..)`, `workgroup(..)`
+        // and `private(..)`, and the induction variables of `scf.forall (..)`
+        // and `scf.parallel (..)`.
+        let head_name = text(head).trim_matches('"');
+        let mut binds = vec![false; rhs.len()];
+        let mut groups: Vec<bool> = Vec::new();
+        for k in 0..rhs.len() {
+            match rhs[k].kind {
+                Tok::LParen => {
+                    let named = k >= 1
+                        && rhs[k - 1].kind == Tok::Ident
+                        && matches!(text(&rhs[k - 1]), "blocks" | "threads" | "clusters" | "workgroup" | "private");
+                    let induction = k == 1 && matches!(head_name, "scf.forall" | "scf.parallel");
+                    groups.push(named || induction);
+                }
+                Tok::RParen => {
+                    groups.pop();
+                }
+                Tok::Ssa => {
+                    let next = rhs.get(k + 1).map(|t| t.kind);
+                    binds[k] = next == Some(Tok::Equal)
+                        || (kind == KIND_FUNC && next == Some(Tok::Colon))
+                        || groups.last() == Some(&true);
+                }
+                _ => {}
+            }
+        }
         let operand_start = if kind == KIND_BLOCK { 0 } else { 1 };
         for (k, t) in rhs.iter().enumerate().skip(operand_start) {
-            if t.kind != Tok::Ssa || binds(k) {
+            if t.kind != Tok::Ssa || binds[k] {
                 continue;
             }
             let sym = interner.intern(text(t));
@@ -234,7 +261,7 @@ pub fn parse(src: &str, interner: &mut Interner, ast: &mut Ast) {
             }
         }
 
-        let bound = (0..rhs.len()).filter(|&k| binds(k)).map(|k| &rhs[k]);
+        let bound = (0..rhs.len()).filter(|&k| binds[k]).map(|k| &rhs[k]);
         for t in lhs.iter().filter(|t| t.kind == Tok::Ssa).chain(bound) {
             let sym = interner.intern(text(t));
             defs.insert(sym, node_idx);
@@ -256,5 +283,45 @@ pub fn parse(src: &str, interner: &mut Interner, ast: &mut Ast) {
         if opens_region {
             stack.push(node_idx);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn undefined(src: &str) -> Vec<String> {
+        let mut interner = Interner::new();
+        let mut ast = Ast::new();
+        parse(src, &mut interner, &mut ast);
+        ast.diags
+            .iter()
+            .filter(|d| d.code == DIAG_UNDEF_SSA)
+            .map(|d| interner.text(d.sym).to_string())
+            .collect()
+    }
+
+    #[test]
+    fn function_arguments_are_defined() {
+        let src = "func.func @f(%arg0: memref<4xf32>, %i: index) {\n  %v = memref.load %arg0[%i] : memref<4xf32>\n  return\n}\n";
+        assert!(undefined(src).is_empty());
+    }
+
+    #[test]
+    fn gpu_launch_ids_and_buffers_are_defined() {
+        let src = "func.func @f(%a: memref<64xf32>) {\n  %c1 = arith.constant 1 : index\n  gpu.launch blocks(%bx, %by, %bz) in (%gx = %c1, %gy = %c1, %gz = %c1) threads(%tx, %ty, %tz) in (%sx = %c1, %sy = %c1, %sz = %c1) workgroup(%t : memref<32xf32, #gpu.address_space<workgroup>>) {\n    %i = arith.addi %bx, %tx : index\n    %v = memref.load %a[%i] : memref<64xf32>\n    memref.store %v, %t[%tx] : memref<32xf32, #gpu.address_space<workgroup>>\n    gpu.terminator\n  }\n  return\n}\n";
+        assert!(undefined(src).is_empty(), "{:?}", undefined(src));
+    }
+
+    #[test]
+    fn forall_induction_variables_are_defined() {
+        let src = "func.func @f(%a: memref<8xf32>) {\n  scf.forall (%i) in (8) {\n    %v = memref.load %a[%i] : memref<8xf32>\n  }\n  return\n}\n";
+        assert!(undefined(src).is_empty(), "{:?}", undefined(src));
+    }
+
+    #[test]
+    fn a_value_used_before_any_definition_is_still_reported() {
+        let src = "func.func @f(%a: index) {\n  %b = arith.addi %a, %missing : index\n  return\n}\n";
+        assert_eq!(undefined(src), vec!["%missing"]);
     }
 }
