@@ -2,7 +2,10 @@
 // the first sample cannot be loaded; the rest are real mlir-opt output in
 // public/samples (see samples/generate.sh), fetched only when picked. The
 // benchmark CSVs are the exception: hand-written mock timings (`*.mock.csv`,
-// flagged `mock`) to show the benchmark view.
+// flagged `mock`) to show the benchmark view. So is the Triton trace
+// (triton-coalesce.trace.txt, flagged `handwritten`): Triton does not run on
+// every machine, so it is written by hand in the format of a Triton 3.x
+// MLIR_ENABLE_DUMP=1 trace; replace it with a real one when one is at hand.
 
 export const RENAME_SAMPLE = `module {
   func.func @matmul(%A: tensor<128x256xf32>, %B: tensor<256x64xf32>) -> tensor<128x64xf32> {
@@ -36,6 +39,14 @@ export const SAMPLES = [
     blurb:
       "An 8×8 grid of 16×16-thread blocks staging tiles of A and B in shared memory, from gpu.launch to PTX.",
     trace: "gpu-tiled-matmul.trace.txt",
+  },
+  {
+    id: "triton-coalesce",
+    title: "Triton: the coalesce pass fixes a strided load",
+    blurb:
+      "A Triton kernel reads a 32×32 tile of a column-major matrix. The default layout puts lanes along the wrong axis; tritongpu-coalesce switches to 4-wide vectors down the columns. Hand-written in Triton 3.x TTGIR format.",
+    trace: "triton-coalesce.trace.txt",
+    handwritten: true,
   },
   {
     id: "gpu-kernels",

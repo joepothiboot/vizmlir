@@ -7,6 +7,7 @@ import { warpAccess } from "./gpu-access.js";
 import { analyzeGpu, memorySpace } from "./gpu.js";
 import { formatBytes } from "./timing.js";
 import { gpuScene } from "./gpu-3d.js";
+import { ownedBy, tritonAccess } from "./triton.js";
 
 const SVG = "http://www.w3.org/2000/svg";
 const WARP = 32;
@@ -47,11 +48,13 @@ function launchSection(launch, kernel, options) {
     el(
       "span",
       "gpu-dim",
-      kernel?.inline
-        ? " · written inline, not outlined into a kernel yet"
-        : launch.host
-          ? ` launched from ${launch.host}`
-          : "",
+      kernel?.triton
+        ? " · Triton GPU IR"
+        : kernel?.inline
+          ? " · written inline, not outlined into a kernel yet"
+          : launch.host
+            ? ` launched from ${launch.host}`
+            : "",
     ),
   );
   section.append(head);
@@ -59,16 +62,24 @@ function launchSection(launch, kernel, options) {
   const blocks = count(launch.grid);
   const perBlock = count(launch.block);
   const facts = el("dl", "gpu-facts");
-  for (const [term, value] of [
-    ["Grid", `${dim(launch.grid)} = ${blocks ?? "?"} blocks`],
-    ["Block", `${dim(launch.block)} = ${perBlock ?? "?"} threads`],
-    [
-      "Threads",
-      launch.threads === null
-        ? "some sizes are only known at runtime"
-        : `${launch.threads.toLocaleString("en-US")} in ${(Math.ceil((perBlock ?? 0) / WARP) * (blocks ?? 0)).toLocaleString("en-US")} warps of ${WARP}`,
-    ],
-  ]) {
+  // A Triton program is a block of num-warps warps; the grid is set by the
+  // host at launch, which is not part of the IR.
+  const rows = kernel?.triton
+    ? [
+        ["Programs", "set at launch (not in this IR)"],
+        ["Program", `${kernel.triton.numWarps} warps = ${perBlock} threads`],
+      ]
+    : [
+        ["Grid", `${dim(launch.grid)} = ${blocks ?? "?"} blocks`],
+        ["Block", `${dim(launch.block)} = ${perBlock ?? "?"} threads`],
+        [
+          "Threads",
+          launch.threads === null
+            ? "some sizes are only known at runtime"
+            : `${launch.threads.toLocaleString("en-US")} in ${(Math.ceil((perBlock ?? 0) / WARP) * (blocks ?? 0)).toLocaleString("en-US")} warps of ${WARP}`,
+        ],
+      ];
+  for (const [term, value] of rows) {
     // Each term and value wrap together in the overlay's single line.
     const pair = el("div");
     pair.append(el("dt", "", term), el("dd", "", value));
@@ -82,9 +93,13 @@ function launchSection(launch, kernel, options) {
   // colors warp 0 in the scene and sets its elements-from-above layer.
   const answer = kernel?.accesses?.length ? answerCard(kernel, options) : null;
   if (answer) section.append(answer);
+  // Triton: which warp and lane hold each element of the picked tensor.
+  const layout = kernel?.triton && answer ? el("figure", "gpu-layout") : null;
+  if (layout) section.append(layout);
   section.append(scene.figure);
   const onPick = (judged) => {
     answer.show(judged);
+    if (layout) renderLayout(layout, judged, kernel);
     scene.showAccess(judged, { formula: depth === "compiler" });
     // Compiler mode also writes the offset's formula in the 3D view.
     answer.onDepth = () => scene.showAccess(judged, { formula: depth === "compiler" });
@@ -250,6 +265,7 @@ const GOOD = new Set(["coalesced", "broadcast", "conflict-free"]);
 function judge(access, kernel, launch) {
   const memref = parseMemref(access.type);
   const space = memorySpace(memref?.space ?? "");
+  if (kernel.triton) return { space, memref, result: tritonAccess(access, kernel) };
   return {
     space,
     memref,
@@ -397,7 +413,7 @@ function plainBody(result, space) {
       result.ways === 1,
     );
   }
-  const fix = FIX_TEXT[result.verdict];
+  const fix = (result.layout ? TRITON_FIX_TEXT : FIX_TEXT)[result.verdict];
   return [
     el("p", "gpu-answer-line", line),
     ...(meter ? [meter] : []),
@@ -409,6 +425,11 @@ const FIX_TEXT = {
   strided:
     "make thread x walk the last (contiguous) index, or read a tile into shared memory and write it out row by row.",
   "bank-conflict": "pad the inner dimension of the shared buffer by one element.",
+};
+// In Triton the layout decides which elements a warp touches together.
+const TRITON_FIX_TEXT = {
+  strided:
+    "a layout whose order starts with the contiguous dimension, with a few elements per thread along it. The tritongpu-coalesce pass picks one when the compiler can see that dimension is contiguous.",
 };
 
 function trafficMeter(label, value, share, good) {
@@ -432,7 +453,7 @@ function compilerBody({ access, result, memref }) {
     rows.push(["offset", `${proof.formula}   (elements of ${access.buffer})`]);
     const bytes = proof.laneStride * result.elementBytes;
     rows.push([
-      "∂/∂tx",
+      proof.laneLabel ?? "∂/∂tx",
       `${proof.laneStride} element${Math.abs(proof.laneStride) === 1 ? "" : "s"} = ${bytes} B between neighboring threads`,
     ]);
   }
@@ -445,7 +466,7 @@ function compilerBody({ access, result, memref }) {
   if (proof?.status === "proven")
     rows.push([
       "holds for",
-      `${proof.warps === null ? "every warp" : `${proof.warps.toLocaleString("en-US")} warps`}${proof.iterations ? " × every loop iteration" : ""}: affine index, every warp shape and alignment checked`,
+      `${proof.perProgram ? "every warp of every program" : proof.warps === null ? "every warp" : `${proof.warps.toLocaleString("en-US")} warps`}${proof.iterations ? " × every loop iteration" : ""}: affine index, every warp shape and alignment checked`,
     ]);
   else if (proof?.status === "varies")
     rows.push([
@@ -546,6 +567,112 @@ export function passSummary(history) {
   return `${steps.join("; ")}.${lowered}`.replace(/^./, (c) => c.toUpperCase());
 }
 
+// Triton's #blocked layout for the picked tensor as a grid, one cell per
+// element (up to 64 × 64), colored by the warp that holds it and labeled with
+// the lane at the start of each thread's piece. Warp 0's elements on the
+// layout's first repetition, the ones judged above, are outlined; later
+// repetitions are paler.
+const LAYOUT_MAX = 64;
+function renderLayout(figure, { access, result }, kernel) {
+  const encoding = access.tensor?.encoding;
+  const layout = kernel.triton.layouts.get(encoding);
+  const shape = access.tensor?.shape ?? [];
+  if (!layout || !shape.length || shape.length > 2) {
+    figure.replaceChildren(
+      el("p", "gpu-note", `The layout ${encoding ?? "?"} is not a #blocked layout VizMLIR draws yet.`),
+    );
+    return;
+  }
+  const [rows, cols] = shape.length === 2 ? shape : [1, shape[0]];
+  const shownRows = Math.min(rows, LAYOUT_MAX);
+  const shownCols = Math.min(cols, LAYOUT_MAX);
+  const at = (coord) => (shape.length === 2 ? coord : [0, coord[0]]);
+  const owner = new Map();
+  const { numWarps, warpSize } = kernel.triton;
+  for (let warp = 0; warp < numWarps; warp++)
+    for (let lane = 0; lane < warpSize; lane++)
+      ownedBy(layout, shape, warp, lane).reps.forEach((coords, rep) =>
+        coords.forEach((coord, k) => {
+          const [r, c] = at(coord);
+          const key = r * cols + c;
+          if (!owner.has(key)) owner.set(key, { warp, lane, rep, first: k === 0 });
+        }),
+      );
+  const cell = shownCols > 32 ? 8 : 14;
+  const grid = svg("svg", {
+    class: "gpu-layout-grid",
+    viewBox: `0 0 ${shownCols * cell} ${shownRows * cell}`,
+    width: shownCols * cell,
+    height: shownRows * cell,
+    role: "img",
+    "aria-label": `Which warp and lane hold each element of ${access.buffer}'s tensor`,
+  });
+  for (let r = 0; r < shownRows; r++)
+    for (let c = 0; c < shownCols; c++) {
+      const o = owner.get(r * cols + c);
+      if (!o) continue;
+      const picked = o.warp === 0 && o.rep === 0;
+      grid.append(
+        svg(
+          "rect",
+          {
+            x: c * cell,
+            y: r * cell,
+            width: cell,
+            height: cell,
+            class: `w${o.warp % 4}${o.rep ? " later" : ""}${picked ? " picked" : ""}`,
+          },
+          `element [${shape.length === 2 ? `${r}, ${c}` : c}] · warp ${o.warp}, lane ${o.lane}${o.rep ? `, repetition ${o.rep + 1}` : ""}`,
+        ),
+      );
+      if (o.first && cell >= 14) {
+        const label = svg("text", { x: c * cell + 2, y: r * cell + cell - 4 });
+        label.textContent = String(o.lane);
+        grid.append(label);
+      }
+    }
+  const legend = el("div", "gpu-layout-legend");
+  for (let warp = 0; warp < Math.min(numWarps, 4); warp++) {
+    const item = el("span", "", `warp ${warp}${numWarps > 4 && warp === 3 ? ` (and every 4th after)` : ""}`);
+    item.style.setProperty("--swatch", `var(--warp-${warp})`);
+    legend.append(item);
+  }
+  const clipped = rows > shownRows || cols > shownCols ? ` Showing the first ${shownRows} × ${shownCols}.` : "";
+  figure.replaceChildren(
+    el("span", "gpu-kicker", `Who holds which element · ${encoding}`),
+    el("p", "", describeLayout(layout, shape, result.elementBytes, numWarps) + clipped),
+    grid,
+    legend,
+    el(
+      "p",
+      "gpu-note",
+      `sizePerThread [${layout.sizePerThread.join(", ")}] · threadsPerWarp [${layout.threadsPerWarp.join(", ")}] · warpsPerCTA [${layout.warpsPerCTA.join(", ")}] · order [${layout.order.join(", ")}]. Outlined: what warp 0 ${access.kind === "load" ? "loads" : "stores"} in one go, judged above. Numbers are lane ids.`,
+    ),
+  );
+}
+
+// "Each thread holds 4 elements side by side along i, one 16-byte access. A
+// warp covers 32 × 4 elements, and 4 warps 32 × 16, repeated 2 times."
+function describeLayout(layout, shape, elementBytes, numWarps) {
+  const names = shape.length === 2 ? ["i", "j"] : ["i"];
+  const fast = layout.order[0];
+  const run = layout.sizePerThread[fast];
+  const each = layout.sizePerThread.reduce((a, b) => a * b, 1);
+  const warp = shape.map((_, d) => layout.sizePerThread[d] * layout.threadsPerWarp[d]);
+  const program = shape.map((_, d) => warp[d] * layout.warpsPerCTA[d]);
+  const reps = shape.reduce((n, size, d) => n * Math.max(1, Math.ceil(size / program[d])), 1);
+  const bytes = run * (elementBytes ?? 0);
+  const first =
+    run > 1
+      ? `Each thread holds ${each} elements, ${run} side by side along ${names[fast]}: one ${bytes}-byte access.`
+      : `Each thread holds ${each === 1 ? "one element" : `${each} elements`} at a time, so neighboring lanes decide what a warp touches.`;
+  const cover = (dims) => dims.join(" × ");
+  return (
+    `${first} Lanes are laid out along ${names[fast]} first. A warp covers ${cover(warp)} elements, and the program's ${numWarps} warps ${cover(program)}` +
+    (reps > 1 ? `, repeated ${reps} times to fill ${cover(shape)}.` : ".")
+  );
+}
+
 // Sector or bank → its color slot, in the order lanes first meet them.
 function groupOrder(result) {
   const groups = [...new Set(result.lanes.map((l) => l.group))];
@@ -556,7 +683,11 @@ function groupOrder(result) {
 function reach(proof) {
   if (proof?.status === "varies") return "varies";
   if (proof?.status !== "proven") return "warp 0 only";
-  const warps = proof.warps === null ? "every warp" : `all ${proof.warps.toLocaleString("en-US")} warps`;
+  const warps = proof.perProgram
+    ? "every warp, every program"
+    : proof.warps === null
+      ? "every warp"
+      : `all ${proof.warps.toLocaleString("en-US")} warps`;
   return proof.iterations ? `${warps}, every iteration` : warps;
 }
 

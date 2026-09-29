@@ -91,6 +91,9 @@ function normalize(op, rest) {
   }
   const sreg = /^(?:nvvm\.read\.ptx\.sreg|rocdl)\.(tid|ctaid|ntid|nctaid|workitem\.id|workgroup\.id)\.([xyz])$/.exec(op);
   if (sreg) return { op: SREG[sreg[1]], rest: sreg[2] };
+  // A Triton program is a block: its id and count are block id and grid size.
+  if (op === "tt.get_program_id") return { op: "gpu.block_id", rest };
+  if (op === "tt.get_num_programs") return { op: "gpu.grid_dim", rest };
   return { op, rest };
 }
 
@@ -161,6 +164,10 @@ export function buildDefs(lines, firstLine = 1, maps = new Map()) {
       const bounds = FOR_BOUNDS.exec(line.slice(loop.index));
       const operands = bounds ? [loop[2], bounds[1], bounds[2] ?? "1"] : [loop[2]];
       defs.set(loop[1], { op: "loop", operands, rest: "", line: at });
+      // Values carried around the loop: "iter", holding their first value.
+      const carried = /\biter_args\s*\(([^)]*)\)/.exec(line)?.[1] ?? "";
+      for (const pair of carried.matchAll(/(%[\w$.-]+)\s*=\s*(%[\w$.-]+)/g))
+        defs.set(pair[1], { op: "iter", operands: [pair[2]], rest: "", line: at });
     }
     if (/\bgpu\.launch\b(?!_)/.test(line) || /^\s*threads\(/.test(line)) {
       for (const [keyword, ids] of Object.entries(LAUNCH_IDS)) {
@@ -387,7 +394,7 @@ export function warpLanes(block, warp = 0) {
 // Judges one warp from the byte address each lane touches: global memory by
 // the 32-byte sectors it moves, shared memory by its most crowded bank.
 // `groups` is each lane's sector or bank, for coloring.
-function judgeWarp(bytes, elementBytes, space) {
+export function judgeWarp(bytes, elementBytes, space) {
   const distinct = new Set(bytes).size;
   if (space === "shared") {
     // Lanes that read the same word share it (broadcast); different words in

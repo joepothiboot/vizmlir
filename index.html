@@ -40,6 +40,11 @@
         --err: #ff6b5e;
         --good: #9be564;
         --warn: #f2c94c;
+        /* Warps in the Triton layout grid, told apart by hue and lightness. */
+        --warp-0: #9be564;
+        --warp-1: #f2c94c;
+        --warp-2: #6fb3f2;
+        --warp-3: #d58ad6;
         --edge: rgba(155, 155, 155, 0.45);
         --grid-dot: #262626;
         --selection: rgba(255, 255, 255, 0.18);
@@ -86,6 +91,10 @@
         --err: #b8321f;
         --good: #3b7d1f;
         --warn: #8f6200;
+        --warp-0: #3b7d1f;
+        --warp-1: #8f6200;
+        --warp-2: #1f5f9e;
+        --warp-3: #8a3f8c;
         --edge: rgba(107, 107, 107, 0.5);
         --grid-dot: #e3e3e3;
         --selection: rgba(0, 0, 0, 0.12);
@@ -2322,6 +2331,64 @@
       .gpu-meter-bar.good div {
         background: var(--good);
       }
+      /* Triton: which warp and lane hold each element of a tensor. */
+      .gpu-layout {
+        margin: 0 0 12px;
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+      }
+      .gpu-layout p {
+        max-width: 720px;
+        margin: 4px 0 8px;
+      }
+      .gpu-layout code {
+        font-size: 11px;
+      }
+      .gpu-layout-grid {
+        display: block;
+        max-width: 100%;
+        height: auto;
+      }
+      .gpu-layout-grid rect {
+        stroke: var(--bg);
+        stroke-width: 0.5;
+      }
+      .gpu-layout-grid .w0 { fill: var(--warp-0); }
+      .gpu-layout-grid .w1 { fill: var(--warp-1); }
+      .gpu-layout-grid .w2 { fill: var(--warp-2); }
+      .gpu-layout-grid .w3 { fill: var(--warp-3); }
+      .gpu-layout-grid .later {
+        fill-opacity: 0.45;
+      }
+      .gpu-layout-grid .picked {
+        stroke: var(--fg);
+        stroke-width: 1.5;
+      }
+      .gpu-layout-grid text {
+        fill: var(--bg);
+        font-family: var(--code);
+        font-size: 7px;
+        pointer-events: none;
+      }
+      .gpu-layout-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 14px;
+        margin-top: 8px;
+        color: var(--dim);
+        font-size: 11px;
+      }
+      .gpu-layout-legend span::before {
+        content: "";
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        margin-right: 5px;
+        border-radius: 2px;
+        background: var(--swatch);
+        vertical-align: -1px;
+      }
       .gpu-answer-fix {
         max-width: 720px;
         margin: 0;
@@ -3874,6 +3941,15 @@
                   into one column is a strided access. <strong>Elements</strong>
                   (<kbd>e</kbd>) shows the same buffer flat, from above.
                 </p>
+                <p>
+                  For <strong>Triton</strong> kernels, the layout of a tensor
+                  decides which elements each thread holds, and so what a warp
+                  reads together. <strong>Who holds which element</strong>
+                  draws it: one square per element, colored by warp and
+                  numbered by lane. Open the Triton sample and step from the
+                  first pass to the second to watch the coalesce pass turn a
+                  row of lanes into columns of 4-wide vectors.
+                </p>
 
                 <div class="try">
                   <strong>Try it.</strong>
@@ -4287,6 +4363,14 @@ mlir-opt input.mlir -pass-pipeline='…' \
                     dialect, where loops have become branches. Once a kernel is
                     compiled to a binary, only its register and shared memory
                     counts can be read.
+                  </li>
+                  <li>
+                    Triton GPU IR is read with its <code>#blocked</code>
+                    layouts. Other layouts (<code>#mma</code>, dot operands,
+                    shared), block pointers from
+                    <code>tt.make_tensor_ptr</code>, and pointers carried
+                    around a loop past its first trip are not read yet. How
+                    many programs run is set at launch, outside the IR.
                   </li>
                   <li>
                     VizMLIR understands the most common MLIR code. If something
