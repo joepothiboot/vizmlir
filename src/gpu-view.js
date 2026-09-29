@@ -6,7 +6,7 @@ import { parseMemref } from "./buffers.js";
 import { warpAccess } from "./gpu-access.js";
 import { analyzeGpu, memorySpace } from "./gpu.js";
 import { formatBytes } from "./timing.js";
-import { gpuScene } from "./gpu-3d.js";
+import { gpuScene, matrixWidth } from "./gpu-3d.js";
 import { ownedBy, tritonAccess } from "./triton.js";
 
 const SVG = "http://www.w3.org/2000/svg";
@@ -256,6 +256,7 @@ function memorySummary(kernel) {
 const VERDICT_TEXT = {
   coalesced: "coalesced",
   strided: "strided",
+  misaligned: "misaligned",
   broadcast: "broadcast",
   "conflict-free": "no bank conflicts",
   "bank-conflict": "bank conflict",
@@ -390,6 +391,9 @@ function plainBody(result, space) {
       line = `Each warp touches ${result.sectors} separate 32-byte chunks, so the GPU moves ${times > 1 ? `${times}× ` : ""}more data than it uses.`;
       break;
     }
+    case "misaligned":
+      line = `Neighbors read neighbors, but the run starts partway into a 32-byte chunk, so the warp needs ${result.sectors} chunks instead of ${result.needed}.`;
+      break;
     case "conflict-free":
       line = `Each thread uses its own bank of ${space} memory, so the warp is served in one pass.`;
       break;
@@ -413,10 +417,17 @@ function plainBody(result, space) {
       result.ways === 1,
     );
   }
-  const fix = (result.layout ? TRITON_FIX_TEXT : FIX_TEXT)[result.verdict];
+  // A small stride is usually fields of a struct read one at a time.
+  const stride = result.lanes.length > 1 ? Math.abs(result.lanes[1].offset - result.lanes[0].offset) : 0;
+  const fix =
+    !result.layout && result.verdict === "strided" && stride >= 2 && stride <= 8
+      ? `neighboring threads are ${stride} elements apart, as when reading one field of an array of structs. Keep each field in its own array (a struct of arrays) so neighbors read neighbors.`
+      : (result.layout ? TRITON_FIX_TEXT : FIX_TEXT)[result.verdict];
   return [
     el("p", "gpu-answer-line", line),
     ...(meter ? [meter] : []),
+    // What the sentence and bar show is warp 0 on the first loop trip.
+    ...(result.proof?.status === "varies" ? [el("p", "gpu-answer-fix", explainProof(result.proof))] : []),
     ...(fix ? [el("p", "gpu-answer-fix", `Usual fix: ${fix}`)] : []),
   ];
 }
@@ -424,12 +435,14 @@ function plainBody(result, space) {
 const FIX_TEXT = {
   strided:
     "make thread x walk the last (contiguous) index, or read a tile into shared memory and write it out row by row.",
+  misaligned: "start each warp's run on a multiple of 32 bytes: shift the index, or pad the array.",
   "bank-conflict": "pad the inner dimension of the shared buffer by one element.",
 };
 // In Triton the layout decides which elements a warp touches together.
 const TRITON_FIX_TEXT = {
   strided:
     "a layout whose order starts with the contiguous dimension, with a few elements per thread along it. The tritongpu-coalesce pass picks one when the compiler can see that dimension is contiguous.",
+  misaligned: "start the tile on a multiple of 32 bytes, or tell Triton the base is aligned (tt.divisibility).",
 };
 
 function trafficMeter(label, value, share, good) {
@@ -446,7 +459,7 @@ function trafficMeter(label, value, share, good) {
 
 // The index math: the element offset as a function of the ids, how far apart
 // neighboring threads land, and how far the verdict was checked.
-function compilerBody({ access, result, memref }) {
+function compilerBody({ access, result }) {
   const proof = result.proof;
   const rows = [];
   if (proof?.formula) {
@@ -520,7 +533,12 @@ function passStrip(passes, history) {
   const cells = el("div", "gpu-pass-cells");
   const width = Math.max(2, String(history.length).length);
   history.forEach(({ event, result }, i) => {
-    const state = !result?.analyzed ? "none" : GOOD.has(result.verdict) ? "good" : "bad";
+    // A verdict that varies across warps or loop trips is not all good.
+    const state = !result?.analyzed
+      ? "none"
+      : GOOD.has(result.verdict) && result.proof?.status !== "varies"
+        ? "good"
+        : "bad";
     const cell = el("button", `gpu-pass ${state}`, String(i + 1).padStart(width, "0"));
     cell.type = "button";
     if (i === passes.current) cell.setAttribute("aria-current", "step");
@@ -541,7 +559,12 @@ function passStrip(passes, history) {
 
 const verdictText = (result) =>
   VERDICT_TEXT[result.verdict] +
-  (result.sectors !== undefined ? ` · ${result.sectors} sectors` : result.ways > 1 ? ` · ${result.ways}-way` : "");
+  (result.sectors !== undefined
+    ? ` · ${result.sectors} sector${result.sectors === 1 ? "" : "s"}`
+    : result.ways > 1
+      ? ` · ${result.ways}-way`
+      : "") +
+  (result.proof?.status === "varies" ? " for warp 0, varying across warps" : "");
 
 // "1–3" for a run of pass numbers (0-based in), "5" for one.
 const span = (first, last) => (first === last ? `${first + 1}` : `${first + 1}–${last + 1}`);
@@ -721,6 +744,14 @@ function explain(result, space) {
         "Making thread x walk the last (contiguous) index, or staging the data through shared memory, usually fixes this."
       );
     }
+    case "misaligned": {
+      const offBy = (result.lanes[0].byte % 32 + 32) % 32;
+      return (
+        `The warp's ${result.distinct} elements (${bytes} B) are side by side, but the first starts ${offBy} B into a 32-byte sector, ` +
+        `so they straddle ${result.sectors} sectors instead of ${result.needed}: ${Math.round(result.efficiency * 100)}% of the traffic is useful. ` +
+        "Starting each warp's run on a multiple of 32 bytes (shift the index, or pad the array) fixes this; the cost is one extra sector, not a stride."
+      );
+    }
     case "conflict-free":
       return `Each thread uses its own bank of ${space} memory (or shares a word with another thread), so the warp is served in one pass.`;
     case "bank-conflict":
@@ -883,10 +914,11 @@ function renderLaneDetail(container, { access, result, space }) {
 }
 
 // The buffer around the touched elements, rows by the first index (or rows
-// of 32 for a 1-D buffer), touched elements colored like their lanes.
+// of 32 for a 1-D buffer, or one with rows narrower than 32), touched
+// elements colored like their lanes.
 function elementMap(access, result, memref, order) {
-  const twoD = memref.dims.length >= 2;
-  const width = twoD ? memref.dims.at(-1) : 32;
+  const twoD = matrixWidth(memref.dims) !== null;
+  const width = matrixWidth(memref.dims) ?? 32;
   const at = (offset) => ({ row: Math.floor(offset / width), col: offset % width });
   const touched = new Map();
   for (const lane of result.lanes) touched.set(lane.offset, lane);

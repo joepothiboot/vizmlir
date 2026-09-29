@@ -34,6 +34,13 @@ export const SAMPLES = [
     trace: "gpu-transpose.trace.txt",
   },
   {
+    id: "gpu-patterns",
+    title: "Memory patterns: six ways a warp reads",
+    blurb:
+      "One small kernel per pattern: {x, y} pairs vs. separate arrays, a read shifted by one, a sliding window, a shared bias, and 16×16 blocks. Each looks different in the 3D view.",
+    trace: "gpu-patterns.trace.txt",
+  },
+  {
     id: "gpu-tiled-matmul",
     title: "Tiled matmul on the GPU",
     blurb:

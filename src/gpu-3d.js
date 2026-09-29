@@ -102,13 +102,15 @@ export function layoutLaunch(grid, block) {
 }
 
 // The window of the picked access's buffer drawn on the memory plate: rows by
-// the first index (rows of 32 for a 1-D buffer), at most TILE.rows × TILE.cols
-// around the elements warp 0 touches. `cells` maps a tile to the lane that
-// touches it, `of` a lane to its tile, and `shade(r, c)` alternates by 32-byte
-// sector (global) or by 128-byte row of the 32 banks (shared).
+// the first index, or memory as rows of 32 elements for a 1-D buffer and one
+// whose rows are narrower than 32 (such as {x, y} pairs), at most TILE.rows ×
+// TILE.cols around the elements warp 0 touches. `cells` maps a tile to the
+// lane that touches it, `of` a lane to its tile, and `shade(r, c)` alternates
+// by 32-byte sector (global) or by 128-byte row of the 32 banks (shared).
+export const matrixWidth = (dims) => (dims.length >= 2 && dims.at(-1) >= 32 ? dims.at(-1) : null);
 export function elementTiles({ access, memref, space }, result, order) {
   const dims = memref?.dims ?? [];
-  const width = dims.length >= 2 ? dims.at(-1) : 32;
+  const width = matrixWidth(dims) ?? 32;
   if (!width) return null;
   const at = (offset) => [Math.floor(offset / width), offset % width];
   const points = result.lanes.map((l) => at(l.offset));
@@ -131,7 +133,7 @@ export function elementTiles({ access, memref, space }, result, order) {
   const shade = (r, c) =>
     Math.floor((((rowStart + r) * width + colStart + c) * result.elementBytes) / unit) % 2 === 1;
   const label =
-    dims.length >= 2
+    matrixWidth(dims)
       ? `${access.buffer} · rows ${rowStart}–${rowStart + rows - 1} × columns ${colStart}–${colStart + cols - 1}`
       : `${access.buffer} · elements ${rowStart * width}–${(rowStart + rows) * width - 1}`;
   return { rows, cols, cells, of, shade, label };
