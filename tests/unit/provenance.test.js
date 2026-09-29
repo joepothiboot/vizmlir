@@ -132,6 +132,28 @@ describe("scanSymbols", () => {
     expect(symbols.get("@helper").text).toBe("func.func private @helper()");
   });
 
+  it("keeps block labels at the function's own indent inside it", () => {
+    const ir = [
+      "module {",
+      "  func.func @f(%n: index) {",
+      "    cf.br ^bb1",
+      "  ^bb1:",
+      "    return",
+      "  }",
+      "  func.func @g() {",
+      "    return",
+      "  }",
+      "}",
+    ].join("\n");
+    expect(scanSymbols(ir).get("@f").full.split("\n")).toEqual([
+      "func.func @f(%n: index) {",
+      "  cf.br ^bb1",
+      "^bb1:",
+      "  return",
+      "}",
+    ]);
+  });
+
   it("reads quoted symbols, visibility keywords and globals", () => {
     const symbols = scanSymbols(
       [
