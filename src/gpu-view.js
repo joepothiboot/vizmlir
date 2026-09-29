@@ -470,7 +470,7 @@ function passModel(ir) {
 // number of loads and stores in its kernel, and a load or store of the same
 // kind at the same place. Passes where nothing matches (after lowering to
 // LLVM, memref loads and stores are gone) get a null result.
-function acrossPasses(passes, launchIndex, kernel, judged) {
+export function acrossPasses(passes, launchIndex, kernel, judged) {
   return passes.events.map((event) => {
     const model = event.ir ? passModel(event.ir) : null;
     const launch = model?.launches[launchIndex];
@@ -478,7 +478,7 @@ function acrossPasses(passes, launchIndex, kernel, judged) {
     const access = other?.accesses?.[judged.index];
     if (!access || other.accesses.length !== kernel.accesses.length || access.kind !== judged.access.kind)
       return { event, result: null };
-    return { event, ...judge(access, other, launch) };
+    return { event, access, ...judge(access, other, launch) };
   });
 }
 
@@ -516,7 +516,7 @@ const verdictText = (result) =>
 // "1–3" for a run of pass numbers (0-based in), "5" for one.
 const span = (first, last) => (first === last ? `${first + 1}` : `${first + 1}–${last + 1}`);
 
-function passSummary(history) {
+export function passSummary(history) {
   const seen = history
     .map((h, i) => ({ i, text: h.result?.analyzed ? verdictText(h.result) : null }))
     .filter((h) => h.text);

@@ -1897,6 +1897,8 @@
         font-family: var(--ui);
         font-size: 12px;
         line-height: 1.5;
+        /* The answer card tightens when this column is narrow. */
+        container-type: inline-size;
       }
       .gpu-intro {
         max-width: 720px;
@@ -2325,6 +2327,21 @@
         margin: 0;
         color: var(--dim);
         font-size: 12px;
+      }
+      @container (max-width: 460px) {
+        .gpu-answer {
+          padding: 10px 12px;
+        }
+        .gpu-answer-line {
+          font-size: 14px;
+        }
+        .gpu-depth {
+          margin-left: 0;
+        }
+        .gpu-meter-labels {
+          flex-direction: column;
+          gap: 0;
+        }
       }
       .gpu-passes {
         display: flex;
@@ -3608,9 +3625,11 @@
                     will do.
                   </li>
                   <li>
-                    Scroll to <strong>Memory accesses</strong> and click a row
-                    marked in orange. It explains what is wrong and how people
-                    usually fix it.
+                    Read the card at the top of the GPU view. It says whether
+                    the picked read or write is good for the GPU, what it
+                    costs, and how people usually fix it. Click another row in
+                    <strong>Memory accesses</strong> to change which one it
+                    explains.
                   </li>
                   <li>
                     Press <kbd>]</kbd> a few times to step through the
@@ -3812,9 +3831,46 @@
                   For every <em>launch</em> (a place the program starts work on
                   the GPU), the view shows the grid and one opened block, every
                   array sorted into global, shared, and private memory, and
-                  every read and write with a verdict for the first warp. Click
-                  an access to see its 32 threads as colored squares (same
-                  color, same sector or bank) and to mark its line in the code.
+                  every read and write with a verdict. Click an access to see
+                  its 32 threads as colored squares (same color, same sector or
+                  bank) and to mark its line in the code.
+                </p>
+                <p>
+                  The <strong>answer card</strong> at the top of each launch
+                  sums up the picked access: its verdict, one sentence on what
+                  it costs, and a bar for how much of the memory traffic is
+                  useful. Next to the verdict:
+                </p>
+                <dl class="docs-terms">
+                  <dt><span class="gpu-chip proven">✓ all 32,768 warps</span></dt>
+                  <dd>
+                    Proven. The address is a linear function of the thread ids,
+                    block ids and loop counters, so VizMLIR checked every warp
+                    of the launch and every trip through the loops, not just
+                    the first warp.
+                  </dd>
+                  <dt><span class="bad">varies across warps</span></dt>
+                  <dd>
+                    Some warps or loop trips do better than others, usually
+                    because the address drifts out of line with the 32-byte
+                    sectors. The card says how often each case happens.
+                  </dd>
+                  <dt>warp 0 only</dt>
+                  <dd>
+                    The address uses something VizMLIR can't reason about for
+                    every warp (a division, say), so only the first warp was
+                    checked.
+                  </dd>
+                </dl>
+                <p>
+                  <strong>Compiler</strong> on the card swaps the sentence for
+                  the math: the element offset as a formula of the ids, and
+                  how far apart neighboring threads land. With a pass trace
+                  open, <strong>Across passes</strong> shows the same access at
+                  every pass, so you can see which pass made it better or
+                  worse. In the 3D view, <strong>Elements</strong>
+                  (<kbd>e</kbd>) shows the buffer from above with the elements
+                  the first warp touches.
                 </p>
 
                 <div class="try">
