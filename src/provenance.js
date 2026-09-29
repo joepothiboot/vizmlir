@@ -42,12 +42,13 @@ export function scanSymbols(ir) {
     if (line.trim() === "") continue;
     const indent = indentOf(line);
 
-    // Leave every op this line is not inside. A closing brace at the op's own
+    // Leave every op this line is not inside. A closing brace or a block label
+    // (`^bb1:`, which MLIR prints at its region's op indent) at the op's own
     // indent still belongs to it.
     while (
       stack.length &&
       (indent < stack.at(-1).indent ||
-        (indent === stack.at(-1).indent && !/^\s*}/.test(line)))
+        (indent === stack.at(-1).indent && !/^\s*[}^]/.test(line)))
     )
       stack.pop().end = last;
     owner = stack.at(-1) ?? null;

@@ -6,7 +6,7 @@
 // sizes that are only known at runtime stay null.
 
 import { parseMemref } from "./buffers.js";
-import { buildDefs, findAccesses } from "./gpu-access.js";
+import { affineAliases, buildDefs, findAccesses } from "./gpu-access.js";
 import { embeddedAssembly, scanSymbols } from "./provenance.js";
 
 const LAUNCH_FUNC =
@@ -238,9 +238,34 @@ export function ptxEntries(ptx) {
 //     values, and `threads` is their product when all are known.
 //   kernels: [{ path, name, op, line, inline, lowered, buffers, ptx }] where
 //     `ptx` is { registers, sharedBytes } from an embedded PTX entry.
+// The values a launch passes, one per kernel parameter. When the kernel was
+// lowered to LLVM and takes more parameters than the launch has operands, each
+// memref operand is expanded the way MLIR lowers it: allocated and aligned
+// pointers (unknown), then the offset, sizes and strides, known for a static
+// row-major memref. `valueOf(part)` gives any other operand's constant value.
+export function loweredArgs(operands, params, valueOf) {
+  if (operands.length === params) return operands.map(valueOf);
+  const values = [];
+  for (const part of operands) {
+    const type = part.slice(part.indexOf(":") + 1).trim();
+    const memref = type.startsWith("memref") ? parseMemref(type) : null;
+    if (!memref) {
+      values.push(valueOf(part));
+      continue;
+    }
+    const dims = memref.dims;
+    const strides = dims.map((_, k) =>
+      dims.slice(k + 1).reduce((a, d) => (a === null || d === null ? null : a * d), 1),
+    );
+    values.push(null, null, 0, ...dims, ...strides);
+  }
+  return values;
+}
+
 export function analyzeGpu(ir) {
   if (!/\bgpu\./.test(ir)) return null;
   const lines = ir.split("\n");
+  const maps = affineAliases(ir);
   const kernels = [];
   const launches = [];
   const byPath = new Map();
@@ -266,6 +291,9 @@ export function analyzeGpu(ir) {
     declared.push(...attributions(rest));
     const full = symbol.full.split("\n");
     const body = full.slice(1);
+    // Lowered (llvm.func) kernels are read too: their LLVM and NVVM ops are
+    // normalized by buildDefs, and their loads and stores go through
+    // getelementptr (findAccesses).
     const kernel = {
       path: symbol.path,
       name: symbol.symbol,
@@ -275,14 +303,10 @@ export function analyzeGpu(ir) {
       lowered: symbol.op !== "gpu.func",
       buffers: isGpuKernel ? kernelBuffers(declared, body) : [],
       ptx: null,
-      ...(isGpuKernel
-        ? {
-            params,
-            args: new Map(),
-            defs: buildDefs(full, symbol.line),
-            accesses: findAccesses(full, symbol.line),
-          }
-        : {}),
+      params,
+      args: new Map(),
+      defs: buildDefs(full, symbol.line, maps),
+      accesses: findAccesses(full, symbol.line),
     };
     byPath.set(symbol.path, kernels.length);
     kernels.push(kernel);
@@ -333,10 +357,10 @@ export function analyzeGpu(ir) {
         const operands = match
           ? splitTop(parenBody(header, match.index + match[0].length - 1) ?? "")
           : [];
-        operands.forEach((part, k) => {
-          const name = part.split(":")[0].trim();
-          if (entry.params[k])
-            entry.args.set(entry.params[k], constantBefore(lines, i, name));
+        loweredArgs(operands, entry.params.length, (part) =>
+          constantBefore(lines, i, part.split(":")[0].trim()),
+        ).forEach((value, k) => {
+          if (entry.params[k]) entry.args.set(entry.params[k], value);
         });
       }
       if (kernel < 0) {
@@ -369,7 +393,7 @@ export function analyzeGpu(ir) {
         ptx: null,
         params: [],
         args: new Map(),
-        defs: buildDefs(scope, (host?.index ?? i) + 1),
+        defs: buildDefs(scope, (host?.index ?? i) + 1, maps),
         accesses: findAccesses(region.lines, region.start + 1),
       });
     }

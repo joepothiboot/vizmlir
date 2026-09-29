@@ -3868,9 +3868,11 @@
                   how far apart neighboring threads land. With a pass trace
                   open, <strong>Across passes</strong> shows the same access at
                   every pass, so you can see which pass made it better or
-                  worse. In the 3D view, <strong>Elements</strong>
-                  (<kbd>e</kbd>) shows the buffer from above with the elements
-                  the first warp touches.
+                  worse. In the 3D view, the memory plate next to the opened
+                  block holds the elements the first warp touches, with a line
+                  from each thread to its element: a row of threads fanning
+                  into one column is a strided access. <strong>Elements</strong>
+                  (<kbd>e</kbd>) shows the same buffer flat, from above.
                 </p>
 
                 <div class="try">
@@ -4277,6 +4279,14 @@ mlir-opt input.mlir -pass-pipeline='…' \
                     Index arithmetic built from values VizMLIR can't work out
                     (data loaded from memory, for example) is reported as not
                     analyzed rather than guessed.
+                  </li>
+                  <li>
+                    Reads and writes are followed through the whole pipeline:
+                    <code>memref</code> and <code>affine</code> loads and
+                    stores, then the same kernel after lowering to the LLVM
+                    dialect, where loops have become branches. Once a kernel is
+                    compiled to a binary, only its register and shared memory
+                    counts can be read.
                   </li>
                   <li>
                     VizMLIR understands the most common MLIR code. If something

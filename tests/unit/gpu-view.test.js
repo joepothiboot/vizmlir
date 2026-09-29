@@ -23,7 +23,7 @@ describe("acrossPasses", () => {
   const trace = events("gpu-transpose.trace.txt");
   const passes = { events: trace };
 
-  it("follows an access through outlining by position, and loses it once lowered", () => {
+  it("follows an access through outlining and lowering by position, and loses it in the binary", () => {
     const { kernel, judged } = pick(trace[0].ir, 0, 1);
     expect(judged.access.kind).toBe("store");
     const history = acrossPasses(passes, 0, kernel, judged);
@@ -33,14 +33,16 @@ describe("acrossPasses", () => {
       "strided",
       "strided",
       "strided",
-      null,
-      null,
-      null,
+      "strided",
+      "strided",
+      "strided",
       null,
     ]);
-    // Outlining renamed the buffer; the match is by position.
+    // Outlining renamed the buffer, and lowering split it into pointers,
+    // sizes and strides; the match is by position.
     expect(history[0].access.buffer).toBe("%arg1");
     expect(history[1].access.buffer).toBe("%arg2");
+    expect(history[4].access.buffer).toBe("%arg9");
   });
 
   it("does not match an access of another kind at the same place", () => {
@@ -56,7 +58,7 @@ describe("passSummary", () => {
 
   it("says no pass changes a verdict, and where the access stops being readable", () => {
     expect(passSummary([at("strided", 32), at("strided", 32), none])).toBe(
-      "Strided · 32 sectors in passes 1–2: no pass changes it, so a fix belongs in the source. From pass 3 on it is lowered past memref loads and stores, so it is not read.",
+      "Strided · 32 sectors in passes 1–2: no pass changes it, so a fix belongs in the source. From pass 3 on it can't be found: the kernel was compiled to a binary, or its loads and stores changed.",
     );
   });
 
