@@ -216,8 +216,10 @@ const dimText = (dims) => dims.join(" × ");
 // and everything they read or feed, and returns how many it lit.
 // showAccess({ access, result }) colors warp 0's threads by the sector or
 // bank each one hits, showSpace(space) outlines that memory's floor plate,
-// and overlay(facts, panel) lays the launch facts and a Memory panel over
-// the canvas, so the whole launch reads in one place.
+// overlay(facts, panel) lays the launch facts and a Memory panel over the
+// canvas, so the whole launch reads in one place, and showElements(node)
+// sets the picked access's elements seen from above: a layer over the canvas
+// that the Elements tool (e) turns on and off.
 export function gpuScene(launch, kernel, { onLine } = {}) {
   const layout = layoutLaunch(launch.grid, launch.block);
   const floor = [...layout.blocks, ...layout.threads];
@@ -313,18 +315,42 @@ export function gpuScene(launch, kernel, { onLine } = {}) {
   tool("Reset", "Reset the view (0)", () =>
     Object.assign(view, { ...HOME, zoom: 1, pan: [0, 0] }),
   );
+  // The picked access's elements from above, over the canvas; off until the
+  // Elements tool turns it on, and kept on or off as other accesses are picked.
+  const elements = el("div", "gpu-3d-elements");
+  elements.hidden = true;
+  let showTop = false;
+  tool("Elements", "Show the elements the picked warp touches, seen from above (e)", () =>
+    toggleElements(),
+  );
+  const elementsButton = tools.lastChild;
+  elementsButton.setAttribute("aria-pressed", "false");
+  elementsButton.disabled = true;
+  function toggleElements(on = !showTop) {
+    showTop = on && !elementsButton.disabled;
+    elementsButton.setAttribute("aria-pressed", String(showTop));
+    placeElements();
+  }
+  // Below the facts, left of the Memory panel, above the tools.
+  function placeElements() {
+    elements.hidden = !showTop;
+    elements.style.top = `${topSpace + 4}px`;
+    elements.style.right = `${inset ? inset : 8}px`;
+  }
+  let irButton = null;
   if (nodes.length) {
     tool("IR", "Show or hide the kernel IR wall (i)", () => toggleIR());
-    tools.lastChild.setAttribute("aria-pressed", "true");
+    irButton = tools.lastChild;
+    irButton.setAttribute("aria-pressed", "true");
   }
   function toggleIR() {
     showIR = !showIR;
-    tools.lastChild.setAttribute("aria-pressed", String(showIR));
+    irButton.setAttribute("aria-pressed", String(showIR));
     rebuild();
     resize();
   }
   const hint = el("div", "gpu-3d-hint");
-  stage.append(canvas, tip, tools, hint);
+  stage.append(canvas, elements, tip, tools, hint);
   figure.append(stage);
 
   function describe() {
@@ -828,6 +854,7 @@ export function gpuScene(launch, kernel, { onLine } = {}) {
     "-": () => (view.zoom /= 1.25),
     t: () => Object.assign(view, { yaw: 0, pitch: Math.PI / 2 - 0.01 }),
     i: () => nodes.length && toggleIR(),
+    e: () => toggleElements(),
     0: () => Object.assign(view, { ...HOME, zoom: 1, pan: [0, 0] }),
   };
   canvas.addEventListener("keydown", (e) => {
@@ -850,6 +877,7 @@ export function gpuScene(launch, kernel, { onLine } = {}) {
     const panel = stage.querySelector(".gpu-3d-panel");
     inset = panel?.open && width >= 640 ? panel.offsetWidth + 16 : 0;
     topSpace = (stage.querySelector(".gpu-3d-facts")?.offsetHeight ?? 0) + 8;
+    placeElements();
     const ratio = window.devicePixelRatio || 1;
     size = [width, height];
     scene.shown = true;
@@ -902,6 +930,15 @@ export function gpuScene(launch, kernel, { onLine } = {}) {
       });
       panel.addEventListener("toggle", resize);
       stage.append(panel);
+    },
+    // `node` is the element map of the picked access, or null when it has none.
+    showElements(node) {
+      elements.replaceChildren(...(node ? [node] : []));
+      elementsButton.disabled = !node;
+      elementsButton.title = node
+        ? "Show the elements the picked warp touches, seen from above (e)"
+        : "No elements to show: pick an access that could be analyzed";
+      toggleElements(showTop);
     },
     // `judged` is a Memory accesses row: { access, result, space }.
     showAccess(judged) {

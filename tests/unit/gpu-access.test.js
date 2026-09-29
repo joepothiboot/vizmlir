@@ -160,6 +160,87 @@ describe("warpAccess verdicts", () => {
   });
 });
 
+describe("proofs", () => {
+  const proof = (body) => {
+    const model = analyzeGpu(kernel(body));
+    const [launch] = model.launches;
+    const k = model.kernels[launch.kernel];
+    return k.accesses.map((access) => {
+      const memref = parseMemref(access.type);
+      return warpAccess(access, memref, memorySpace(memref.space), {
+        defs: k.defs,
+        args: k.args,
+        block: launch.block,
+        grid: launch.grid,
+      }).proof;
+    });
+  };
+
+  it("proves a verdict for every warp of the launch", () => {
+    expect(
+      proof([
+        "%v = memref.load %x[%c0, %tx] : memref<64x64xf32>",
+        "memref.store %v, %x[%tx, %c0] : memref<64x64xf32>",
+      ]),
+    ).toEqual([
+      {
+        status: "proven",
+        verdict: "coalesced",
+        sectors: 4,
+        warps: 1,
+        iterations: false,
+        formula: "tx",
+        laneStride: 1,
+      },
+      {
+        status: "proven",
+        verdict: "strided",
+        sectors: 32,
+        warps: 1,
+        iterations: false,
+        formula: "64·tx",
+        laneStride: 64,
+      },
+    ]);
+  });
+
+  it("covers every loop iteration, and finds a loop that drifts out of alignment", () => {
+    const [aligned, drifting] = proof([
+      "scf.for %i = %c0 to %c32 step %c32 {",
+      "  %a = arith.addi %i, %tx : index",
+      "  %v = memref.load %x[%c0, %a] : memref<64x64xf32>",
+      "}",
+      "scf.for %j = %c0 to %c32 step %c1 {",
+      "  %b = arith.addi %j, %tx : index",
+      "  %w = memref.load %x[%c0, %b] : memref<64x64xf32>",
+      "}",
+    ]);
+    expect(aligned).toMatchObject({ status: "proven", verdict: "coalesced", iterations: true });
+    // Warp 0 on the first iteration is aligned; 7 of every 8 iterations straddle
+    // one more sector.
+    expect(drifting).toMatchObject({
+      status: "varies",
+      outcomes: [
+        { verdict: "strided", sectors: 5, cases: 7 },
+        { verdict: "coalesced", sectors: 4, cases: 1 },
+      ],
+      cases: 8,
+      formula: "%j + tx",
+    });
+  });
+
+  it("falls back to the warp shown when an index is not affine", () => {
+    const [shown] = proof([
+      "%r = arith.remui %tx, %c2 : index",
+      "%v = memref.load %x[%c0, %r] : memref<64x64xf32>",
+    ]);
+    expect(shown).toEqual({
+      status: "sampled",
+      reason: "%r is not affine in the thread ids, block ids and loop counters",
+    });
+  });
+});
+
 describe("the GPU samples", () => {
   it("saxpy's loads and store are coalesced", () => {
     expect(verdicts(events("gpu-kernels.trace.txt")[1].ir)).toEqual([
@@ -190,6 +271,30 @@ describe("the GPU samples", () => {
     const trace = events("gpu-transpose.trace.txt");
     for (const event of [trace[0], trace[1]])
       expect(verdicts(event.ir).map(([kind, , verdict, detail]) => [kind, verdict, detail])).toEqual(expected);
+  });
+
+  it("proves the transpose verdicts for all 32,768 warps", () => {
+    const model = analyzeGpu(events("gpu-transpose.trace.txt")[0].ir);
+    const launch = model.launches[0];
+    const k = model.kernels[launch.kernel];
+    const store = k.accesses.find((a) => a.kind === "store");
+    const memref = parseMemref(store.type);
+    expect(
+      warpAccess(store, memref, memorySpace(memref.space), {
+        defs: k.defs,
+        args: k.args,
+        block: launch.block,
+        grid: launch.grid,
+      }).proof,
+    ).toEqual({
+      status: "proven",
+      verdict: "strided",
+      sectors: 32,
+      warps: 32768,
+      iterations: false,
+      formula: "32768·bx + 1024·tx + 32·by + ty",
+      laneStride: 1024,
+    });
   });
 
   it("the tiled matmul is coalesced and conflict-free before and after outlining", () => {

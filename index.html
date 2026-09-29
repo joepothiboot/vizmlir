@@ -2235,6 +2235,140 @@
       .gpu-chip.muted {
         color: var(--dim);
       }
+      .gpu-chip.proven {
+        border-color: var(--fg);
+        background: var(--fg);
+        color: var(--bg);
+      }
+      /* The answer for the picked access, above the 3D view. */
+      .gpu-answer {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin: 0 0 12px;
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--raised);
+      }
+      .gpu-answer-top {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+      .gpu-kicker {
+        color: var(--dim);
+        font-size: 11px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+      .gpu-depth {
+        display: flex;
+        gap: 2px;
+        margin-left: auto;
+        padding: 2px;
+        border-radius: 7px;
+        background: var(--accent-bg);
+      }
+      .gpu-depth button {
+        padding: 3px 10px;
+        border: 0;
+        border-radius: 5px;
+        background: transparent;
+        color: var(--dim);
+        font-size: 11px;
+      }
+      .gpu-depth button[aria-pressed="true"] {
+        background: var(--fg);
+        color: var(--bg);
+      }
+      .gpu-answer-line {
+        max-width: 720px;
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+        line-height: 1.35;
+        text-wrap: balance;
+      }
+      .gpu-meter {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        max-width: 720px;
+        font-size: 11px;
+      }
+      .gpu-meter-labels {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+      .gpu-meter-bar {
+        height: 8px;
+        overflow: hidden;
+        border-radius: 4px;
+        background: color-mix(in srgb, var(--warn) 18%, transparent);
+      }
+      .gpu-meter-bar.good {
+        background: color-mix(in srgb, var(--good) 18%, transparent);
+      }
+      .gpu-meter-bar div {
+        height: 100%;
+        background: var(--warn);
+      }
+      .gpu-meter-bar.good div {
+        background: var(--good);
+      }
+      .gpu-math {
+        display: grid;
+        gap: 4px;
+        margin: 0;
+        font-family: var(--code);
+        font-size: 12px;
+      }
+      .gpu-math div {
+        display: grid;
+        grid-template-columns: 90px 1fr;
+        gap: 12px;
+      }
+      .gpu-math dt {
+        color: var(--dim);
+      }
+      .gpu-math dd {
+        margin: 0;
+        overflow-wrap: anywhere;
+      }
+      /* The Elements layer: the picked access's buffer from above, over the
+         3D canvas. gpu-3d.js sets its top and right around the overlays. */
+      .gpu-3d-elements {
+        position: absolute;
+        z-index: 1;
+        bottom: 40px;
+        left: 8px;
+        overflow: auto;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--bg);
+        box-shadow: 0 2px 10px var(--shadow);
+      }
+      .gpu-3d-elements figure {
+        margin: 0;
+      }
+      .gpu-3d-elements svg {
+        width: 100%;
+        max-width: 860px;
+        height: auto;
+      }
+      .gpu-3d-elements figcaption {
+        margin-top: 6px;
+        color: var(--dim);
+        font-size: 11px;
+      }
+      .gpu-3d-tools button[aria-pressed="true"] {
+        border-color: var(--fg);
+      }
       .gpu-explain {
         max-width: 720px;
         margin: 0 0 8px;
@@ -4024,9 +4158,12 @@ mlir-opt input.mlir -pass-pipeline='…' \
                 </p>
                 <ul>
                   <li>
-                    The memory verdicts look at the first warp of the first
-                    block, on the first trip through any loop. That is usually
-                    representative, but not always.
+                    The lanes you see are the first warp of the first block, on
+                    the first trip through any loop. When an index is a linear
+                    function of the thread ids, block ids and loop counters,
+                    the verdict is checked for every warp and every trip too,
+                    and the Checked column says so. Otherwise it reads
+                    "warp 0 only", and that one warp may not speak for the rest.
                   </li>
                   <li>
                     They follow how NVIDIA GPUs fetch memory (32-byte sectors
