@@ -389,7 +389,7 @@ export function gpuScene(launch, kernel, { onLine } = {}) {
     elementsButton.setAttribute("aria-pressed", String(showTop));
     placeElements();
   }
-  // Below the facts, left of the Memory panel, above the tools.
+  // Below the facts, left of the Memory panel.
   function placeElements() {
     elements.hidden = !showTop;
     elements.style.top = `${topSpace + 4}px`;
@@ -408,8 +408,8 @@ export function gpuScene(launch, kernel, { onLine } = {}) {
     resize();
   }
   const hint = el("div", "gpu-3d-hint");
-  stage.append(canvas, elements, tip, tools, hint);
-  figure.append(stage);
+  stage.append(canvas, elements, tip, hint);
+  figure.append(tools, stage);
 
   function describe() {
     const perBlock = layout.block[0] * layout.block[1] * layout.block[2];

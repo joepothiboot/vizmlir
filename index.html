@@ -1950,7 +1950,7 @@
         font-variant-numeric: tabular-nums;
       }
       /* The launch in 3D (src/gpu-3d.js): a canvas with a hover tip and a
-         few view buttons in its corner. */
+         row of view buttons above it. */
       .gpu-3d {
         margin: 0 0 12px;
       }
@@ -2000,11 +2000,11 @@
         pointer-events: none;
       }
       .gpu-3d-tools {
-        position: absolute;
-        right: 8px;
-        bottom: 8px;
         display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
         gap: 4px;
+        margin: 0 0 6px;
       }
       .gpu-3d-tools button {
         min-width: 26px;
@@ -2070,7 +2070,7 @@
       }
       .gpu-3d-hint {
         position: absolute;
-        right: 190px;
+        right: 10px;
         bottom: 10px;
         left: 10px;
         color: var(--dim);
