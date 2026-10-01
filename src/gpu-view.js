@@ -89,16 +89,18 @@ function launchSection(launch, kernel, options) {
   // Picking a row in Memory accesses colors warp 0 in it; hovering a buffer
   // outlines its memory's floor plate.
   const scene = gpuScene(launch, kernel, { onLine: options.onLine });
-  // The answer for the picked access sits above the scene; picking also
+  // The answer for the picked access goes to `options.onAnswer` (the page's
+  // inspector), or sits above the scene when there is none; picking also
   // colors warp 0 in the scene and sets its elements-from-above layer.
   const answer = kernel?.accesses?.length ? answerCard(kernel, options) : null;
-  if (answer) section.append(answer);
+  if (answer && !options.onAnswer) section.append(answer);
   // Triton: which warp and lane hold each element of the picked tensor.
   const layout = kernel?.triton && answer ? el("figure", "gpu-layout") : null;
   if (layout) section.append(layout);
   section.append(scene.figure);
-  const onPick = (judged) => {
+  const onPick = (judged, { initial = false } = {}) => {
     answer.show(judged);
+    options.onAnswer?.(answer, judged, { initial, launchIndex: options.launchIndex });
     if (layout) renderLayout(layout, judged, kernel);
     scene.showAccess(judged, { formula: depth === "compiler" });
     // Compiler mode also writes the offset's formula in the 3D view.
@@ -177,7 +179,9 @@ export function renderGpuPath(container, { onLine } = {}) {
     button.append(el("span", "gpu-dim", `line ${node.line}`), el("code", "", node.text));
     if (node.kind === "access") {
       const judged = entry.accesses?.judged.find((j) => j.access.line === node.line);
-      if (judged) button.append(el("span", "gpu-dim", ` ${judged.space} memory `), verdictChip(judged.result));
+      // The focused access's verdict is on the answer card just above.
+      if (judged) button.append(el("span", "gpu-dim", ` ${judged.space} memory `));
+      if (judged && node.line !== focused?.line) button.append(verdictChip(judged.result));
     } else if (node.kind === "thread" || node.kind === "block" || node.kind === "size") {
       button.append(el("span", "gpu-dim", ` ${node.label}`));
     }
@@ -189,26 +193,16 @@ export function renderGpuPath(container, { onLine } = {}) {
   if (!shown.length) {
     children.push(el("p", "gpu-note", "No kernels with loads or stores to trace here."));
   } else if (!focused) {
+    // The loads and stores to start from, with their verdicts, are the
+    // Memory accesses table in the GPU view; this only says how to begin.
     children.push(
       el("h3", "", "How the IR reaches the GPU"),
       el(
         "p",
         "gpu-note",
-        "Click a line of kernel code (or a node on the IR wall in the 3D view) to trace it from the thread and block ids, through the index math, to the memory it touches. Or start from a load or store:",
+        "Click a line of kernel code, a row in Memory accesses, or a node on the IR wall in the 3D view to trace it from the thread and block ids, through the index math, to the memory it touches.",
       ),
     );
-    for (const entry of shown) {
-      const starts = entry.scene.flow.nodes.filter((n) => n.kind === "access");
-      if (!starts.length) continue;
-      children.push(el("h4", "", entry.name));
-      const list = el("ul", "gpu-steps");
-      for (const node of starts) {
-        const item = el("li");
-        item.append(step(node, entry));
-        list.append(item);
-      }
-      children.push(list);
-    }
   } else {
     const { entry, line } = focused;
     const { flow } = entry.scene;
@@ -338,10 +332,6 @@ function answerCard(kernel, options) {
           // Remembering is a nicety.
         }
         for (const other of cards) {
-          if (!other.isConnected) {
-            cards.delete(other);
-            continue;
-          }
           other.render();
           other.onDepth?.();
         }
@@ -364,6 +354,19 @@ function answerCard(kernel, options) {
   };
   cards.add(card);
   return card;
+}
+
+// The picked access in one line, for the bar above the GPU view: where it
+// is, its verdict, and how far that verdict was checked.
+export function verdictSummary({ access, result }) {
+  const where = el("span", "where", `Line ${access.line} · ${access.kind} ${access.buffer}`);
+  const parts = [where, verdictChip(result)];
+  if (result.analyzed) {
+    const reached = reachChip(result.proof);
+    reached.classList.add("reach");
+    parts.push(reached);
+  }
+  return parts;
 }
 
 function reachChip(proof) {
@@ -795,11 +798,11 @@ function accessSection(kernel, launch, options) {
   const tbody = el("tbody");
   const detail = el("div", "gpu-lane-detail");
 
-  const pick = (i, { mark = false } = {}) => {
+  const pick = (i, { mark = false, initial = false } = {}) => {
     picked = i;
     [...tbody.children].forEach((row, k) => row.setAttribute("aria-selected", String(k === i)));
     renderLaneDetail(detail, judged[i]);
-    options.onPick?.(judged[i]);
+    options.onPick?.(judged[i], { initial });
     if (mark) options.onLine?.(judged[i].access.line);
   };
   judged.forEach((j, i) => {
@@ -835,7 +838,7 @@ function accessSection(kernel, launch, options) {
   });
   table.append(thead, tbody);
   section.append(table, detail);
-  pick(picked);
+  pick(picked, { initial: true });
   // Used by the Memory section: its buffers light up and open their rows.
   section.judged = judged;
   section.pick = (i) => {
@@ -1203,6 +1206,7 @@ function ptxNote(ptx) {
 export function renderGpuView(container, model, options = {}) {
   shown = [];
   focused = null;
+  cards.clear();
   const children = [
     el(
       "p",
