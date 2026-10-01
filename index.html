@@ -4232,26 +4232,30 @@
                 </p>
                 <ol>
                   <li>
-                    Open the sample. The big panel in the middle is the
-                    <strong>GPU view</strong>: a picture of the work the GPU
-                    will do.
+                    Open the sample. The code is on the left, and the wide
+                    pane next to it is the <strong>GPU view</strong>: a
+                    picture of the work the GPU will do. Its tabs switch
+                    between this picture and a diagram of the code.
                   </li>
                   <li>
-                    Read the card at the top of the GPU view. It says whether
-                    the picked read or write is good for the GPU, what it
-                    costs, and how people usually fix it. Click another row in
-                    <strong>Memory accesses</strong> to change which one it
-                    explains.
+                    Click a row in <strong>Memory accesses</strong>, under the
+                    picture. The <strong>inspector</strong> slides in on the
+                    right with its answer card: whether that read or write is
+                    good for the GPU, what it costs, and how people usually
+                    fix it. The line above the picture keeps the verdict in
+                    view; <kbd>esc</kbd> closes the inspector.
                   </li>
                   <li>
-                    Press <kbd>]</kbd> a few times to step through the
-                    compiler's work. The code on the left changes, and the
-                    picture follows.
+                    Drag the <strong>Pass</strong> slider at the top, or press
+                    <kbd>]</kbd> a few times, to step through the compiler's
+                    work. Hover the slider to preview a pass before you jump.
+                    The code changes, and the picture follows.
                   </li>
                   <li>
-                    Click any line of code on the left. The panel under it,
-                    <strong>What's this line?</strong>, explains that line in
-                    plain words.
+                    Click any line of code. The inspector's
+                    <strong>Line</strong> tab explains that line in plain
+                    words. Its other tabs hold what changed in this pass,
+                    timing, buffers, op counts, and symbol history.
                   </li>
                 </ol>
                 <div class="try">
@@ -4339,8 +4343,8 @@
                 <div class="try">
                   <strong>Try it.</strong>
                   <span
-                    >In the transpose sample, look at the top of the GPU view: a
-                    grid of squares, one per block. The highlighted block is
+                    >In the transpose sample, look at the GPU view: a grid of
+                    squares, one per block. The highlighted block is
                     opened below it, 32 threads to a row; each row is one warp.
                     Hover a square for its number.</span
                   >
@@ -4455,10 +4459,12 @@
                   bank) and to mark its line in the code.
                 </p>
                 <p>
-                  The <strong>answer card</strong> at the top of each launch
-                  sums up the picked access: its verdict, one sentence on what
-                  it costs, and a bar for how much of the memory traffic is
-                  useful. Next to the verdict:
+                  The <strong>answer card</strong>, in the inspector's
+                  <strong>Line</strong> tab, sums up the picked access: its
+                  verdict, one sentence on what it costs, and a bar for how
+                  much of the memory traffic is useful. The line above the GPU
+                  view repeats the verdict in short; click it to open the
+                  card. Next to the verdict:
                 </p>
                 <dl class="docs-terms">
                   <dt><span class="gpu-chip proven">✓ all 32,768 warps</span></dt>
@@ -4620,8 +4626,9 @@
                     >Click any line in the workspace.
                     <strong>What's this line?</strong> names each part, links
                     every value back to the line that made it, and for loads and
-                    stores says how the GPU handles them. <kbd>w</kbd> hides or
-                    shows it.</span
+                    stores says how the GPU handles them. It is the
+                    inspector's Line tab; <kbd>w</kbd> opens or closes
+                    it.</span
                   >
                 </div>
 
@@ -4692,17 +4699,20 @@
                   </li>
                 </ol>
                 <p>
-                  The row of cards along the top of the workspace is this
-                  pipeline, one card per pass. <kbd>[</kbd> and
-                  <kbd>]</kbd> step through it, and the right panel lists what
-                  each pass added, removed, or changed.
+                  The <strong>Pass</strong> slider along the top of the
+                  workspace is this pipeline, one stop per pass. Drag it, or
+                  press <kbd>[</kbd> and <kbd>]</kbd>, to step through it, and
+                  the inspector's <strong>Changes</strong> tab lists what each
+                  pass added, removed, or changed, with every pass listed under
+                  <strong>All passes</strong>.
                 </p>
 
                 <h3>Follow one kernel</h3>
                 <p>
                   Press <kbd>h</kbd>, or click <strong>@ symbols</strong> at the
-                  bottom, to list every function and kernel with the pass that
-                  created, changed, or lowered it. Click one to follow just that
+                  bottom, to open the inspector's <strong>Symbols</strong> tab:
+                  every function and kernel with the pass that created,
+                  changed, or lowered it. Click one to follow just that
                   kernel like a time-lapse, all the way to its PTX.
                 </p>
 
@@ -4775,7 +4785,7 @@ mlir-opt input.mlir -pass-pipeline='…' \
                 </dl>
                 <p>
                   Add <code>-mlir-timing</code> to see how long each pass took
-                  (<kbd>p</kbd>). With <strong>Watch…</strong> (Chrome and
+                  (<kbd>p</kbd>, the inspector's Timing tab). With <strong>Watch…</strong> (Chrome and
                   Edge), VizMLIR reloads the file each time you rerun the
                   command, so you can keep it open beside your terminal. A
                   failed pass is marked ✗, with the compiler's messages over the
@@ -4792,12 +4802,13 @@ mlir-opt input.mlir -pass-pipeline='…' \
                 <div class="docs-kicker">Lab</div>
                 <h2>Diagrams and diffs</h2>
                 <p>
-                  For code without GPU parts, or when you press <kbd>g</kbd>,
-                  the middle panel draws the code as a dataflow graph: every
-                  operation is a box, and arrows show where each value goes
-                  next. The panel on the right lists what the current pass
-                  added, removed, or changed; walk through it with
-                  <kbd>j</kbd> and <kbd>k</kbd>.
+                  For code without GPU parts, or on the
+                  <strong>Graph</strong> tab (<kbd>g</kbd>), the wide pane
+                  draws the code as a dataflow graph: every operation is a
+                  box, and arrows show where each value goes next. The
+                  inspector's <strong>Changes</strong> tab lists what the
+                  current pass added, removed, or changed; walk through it
+                  with <kbd>j</kbd> and <kbd>k</kbd>.
                 </p>
                 <p>
                   You can also compare any two versions by hand: paste the
@@ -4870,8 +4881,8 @@ mlir-opt input.mlir -pass-pipeline='…' \
                   </li>
                   <li>
                     Save the diagram as PNG or SVG from the buttons above it,
-                    and the list of changes as Markdown or JSON from the right
-                    panel. Pick changes with <kbd>x</kbd> and press
+                    and the list of changes as Markdown or JSON from the
+                    inspector's Changes tab. Pick changes with <kbd>x</kbd> and press
                     <kbd>c</kbd> to copy them.
                   </li>
                 </ul>
