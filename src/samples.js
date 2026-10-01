@@ -1,6 +1,8 @@
 // Built-in samples. The inline one needs no fetch, so it is the fallback when
 // the first sample cannot be loaded; the rest are real mlir-opt output in
-// public/samples (see samples/generate.sh), fetched only when picked. The
+// public/samples (see samples/generate.sh), fetched only when picked, or the
+// output of an out-of-tree driver built on MLIR (nanodsp-local-matmul, from
+// nanodsp-opt; see public/samples/NANODSP_VERSION). The
 // benchmark CSVs are the exception: hand-written mock timings (`*.mock.csv`,
 // flagged `mock`) to show the benchmark view. So is the Triton trace
 // (triton-coalesce.trace.txt, flagged `handwritten`): Triton does not run on
@@ -66,6 +68,13 @@ export const SAMPLES = [
       current: "gpu-kernels.current.mock.csv",
     },
     mock: true,
+  },
+  {
+    id: "nanodsp-local-matmul",
+    title: "DSP scratchpad: double-buffered DMA",
+    blurb:
+      "A DSP-style scratchpad: tiles copied into local memory by DMA, double-buffered. A matmul for nano-dsp-mlir's Hexagon-like target: one pass gives the A and B tiles two slots each in local memory and fetches the next tile by DMA while the current one is used; the next turns the DMAs into plain copies. Open the Local memory tab.",
+    trace: "nanodsp-local-matmul.trace.txt",
   },
   {
     id: "lowering",
