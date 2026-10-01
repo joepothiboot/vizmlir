@@ -1,12 +1,20 @@
+// @vitest-environment jsdom
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { URL as FileURL } from "node:url";
+import { describe, expect, it, vi } from "vitest";
 import { analyzeGpu } from "../../src/gpu.js";
-import { acrossPasses, passSummary } from "../../src/gpu-view.js";
+import {
+  acrossPasses,
+  passSummary,
+  renderGpuPath,
+  renderGpuView,
+  verdictSummary,
+} from "../../src/gpu-view.js";
 import { parsePassTrace } from "../../src/trace.js";
 
 const events = (name) =>
   parsePassTrace(
-    readFileSync(new URL(`../../public/samples/${name}`, import.meta.url), "utf8"),
+    readFileSync(new FileURL(`../../public/samples/${name}`, import.meta.url), "utf8"),
   ).events;
 
 // The picked row for access `index` of launch `launchIndex` in `ir`.
@@ -70,5 +78,68 @@ describe("passSummary", () => {
 
   it("says when no pass can be read", () => {
     expect(passSummary([none, none])).toBe("Not readable in any pass.");
+  });
+});
+
+// The page shows the picked access's answer card in its inspector and keeps
+// a one-line verdict over the GPU view, so the view itself holds the picture.
+describe("GPU view in the page", () => {
+  const ir = events("gpu-transpose.trace.txt")[0].ir;
+  // jsdom has no 2D canvas; the 3D view draws on animation frames.
+  globalThis.ResizeObserver ??= class {
+    observe() {}
+    disconnect() {}
+  };
+  window.requestAnimationFrame = () => 0;
+
+  function draw() {
+    const view = document.createElement("div");
+    document.body.replaceChildren(view);
+    const onAnswer = vi.fn();
+    renderGpuView(view, analyzeGpu(ir), { onAnswer });
+    return { view, onAnswer };
+  }
+
+  it("hands the answer card to onAnswer instead of drawing it in the view", () => {
+    const { view, onAnswer } = draw();
+    expect(view.querySelector(".gpu-answer")).toBeNull();
+    // One initial pick per launch with loads or stores.
+    expect(onAnswer).toHaveBeenCalledTimes(analyzeGpu(ir).launches.length);
+    const [card, judged, { initial, launchIndex }] = onAnswer.mock.calls[0];
+    expect(card.classList.contains("gpu-answer")).toBe(true);
+    expect(initial).toBe(true);
+    expect(launchIndex).toBe(0);
+    expect(card.textContent).toContain(`Line ${judged.access.line}`);
+    expect(card.textContent).toContain("Each warp touches");
+  });
+
+  it("reports a picked access as the person's pick", () => {
+    const { view, onAnswer } = draw();
+    const row = view.querySelector(".gpu-access-table tbody tr:first-child");
+    row.click();
+    const [, judged, { initial }] = onAnswer.mock.calls.at(-1);
+    expect(initial).toBe(false);
+    expect(row.textContent).toContain(judged.access.buffer);
+  });
+
+  it("sums up the picked access in one line", () => {
+    const { onAnswer } = draw();
+    const [, judged] = onAnswer.mock.calls[0];
+    const line = document.createElement("span");
+    line.append(...verdictSummary(judged));
+    expect(line.querySelector(".where").textContent).toBe(
+      `Line ${judged.access.line} · ${judged.access.kind} ${judged.access.buffer}`,
+    );
+    expect(line.querySelector(".gpu-chip").textContent).toMatch(/^strided · 32 sectors$/);
+    expect(line.querySelector(".reach").textContent).toContain("32,768 warps");
+  });
+
+  it("does not repeat the access list in the GPU path before a line is picked", () => {
+    draw();
+    const path = document.createElement("div");
+    renderGpuPath(path);
+    expect(path.querySelector("h3").textContent).toBe("How the IR reaches the GPU");
+    expect(path.querySelector(".gpu-chip")).toBeNull();
+    expect(path.querySelectorAll(".gpu-step")).toHaveLength(0);
   });
 });

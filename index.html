@@ -268,58 +268,195 @@
       #file {
         display: none;
       }
-      #pass-strip {
+      /* The pass scrubber: one row for any number of passes. Ticks under the
+         track mark failed passes (red) and, with a timing report, each pass's
+         time against the slowest (their height). */
+      .pass-scrubber {
+        --thumb: 14px;
         display: flex;
         flex: 0 0 auto;
+        align-items: center;
         gap: 8px;
-        padding: 6px 20px 14px;
-        overflow-x: auto;
-        scrollbar-width: thin;
+        padding: 6px 20px 10px;
       }
-      #pass-strip[hidden] {
-        display: none;
+      .scrub-kicker {
+        color: var(--dim);
+        font-size: 11px;
       }
-      #pass-strip button {
-        display: flex;
+      .scrub-prev,
+      .scrub-next {
         flex: 0 0 auto;
+        font-size: 15px;
+        line-height: 1;
+      }
+      .scrub-prev:disabled,
+      .scrub-next:disabled {
+        opacity: 0.35;
+        cursor: default;
+      }
+      .scrub-track {
+        position: relative;
+        flex: 1 1 auto;
+        min-width: 120px;
+        height: 26px;
+      }
+      .scrub-range {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        background: transparent;
+        cursor: pointer;
+        appearance: none;
+        -webkit-appearance: none;
+      }
+      .scrub-range:focus-visible {
+        outline: 1px solid var(--accent);
+        outline-offset: 2px;
+        border-radius: 4px;
+      }
+      .scrub-range::-webkit-slider-runnable-track {
+        height: 2px;
+        border-radius: 1px;
+        background: var(--line);
+      }
+      .scrub-range::-moz-range-track {
+        height: 2px;
+        border-radius: 1px;
+        background: var(--line);
+      }
+      .scrub-range::-webkit-slider-thumb {
+        width: var(--thumb);
+        height: var(--thumb);
+        margin-top: -6px;
+        border: 2px solid var(--bg);
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 0 1px var(--accent);
+        -webkit-appearance: none;
+      }
+      .scrub-range::-moz-range-thumb {
+        width: calc(var(--thumb) - 4px);
+        height: calc(var(--thumb) - 4px);
+        border: 2px solid var(--bg);
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 0 1px var(--accent);
+      }
+      .scrub-ticks {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+      .scrub-ticks span {
+        position: absolute;
+        bottom: 1px;
+        width: 1px;
+        height: calc(3px + 6px * var(--share, 0));
+        background: var(--faint);
+        transform: translateX(-50%);
+      }
+      .scrub-ticks span.failed {
+        width: 3px;
+        height: 9px;
+        background: var(--err);
+      }
+      .scrub-ticks span.current {
+        background: var(--accent);
+      }
+      .scrub-preview {
+        position: absolute;
+        bottom: calc(100% + 4px);
+        z-index: 30;
+        display: flex;
         flex-direction: column;
-        align-items: flex-start;
-        gap: 2px;
-        width: 176px;
-        padding: 8px 12px;
+        gap: 1px;
+        max-width: 320px;
+        padding: 6px 9px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--overlay);
+        box-shadow: 0 6px 18px var(--shadow);
+        color: var(--dim);
+        font-size: 11px;
+        white-space: nowrap;
+        pointer-events: none;
+        transform: translateX(-50%);
+      }
+      .scrub-preview strong {
+        overflow: hidden;
+        color: var(--fg);
+        font-weight: 600;
+        text-overflow: ellipsis;
+      }
+      .scrub-label {
+        flex: 0 1 auto;
+        min-width: 0;
+        max-width: 38%;
+        overflow: hidden;
+        color: var(--fg);
+        font-size: 11px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      /* Every pass as a compact list, in the inspector's Changes tab. */
+      .pass-list-wrap {
+        margin: 4px 10px 16px;
+        border-top: 1px solid var(--line);
+      }
+      .pass-list-wrap summary {
+        padding: 10px 8px 6px;
+        color: var(--dim);
+        font-size: 11px;
+        cursor: pointer;
+      }
+      #pass-list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      #pass-list button {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 8px;
+        width: 100%;
+        padding: 3px 8px;
+        border: 0;
+        border-radius: 4px;
         background: transparent;
         color: var(--dim);
         font-size: 11px;
         text-align: left;
       }
-      #pass-strip button .n {
-        color: var(--faint);
+      #pass-list button:hover {
+        background: var(--panel);
       }
-      #pass-strip button .name {
-        max-width: 100%;
+      #pass-list .n {
+        color: var(--faint);
+        font-variant-numeric: tabular-nums;
+      }
+      #pass-list .name {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      #pass-strip button .meta {
+      #pass-list .meta {
         color: var(--faint);
         font-variant-numeric: tabular-nums;
       }
-      #pass-strip button.failed .n {
+      #pass-list button.failed .n {
         color: var(--err);
       }
-      #pass-strip button[aria-current="step"] {
+      #pass-list button[aria-current="step"] {
         background: var(--accent-bg);
-        border-color: var(--accent);
         color: var(--fg);
+        box-shadow: inset 2px 0 0 var(--accent);
       }
-      #pass-strip button[aria-current="step"] .n {
-        color: var(--accent);
-      }
-      /* A bar along the bottom edge, scaled to the slowest pass. Declared after
-         the current-step rule so its background shorthand keeps the bar. */
-      #pass-strip button[style*="--time"] {
-        background-image: linear-gradient(var(--dim), var(--dim));
+      /* A bar along the bottom edge, scaled to the slowest pass. */
+      #pass-list button[style*="--time"] {
+        background-image: linear-gradient(var(--line), var(--line));
         background-position: left bottom;
         background-repeat: no-repeat;
         background-size: var(--time) 2px;
@@ -334,9 +471,11 @@
       #docs-view[hidden] {
         display: none;
       }
-      /* The workspace is a padded frame; the source, canvas, and diff sit in
-         it as separate rounded cards, with the splitters as the gutters. */
+      /* The workspace is a padded frame; the source, the visualization, and
+         the inspector sit in it as separate rounded cards, with the splitters
+         as the gutters. */
       main {
+        position: relative;
         display: flex;
         flex: 1 1 auto;
         min-height: 0;
@@ -344,7 +483,7 @@
       }
       #source-pane,
       #stage,
-      #diff-pane {
+      #inspector {
         border: 1px solid var(--line);
         border-radius: 10px;
         background: var(--bg);
@@ -355,7 +494,7 @@
       }
       #source-pane {
         flex: 0 0 auto;
-        width: 38%;
+        width: 34%;
         min-width: 180px;
         overflow: auto;
       }
@@ -401,7 +540,7 @@
         min-width: 0;
         min-height: 0;
       }
-      #diff-pane h2 {
+      #diff-head {
         display: flex;
         align-items: baseline;
         justify-content: space-between;
@@ -415,26 +554,140 @@
         color: var(--dim);
         font-weight: 400;
       }
-      /* The side panel's tabs: the pass diff, or (with the GPU view on) the
-         path a picked line takes into the GPU. */
-      .side-tabs {
-        display: flex;
-        gap: 4px;
-        padding: 12px 14px 0;
+      /* The inspector: a drawer of tabs beside the visualization. It takes a
+         column on wide screens, overlays the visualization below 1100px, and
+         is a bottom sheet on phones. */
+      #inspector {
+        flex: 0 0 auto;
+        width: clamp(300px, 27vw, 420px);
+        min-width: 180px;
+        overflow: hidden;
+        animation: inspector-in 0.16s ease-out;
       }
-      .side-tabs [role="tab"] {
-        padding: 3px 10px;
-        border-color: transparent;
+      @keyframes inspector-in {
+        from {
+          opacity: 0;
+          transform: translateX(24px);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #inspector {
+          animation: none;
+        }
+      }
+      .inspector-head {
+        display: flex;
+        flex: 0 0 auto;
+        align-items: flex-start;
+        gap: 6px;
+        padding: 8px 8px 0 10px;
+        border-bottom: 1px solid var(--line);
+      }
+      /* Six tabs wrap onto a second row in a narrow drawer. */
+      .inspector-tabs {
+        display: flex;
+        flex: 1 1 auto;
+        flex-wrap: wrap;
+        min-width: 0;
+      }
+      .inspector-tabs [role="tab"] {
+        flex: 0 0 auto;
+        padding: 6px 9px 8px;
+        border: 0;
+        border-radius: 0;
         background: none;
         color: var(--dim);
+        font-family: var(--ui);
+        font-size: 12px;
       }
-      .side-tabs [role="tab"][aria-selected="true"] {
-        border-color: var(--line);
-        background: var(--raised);
+      .inspector-tabs [role="tab"]:hover {
         color: var(--fg);
       }
+      .inspector-tabs [role="tab"][aria-selected="true"] {
+        color: var(--fg);
+        box-shadow: inset 0 -2px 0 var(--accent);
+      }
+      #inspector-close {
+        flex: 0 0 auto;
+        margin: 2px 0 6px;
+        font-size: 15px;
+      }
+      .inspector-panel {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: auto;
+        /* The answer card tightens when the drawer is narrow. */
+        container-type: inline-size;
+      }
+      /* The analysis tabs read as app chrome, like the dialogs they were. */
+      #panel-line,
+      #panel-timing,
+      #panel-buffers,
+      #panel-opcount,
+      #panel-symbols {
+        padding: 12px 14px 18px;
+        font-family: var(--ui);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      #panel-timing button,
+      #panel-buffers button,
+      #panel-opcount button,
+      #panel-symbols button {
+        font-family: var(--ui);
+      }
+      .panel-about {
+        margin: 0 0 10px;
+      }
+      .panel-about summary {
+        color: var(--dim);
+        font-size: 11px;
+        cursor: pointer;
+      }
+      .panel-about .dialog-note {
+        margin: 6px 0 0;
+      }
+      .panel-facts {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 4px 16px;
+        margin: 0 0 12px;
+      }
+      .panel-facts dt {
+        color: var(--dim);
+      }
+      .panel-facts dd {
+        margin: 0;
+        font-variant-numeric: tabular-nums;
+      }
+      .panel-section {
+        margin: 14px 0 0;
+        padding: 12px 0 0;
+        border-top: 1px solid var(--line);
+      }
+      .panel-section > h3 {
+        margin: 0 0 8px;
+        color: var(--dim);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+      #inspector .opcount-controls input[type="search"] {
+        flex: 1 1 100%;
+      }
+      #inspector .dialog-actions {
+        flex-wrap: wrap;
+      }
+      #inspector .dialog-actions button {
+        background: transparent;
+        border-radius: 5px;
+      }
+      #inspector .dialog-actions button:hover {
+        background: var(--raised);
+        border-color: var(--line);
+      }
       #gpu-path {
-        padding: 10px 18px 18px;
         font-family: var(--ui);
         font-size: 12px;
         line-height: 1.5;
@@ -511,18 +764,6 @@
       #source-pane.split .code-editor[hidden] {
         display: block !important;
       }
-      .line-explain {
-        flex: 0 0 auto;
-        max-height: 46%;
-        overflow: auto;
-        padding: 8px 12px 12px;
-        border-top: 1px solid var(--line);
-        background: var(--bg);
-        font-family: var(--ui);
-        font-size: 12px;
-        line-height: 1.5;
-      }
-      .line-explain[hidden],
       #le-docs[hidden] {
         display: none;
       }
@@ -535,10 +776,6 @@
       .le-head a {
         color: var(--dim);
         font-size: 11px;
-      }
-      #le-close {
-        padding: 0 4px;
-        font-size: 15px;
       }
       .le-summary {
         margin: 0 0 8px;
@@ -707,16 +944,117 @@
       .syntax-identifier {
         color: var(--fg);
       }
+      /* The visualization: one wide pane with a tab per view. */
       #stage {
         position: relative;
+        display: flex;
+        container: stage / inline-size;
         flex: 1 1 auto;
+        flex-direction: column;
         min-width: 0;
       }
-      #diff-pane {
+      .viz-bar {
+        display: flex;
         flex: 0 0 auto;
-        width: 300px;
-        min-width: 180px;
-        overflow: auto;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        padding: 0 8px 0 4px;
+        border-bottom: 1px solid var(--line);
+        font-family: var(--ui);
+      }
+      .viz-tabs {
+        display: flex;
+        flex: 0 0 auto;
+      }
+      .viz-tabs [role="tab"] {
+        padding: 10px 14px;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        color: var(--dim);
+        font-family: var(--ui);
+      }
+      .viz-tabs [role="tab"]:hover {
+        color: var(--fg);
+      }
+      .viz-tabs [role="tab"][aria-selected="true"] {
+        color: var(--fg);
+        box-shadow: inset 0 -2px 0 var(--accent);
+      }
+      /* The picked access in one line; the full answer is in the inspector. */
+      .viz-verdict {
+        display: flex;
+        flex: 0 1 auto;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+        padding: 3px 8px;
+        overflow: hidden;
+        border-color: transparent;
+        background: transparent;
+        font-family: var(--ui);
+        font-size: 11px;
+        white-space: nowrap;
+      }
+      .viz-verdict:hover {
+        border-color: var(--line);
+        background: var(--raised);
+      }
+      .viz-verdict .where {
+        overflow: hidden;
+        color: var(--dim);
+        text-overflow: ellipsis;
+      }
+      .viz-verdict .gpu-chip {
+        flex: 0 0 auto;
+      }
+      /* A narrow pane keeps the verdict and drops the rest of the line. */
+      @container stage (max-width: 640px) {
+        .viz-verdict .reach {
+          display: none;
+        }
+      }
+      @container stage (max-width: 520px) {
+        .viz-verdict .where {
+          display: none;
+        }
+      }
+      .inspector-toggle {
+        display: flex;
+        flex: 0 0 auto;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 9px;
+        background: transparent;
+        color: var(--dim);
+        font-family: var(--ui);
+        font-size: 11px;
+      }
+      .inspector-toggle[aria-expanded="true"] {
+        border-color: var(--accent);
+        color: var(--fg);
+      }
+      .inspector-badge:empty {
+        display: none;
+      }
+      .inspector-badge .added {
+        color: var(--good);
+      }
+      .inspector-badge .removed {
+        color: var(--err);
+      }
+      .inspector-badge .changed {
+        color: var(--warn);
+      }
+      .viz-body {
+        position: relative;
+        flex: 1 1 auto;
+        min-height: 0;
+      }
+      #graph-view {
+        position: absolute;
+        inset: 0;
       }
       #diff-summary .added {
         color: var(--good);
@@ -794,14 +1132,20 @@
       .diff-hint > * {
         white-space: nowrap;
       }
+      /* Below 1100px the inspector overlays the visualization instead of
+         taking a column. */
       @media (max-width: 1100px) {
-        #diff-pane {
-          width: 250px;
+        #inspector {
+          position: absolute;
+          top: 0;
+          right: 20px;
+          bottom: 16px;
+          z-index: 20;
+          max-width: calc(100% - 40px);
+          box-shadow: -12px 0 32px var(--shadow);
         }
-      }
-      @media (max-width: 900px) {
-        #diff-pane {
-          width: 220px;
+        #inspector-splitter {
+          display: none;
         }
       }
       @media (max-width: 680px) {
@@ -813,15 +1157,24 @@
         header {
           padding: 10px 12px;
         }
-        #pass-strip {
-          padding: 4px 12px 10px;
+        .pass-scrubber {
+          padding: 4px 12px 8px;
         }
+        .scrub-kicker,
+        .scrub-label {
+          display: none;
+        }
+        /* Clip the status line so it never widens the page (the bottom
+           sheet spans the page). */
         #status {
           gap: 10px;
           padding: 0 12px 8px;
+          overflow: hidden;
         }
-        #source-pane,
-        #diff-pane {
+        #abi {
+          display: none;
+        }
+        #source-pane {
           width: 100% !important;
           min-width: 0;
         }
@@ -831,8 +1184,28 @@
         #source-pane {
           height: 42%;
         }
-        #diff-pane {
-          height: 28%;
+        /* A bottom sheet over the workspace. */
+        #inspector {
+          position: fixed;
+          top: auto;
+          right: 0;
+          bottom: 0;
+          left: 0;
+          width: 100% !important;
+          max-width: none;
+          height: min(70vh, 560px);
+          border-radius: 12px 12px 0 0;
+          box-shadow: 0 -12px 32px var(--shadow);
+          animation-name: inspector-up;
+        }
+        @keyframes inspector-up {
+          from {
+            transform: translateY(32px);
+            opacity: 0;
+          }
+        }
+        .viz-verdict .where {
+          display: none;
         }
       }
       #source-name {
@@ -1205,14 +1578,6 @@
         display: flex;
         justify-content: flex-end;
       }
-      #timing {
-        width: min(640px, calc(100vw - 32px));
-        padding: 18px 20px;
-      }
-      #timing h2 {
-        margin: 0 0 6px;
-        font-size: 14px;
-      }
       #timing-summary {
         display: grid;
         grid-template-columns: max-content 1fr;
@@ -1274,14 +1639,6 @@
       }
       #timing-table .link-btn:hover {
         color: var(--accent);
-      }
-      #opcount {
-        width: min(1100px, calc(100vw - 32px));
-        padding: 18px 20px;
-      }
-      #opcount h2 {
-        margin: 0 0 6px;
-        font-size: 14px;
       }
       #opcount-summary {
         display: grid;
@@ -1389,15 +1746,7 @@
       #opcount-table .link-btn:hover {
         color: var(--accent);
       }
-      #buffers {
-        width: min(1100px, calc(100vw - 32px));
-        padding: 18px 20px;
-      }
-      #buffers h2 {
-        margin: 0 0 6px;
-        font-size: 14px;
-      }
-      #buffers h3 {
+      #panel-buffers h3 {
         margin: 0 0 8px;
         font-size: 12px;
       }
@@ -1598,14 +1947,6 @@
       #buffers-pass-table .link-btn:hover {
         color: var(--accent);
       }
-      #symbols {
-        width: min(1100px, calc(100vw - 32px));
-        padding: 18px 20px;
-      }
-      #symbols h2 {
-        margin: 0 0 6px;
-        font-size: 14px;
-      }
       #symbols-summary {
         display: grid;
         grid-template-columns: max-content 1fr;
@@ -1696,7 +2037,7 @@
       #symbols-min-change {
         width: 48px;
       }
-      #symbols h3 {
+      #panel-symbols h3 {
         margin: 0 0 6px;
         font-size: 12px;
       }
@@ -1870,35 +2211,21 @@
         width: 100%;
         height: 100%;
       }
-      .view-toggle {
-        display: inline-flex;
-        gap: 2px;
-      }
-      .view-toggle[hidden],
-      #view-sep[hidden],
-      #gpu-view[hidden] {
-        display: none;
-      }
-      .view-toggle [aria-pressed="true"] {
-        background: var(--raised);
-        box-shadow: inset 0 -2px 0 var(--accent);
-      }
       #stage .graph-tools {
         z-index: 2;
       }
-      /* The GPU view replaces the graph; only the toggle stays in the toolbar. */
-      #stage.gpu-mode .graph-tools > :not(.view-toggle),
-      #stage.gpu-mode .graph-legend,
-      #stage.gpu-mode #diags {
-        display: none;
-      }
-      #stage.gpu-mode #canvas {
+      /* The graph stays laid out under the GPU view so the canvas keeps its
+         size; hidden, it also leaves the accessibility tree. */
+      #stage.gpu-mode #graph-view {
         visibility: hidden;
       }
-      /* Starts below the toolbar so scrolled content never runs under it. */
+      #canvas:focus-visible {
+        outline: 1px solid var(--accent);
+        outline-offset: -2px;
+      }
       #gpu-view {
         position: absolute;
-        inset: 48px 0 0;
+        inset: 0;
         z-index: 1;
         padding: 4px 20px 24px;
         overflow: auto;
@@ -1906,8 +2233,6 @@
         font-family: var(--ui);
         font-size: 12px;
         line-height: 1.5;
-        /* The answer card tightens when this column is narrow. */
-        container-type: inline-size;
       }
       .gpu-intro {
         max-width: 720px;
@@ -2251,7 +2576,7 @@
         background: var(--fg);
         color: var(--bg);
       }
-      /* The answer for the picked access, above the 3D view. */
+      /* The answer for the picked access, in the inspector's Line tab. */
       .gpu-answer {
         display: flex;
         flex-direction: column;
@@ -2944,7 +3269,7 @@
          the editor, graph, and diff list keep the monospace one. */
       #menu-handle,
       #topbar,
-      #pass-strip,
+      #pass-scrubber,
       #status,
       #docs-view,
       dialog {
@@ -3062,7 +3387,45 @@
         aria-label="Hide menu"
         title="Hide menu (m)"
       ></button>
-      <nav id="pass-strip" hidden aria-label="Passes"></nav>
+      <nav id="pass-scrubber" class="pass-scrubber" hidden aria-label="Passes">
+        <span class="scrub-kicker" aria-hidden="true">Pass</span>
+        <button
+          class="scrub-prev icon-btn"
+          type="button"
+          aria-label="Previous pass"
+          title="Previous pass ([)"
+        >
+          ‹
+        </button>
+        <div class="scrub-track">
+          <input
+            id="pass-range"
+            class="scrub-range"
+            type="range"
+            min="1"
+            max="1"
+            value="1"
+            step="1"
+            aria-label="Pass"
+          />
+          <div class="scrub-ticks" aria-hidden="true"></div>
+          <div
+            id="pass-preview"
+            class="scrub-preview"
+            aria-hidden="true"
+            hidden
+          ></div>
+        </div>
+        <button
+          class="scrub-next icon-btn"
+          type="button"
+          aria-label="Next pass"
+          title="Next pass (])"
+        >
+          ›
+        </button>
+        <span id="pass-label" class="scrub-label" aria-hidden="true"></span>
+      </nav>
 
       <div id="workspace">
         <main>
@@ -3124,11 +3487,248 @@
                 placeholder="Paste current MLIR here…"
               ></textarea>
             </div>
-            <aside
-              id="line-explain"
-              class="line-explain"
-              aria-label="What's this line?"
-              aria-live="polite"
+          </section>
+          <div
+            id="source-splitter"
+            class="splitter"
+            aria-label="Resize source pane"
+            title="Drag to resize · double-click to reset"
+          ></div>
+          <section id="stage" aria-label="Visualization">
+            <div class="viz-bar">
+              <!-- One tab per view of the current IR. A new view (for example
+                   "Local memory") adds a [data-view] tab here and registers
+                   its show / hide in VIEWS in src/main.js. -->
+              <div
+                id="viz-tabs"
+                class="viz-tabs"
+                role="tablist"
+                aria-label="Visualization"
+              >
+                <button
+                  id="view-graph"
+                  role="tab"
+                  data-view="graph"
+                  aria-selected="true"
+                  aria-controls="graph-view"
+                  title="Op graph"
+                >
+                  Graph
+                </button>
+                <button
+                  id="view-gpu"
+                  role="tab"
+                  data-view="gpu"
+                  aria-selected="false"
+                  aria-controls="gpu-view"
+                  title="How the kernels are launched and where their data lives (g)"
+                  hidden
+                >
+                  GPU
+                </button>
+              </div>
+              <button
+                id="viz-verdict"
+                class="viz-verdict"
+                title="The picked load or store · open its details in the inspector"
+                hidden
+              ></button>
+              <span class="sp"></span>
+              <button
+                id="inspector-toggle"
+                class="inspector-toggle"
+                aria-controls="inspector"
+                aria-expanded="false"
+                title="Show / hide the inspector (\)"
+              >
+                <span>Inspector</span>
+                <span id="inspector-badge" class="inspector-badge"></span>
+              </button>
+            </div>
+            <div class="viz-body">
+              <div id="graph-view" role="tabpanel" aria-labelledby="view-graph">
+                <canvas
+                  id="canvas"
+                  tabindex="0"
+                  aria-label="Op graph: click a box to select it"
+                ></canvas>
+                <div id="diags"></div>
+                <div class="graph-tools" role="toolbar" aria-label="Graph">
+                  <button
+                    id="zoom-out"
+                    aria-label="Zoom out"
+                    title="Zoom out (-)"
+                  >
+                    −
+                  </button>
+                  <span id="zoom-level" aria-live="polite">100%</span>
+                  <button id="zoom-in" aria-label="Zoom in" title="Zoom in (+)">
+                    +
+                  </button>
+                  <button id="zoom-fit" title="Fit graph (f)">fit</button>
+                  <span class="tools-sep" aria-hidden="true"></span>
+                  <button
+                    id="export-png"
+                    title="Download the whole graph as PNG"
+                  >
+                    PNG
+                  </button>
+                  <button
+                    id="export-svg"
+                    title="Download the whole graph as SVG"
+                  >
+                    SVG
+                  </button>
+                </div>
+                <div class="graph-legend" aria-hidden="true">
+                  <span><b class="added">+</b> added</span>
+                  <span><b class="changed">~</b> modified</span>
+                  <span><b class="removed">−</b> removed</span>
+                </div>
+              </div>
+              <div
+                id="gpu-view"
+                role="tabpanel"
+                aria-labelledby="view-gpu"
+                hidden
+              ></div>
+            </div>
+          </section>
+          <div
+            id="inspector-splitter"
+            class="splitter"
+            aria-label="Resize the inspector"
+            title="Drag to resize · double-click to reset"
+            hidden
+          ></div>
+          <aside id="inspector" class="pane" aria-label="Inspector" hidden>
+            <div class="inspector-head">
+              <div
+                class="inspector-tabs"
+                role="tablist"
+                aria-label="Inspector"
+              >
+                <button
+                  id="tab-changes"
+                  role="tab"
+                  data-tab="changes"
+                  aria-controls="panel-changes"
+                >
+                  Changes
+                </button>
+                <button
+                  id="tab-line"
+                  role="tab"
+                  data-tab="line"
+                  aria-controls="panel-line"
+                  title="What's this line? (w)"
+                >
+                  Line
+                </button>
+                <button
+                  id="tab-timing"
+                  role="tab"
+                  data-tab="timing"
+                  aria-controls="panel-timing"
+                  title="Pass timing and memory (p)"
+                >
+                  Timing
+                </button>
+                <button
+                  id="tab-buffers"
+                  role="tab"
+                  data-tab="buffers"
+                  aria-controls="panel-buffers"
+                  title="Buffers and peak memory (b)"
+                >
+                  Buffers
+                </button>
+                <button
+                  id="tab-opcount"
+                  role="tab"
+                  data-tab="opcount"
+                  aria-controls="panel-opcount"
+                  title="Op counts per pass (o)"
+                >
+                  Op count
+                </button>
+                <button
+                  id="tab-symbols"
+                  role="tab"
+                  data-tab="symbols"
+                  aria-controls="panel-symbols"
+                  title="Symbol history: which pass made each kernel (h)"
+                >
+                  Symbols
+                </button>
+              </div>
+              <button
+                id="inspector-close"
+                class="icon-btn"
+                aria-label="Close the inspector"
+                title="Close (esc)"
+              >
+                ×
+              </button>
+            </div>
+
+            <section
+              id="panel-changes"
+              class="inspector-panel"
+              role="tabpanel"
+              data-panel="changes"
+              aria-labelledby="tab-changes"
+            >
+              <h2 id="diff-head">
+                <span id="diff-title">diff</span>
+                <span id="diff-summary">no comparison yet</span>
+              </h2>
+              <ul
+                id="diff-list"
+                role="listbox"
+                aria-label="Changes"
+                aria-multiselectable="true"
+              ></ul>
+              <div class="diff-hint">
+                <span><kbd>j</kbd> <kbd>k</kbd> step · <kbd>x</kbd> pick</span>
+                <span class="sp"></span>
+                <button
+                  id="diff-copy"
+                  class="link-btn"
+                  title="Copy picked changes (or the current one) as a patch · c"
+                  disabled
+                >
+                  copy
+                </button>
+                <button
+                  id="export-md"
+                  class="link-btn"
+                  title="Download diff as Markdown"
+                >
+                  .md
+                </button>
+                <button
+                  id="export-json"
+                  class="link-btn"
+                  title="Download diff as JSON"
+                >
+                  .json
+                </button>
+              </div>
+              <details id="pass-list-wrap" class="pass-list-wrap" hidden>
+                <summary>
+                  All passes <span id="pass-list-count"></span>
+                </summary>
+                <ol id="pass-list" aria-label="Passes"></ol>
+              </details>
+            </section>
+
+            <section
+              id="panel-line"
+              class="inspector-panel line-explain"
+              role="tabpanel"
+              data-panel="line"
+              aria-labelledby="tab-line"
               hidden
             >
               <div class="le-head">
@@ -3137,138 +3737,242 @@
                 <a id="le-docs" target="_blank" rel="noreferrer" hidden
                   >MLIR docs ↗</a
                 >
-                <button
-                  id="le-close"
-                  class="link-btn"
-                  aria-label="Hide the line explainer"
-                  title="Hide (w)"
-                >
-                  ×
-                </button>
               </div>
-              <div id="le-body"></div>
-            </aside>
-          </section>
-          <div
-            id="source-splitter"
-            class="splitter"
-            aria-label="Resize source pane"
-            title="Drag to resize · double-click to reset"
-          ></div>
-          <div id="stage">
-            <canvas id="canvas"></canvas>
-            <div id="diags"></div>
-            <div id="gpu-view" hidden></div>
-            <div class="graph-tools" role="toolbar" aria-label="Graph">
-              <span
-                id="view-toggle"
-                class="view-toggle"
-                role="group"
-                aria-label="View"
+              <div id="le-body" aria-live="polite"></div>
+              <div id="gpu-answer-section" class="panel-section" hidden>
+                <h3>On the GPU</h3>
+                <div id="gpu-answer-host"></div>
+              </div>
+              <div id="gpu-path" class="panel-section" hidden></div>
+            </section>
+
+            <section
+              id="panel-timing"
+              class="inspector-panel"
+              role="tabpanel"
+              data-panel="timing"
+              aria-labelledby="tab-timing"
+              hidden
+            >
+              <details class="panel-about">
+                <summary>About pass timing</summary>
+                <p class="dialog-note">
+                  From the log's <code>-mlir-timing</code> report. Nested passes
+                  show one total across every op they ran on. mlir-opt does not
+                  measure memory per pass; peak memory is the whole process,
+                  read from <code>/usr/bin/time</code> output when the log
+                  includes it.
+                </p>
+              </details>
+              <p id="timing-empty" class="dialog-note" hidden>
+                No timing report in this log. Add <code>-mlir-timing</code> to
+                the mlir-opt command, and wrap it in
+                <code>/usr/bin/time -l</code> (macOS) or
+                <code>/usr/bin/time -v</code> (Linux) for peak memory.
+              </p>
+              <dl id="timing-summary" class="panel-facts"></dl>
+              <div class="timing-scroll">
+                <table id="timing-table"></table>
+              </div>
+              <div class="dialog-actions">
+                <button id="timing-export">Download .json</button>
+              </div>
+            </section>
+
+            <section
+              id="panel-buffers"
+              class="inspector-panel"
+              role="tabpanel"
+              data-panel="buffers"
+              aria-labelledby="tab-buffers"
+              hidden
+            >
+              <details class="panel-about">
+                <summary>About buffers</summary>
+                <p class="dialog-note">
+                  Buffers the IR allocates (<code>memref.alloc</code>,
+                  <code>memref.alloca</code>, <code>gpu.alloc</code>), baseline
+                  against current. Each bar is a buffer's live range through
+                  its function, top to bottom in the source: from the
+                  allocation to its dealloc, to the end when it is returned
+                  (marked edge), or else to its last use. A use inside a loop
+                  keeps it live until the loop ends. Sizes are static; buffers
+                  with dynamic shapes are counted but not sized. Peak live is
+                  the largest function's. Click a current buffer to show its
+                  line.
+                </p>
+              </details>
+              <p id="buffers-none" class="dialog-note" hidden>
+                No parsed IR to analyze.
+              </p>
+              <div id="buffers-body">
+                <dl id="buffers-summary" class="panel-facts"></dl>
+                <p id="buffers-empty" class="dialog-note" hidden>
+                  No memref allocations. Buffers appear after bufferization, for
+                  example <code>-one-shot-bufferize</code>.
+                </p>
+                <div class="buf-scroll">
+                  <div id="buffers-functions"></div>
+                </div>
+                <div id="buffers-passes">
+                  <h3>Across the trace</h3>
+                  <div class="opcount-controls">
+                    <label
+                      ><input
+                        id="buffers-changed-passes"
+                        type="checkbox"
+                        checked
+                      />
+                      Only passes that change buffers</label
+                    >
+                    <span id="buffers-pass-shown" class="dialog-note"></span>
+                  </div>
+                  <div class="buf-scroll">
+                    <table id="buffers-pass-table"></table>
+                  </div>
+                </div>
+                <div class="dialog-actions">
+                  <button id="buffers-export">Download .json</button>
+                </div>
+              </div>
+            </section>
+
+            <section
+              id="panel-opcount"
+              class="inspector-panel"
+              role="tabpanel"
+              data-panel="opcount"
+              aria-labelledby="tab-opcount"
+              hidden
+            >
+              <p id="opcount-note" class="dialog-note"></p>
+              <div id="opcount-body">
+                <dl id="opcount-summary" class="panel-facts"></dl>
+                <div class="opcount-controls">
+                  <input
+                    id="opcount-filter"
+                    type="search"
+                    placeholder="Filter ops…"
+                    aria-label="Filter ops by name"
+                    autocomplete="off"
+                  />
+                  <label
+                    ><input id="opcount-changed-ops" type="checkbox" checked />
+                    Only ops that change</label
+                  >
+                  <label id="opcount-changed-passes-label"
+                    ><input
+                      id="opcount-changed-passes"
+                      type="checkbox"
+                      checked
+                    />
+                    Only passes that change counts</label
+                  >
+                  <span id="opcount-shown" class="dialog-note"></span>
+                </div>
+                <div class="opcount-scroll">
+                  <table id="opcount-table"></table>
+                </div>
+                <div class="dialog-actions">
+                  <button id="opcount-export">Download .csv</button>
+                </div>
+              </div>
+            </section>
+
+            <section
+              id="panel-symbols"
+              class="inspector-panel"
+              role="tabpanel"
+              data-panel="symbols"
+              aria-labelledby="tab-symbols"
+              hidden
+            >
+              <details class="panel-about">
+                <summary>About symbol history</summary>
+                <p class="dialog-note">
+                  Every function, kernel, GPU module and global in the trace,
+                  with the passes that created it, changed its body, lowered it
+                  to another op (<code>func.func</code> →
+                  <code>llvm.func</code>), or removed it. Nested symbols are
+                  named as in <code>gpu.launch_func</code>
+                  (<code>@module::@kernel</code>), and a change inside a nested
+                  symbol is not counted against its parent. Click a pass to go
+                  to it, or a symbol to follow it step by step.
+                </p>
+              </details>
+              <p id="symbols-none" class="dialog-note" hidden>
+                Open a pass trace to see which pass made each function or
+                kernel.
+              </p>
+              <div id="symbols-body">
+                <p id="symbols-mock" class="mock-note" role="note" hidden>
+                  <strong>Mock data.</strong> These kernel timings are invented
+                  to show how benchmark results line up with the passes that
+                  built each kernel. They were not measured on any GPU. The
+                  trace itself is real <code>mlir-opt</code> output. Use
+                  <strong>Import current…</strong> and
+                  <strong>Import baseline…</strong> to load your own results.
+                </p>
+                <dl id="symbols-summary" class="panel-facts"></dl>
+                <div class="opcount-controls">
+                  <input
+                    id="symbols-filter"
+                    type="search"
+                    placeholder="Filter symbols or ops…"
+                    aria-label="Filter symbols by name or op"
+                    autocomplete="off"
+                  />
+                  <label
+                    ><input id="symbols-changed" type="checkbox" checked />
+                    Only symbols that change</label
+                  >
+                  <label
+                    ><input id="symbols-at-pass" type="checkbox" /> Only the
+                    current pass</label
+                  >
+                  <label hidden
+                    ><input id="symbols-min-change-on" type="checkbox" /> Only
+                    kernels that changed by more than
+                    <input
+                      id="symbols-min-change"
+                      type="number"
+                      value="5"
+                      min="0"
+                      step="1"
+                      aria-label="Minimum change in percent"
+                    />%</label
+                  >
+                  <span id="symbols-shown" class="dialog-note"></span>
+                </div>
+                <p
+                  id="symbols-bench-error"
+                  class="dialog-note"
+                  role="alert"
+                  hidden
+                ></p>
+                <div class="opcount-scroll">
+                  <table id="symbols-table"></table>
+                </div>
+                <div id="symbols-bench" hidden>
+                  <h3>Benchmark kernels not matched to a symbol</h3>
+                  <ul id="symbols-unmatched"></ul>
+                </div>
+                <div class="dialog-actions">
+                  <button id="symbols-export">Download .json</button>
+                  <button id="symbols-bench-current">Import current…</button>
+                  <button id="symbols-bench-baseline">Import baseline…</button>
+                  <button id="symbols-bench-clear" hidden>
+                    Clear benchmarks
+                  </button>
+                </div>
+              </div>
+              <input
+                id="symbols-bench-file"
+                type="file"
+                accept=".csv,.json,.txt"
                 hidden
-              >
-                <button id="view-graph" aria-pressed="true" title="Op graph">
-                  Graph
-                </button>
-                <button
-                  id="view-gpu"
-                  aria-pressed="false"
-                  title="How the kernels are launched and where their data lives (g)"
-                >
-                  GPU
-                </button>
-              </span>
-              <span
-                id="view-sep"
-                class="tools-sep"
-                aria-hidden="true"
-                hidden
-              ></span>
-              <button id="zoom-out" aria-label="Zoom out" title="Zoom out (-)">
-                −
-              </button>
-              <span id="zoom-level" aria-live="polite">100%</span>
-              <button id="zoom-in" aria-label="Zoom in" title="Zoom in (+)">
-                +
-              </button>
-              <button id="zoom-fit" title="Fit graph (f)">fit</button>
-              <span class="tools-sep" aria-hidden="true"></span>
-              <button id="export-png" title="Download the whole graph as PNG">
-                PNG
-              </button>
-              <button id="export-svg" title="Download the whole graph as SVG">
-                SVG
-              </button>
-            </div>
-            <div class="graph-legend" aria-hidden="true">
-              <span><b class="added">+</b> added</span>
-              <span><b class="changed">~</b> modified</span>
-              <span><b class="removed">−</b> removed</span>
-            </div>
-          </div>
-          <div
-            id="diff-splitter"
-            class="splitter"
-            aria-label="Resize diff pane"
-            title="Drag to resize · double-click to reset"
-          ></div>
-          <aside id="diff-pane" class="pane">
-            <div class="side-tabs" role="tablist" aria-label="Side panel">
-              <button
-                id="side-changes"
-                role="tab"
-                aria-selected="true"
-                aria-controls="diff-list"
-              >
-                Changes
-              </button>
-              <button
-                id="side-gpu"
-                role="tab"
-                aria-selected="false"
-                aria-controls="gpu-path"
-                hidden
-              >
-                GPU path
-              </button>
-            </div>
-            <h2 id="diff-head">
-              <span id="diff-title">diff</span>
-              <span id="diff-summary">no comparison yet</span>
-            </h2>
-            <ul
-              id="diff-list"
-              role="listbox"
-              aria-label="Changes"
-              aria-multiselectable="true"
-            ></ul>
-            <div class="diff-hint">
-              <span><kbd>j</kbd> <kbd>k</kbd> step · <kbd>x</kbd> pick</span>
-              <span class="sp"></span>
-              <button
-                id="diff-copy"
-                class="link-btn"
-                title="Copy picked changes (or the current one) as a patch · c"
-                disabled
-              >
-                copy
-              </button>
-              <button
-                id="export-md"
-                class="link-btn"
-                title="Download diff as Markdown"
-              >
-                .md
-              </button>
-              <button
-                id="export-json"
-                class="link-btn"
-                title="Download diff as JSON"
-              >
-                .json
-              </button>
-            </div>
-            <div id="gpu-path" role="tabpanel" hidden></div>
+              />
+            </section>
           </aside>
         </main>
 
@@ -3364,9 +4068,12 @@
           <dt><kbd class="mod-k">⌘K</kbd> <kbd>/</kbd></dt>
           <dd>Jump to a pass, op, symbol, or action</dd>
           <dt><kbd>[</kbd> <kbd>]</kbd></dt>
-          <dd>Previous / next pass in a trace</dd>
+          <dd>
+            Previous / next pass in a trace (or focus the pass slider and use
+            <kbd>←</kbd> <kbd>→</kbd>)
+          </dd>
           <dt><kbd>j</kbd> <kbd>k</kbd></dt>
-          <dd>Next / previous change</dd>
+          <dd>Next / previous change (Changes tab)</dd>
           <dt><kbd>x</kbd> · <kbd>shift</kbd>/<kbd>⌘</kbd> click</dt>
           <dd>Pick changes (esc clears)</dd>
           <dt><kbd>c</kbd></dt>
@@ -3379,198 +4086,36 @@
           <dd>Switch baseline / current tab</dd>
           <dt><kbd>s</kbd></dt>
           <dd>Split: show both sources</dd>
-          <dt><kbd>p</kbd></dt>
-          <dd>Pass timing and memory</dd>
-          <dt><kbd>o</kbd></dt>
-          <dd>Op counts per pass</dd>
-          <dt><kbd>b</kbd></dt>
-          <dd>Buffers and peak memory</dd>
-          <dt><kbd>h</kbd></dt>
-          <dd>Symbol history: which pass made each function or kernel</dd>
-          <dt><kbd>g</kbd></dt>
-          <dd>Switch the canvas between the op graph and the GPU view</dd>
+          <dt><kbd>\</kbd></dt>
+          <dd>Show / hide the inspector beside the picture</dd>
+          <dt><kbd>esc</kbd></dt>
+          <dd>Close the inspector; focus goes back to what you picked</dd>
           <dt><kbd>w</kbd></dt>
-          <dd>What's this line? Explain the line of code you click</dd>
+          <dd>Inspector: Line tab, what the clicked line does</dd>
+          <dt><kbd>p</kbd></dt>
+          <dd>Inspector: Timing tab, pass timing and memory</dd>
+          <dt><kbd>b</kbd></dt>
+          <dd>Inspector: Buffers tab, buffers and peak memory</dd>
+          <dt><kbd>o</kbd></dt>
+          <dd>Inspector: Op count tab, op counts per pass</dd>
+          <dt><kbd>h</kbd></dt>
+          <dd>
+            Inspector: Symbols tab, which pass made each function or kernel
+          </dd>
+          <dt><kbd>g</kbd></dt>
+          <dd>Switch the picture between the op graph and the GPU view</dd>
           <dt><kbd>←</kbd> <kbd>→</kbd></dt>
           <dd>Jump to the previous / next chapter of the guide (Learn)</dd>
           <dt><kbd>m</kbd></dt>
           <dd>Show / hide the menu</dd>
           <dt><kbd>shift</kbd> <kbd>L</kbd></dt>
           <dd>Switch light / dark theme</dd>
-          <dt><kbd>esc</kbd></dt>
+          <dt><kbd>esc</kbd> in the editor</dt>
           <dd>Leave the editor so shortcuts work</dd>
           <dt><kbd>?</kbd></dt>
           <dd>This list</dd>
         </dl>
         <form method="dialog"><button>Close</button></form>
-      </dialog>
-
-      <dialog id="timing" aria-labelledby="timing-title">
-        <h2 id="timing-title">Pass timing and memory</h2>
-        <p class="dialog-note">
-          From the log's <code>-mlir-timing</code> report. Nested passes show
-          one total across every op they ran on. mlir-opt does not measure
-          memory per pass; peak memory is the whole process, read from
-          <code>/usr/bin/time</code> output when the log includes it.
-        </p>
-        <p id="timing-empty" class="dialog-note" hidden>
-          No timing report in this log. Add <code>-mlir-timing</code> to the
-          mlir-opt command, and wrap it in <code>/usr/bin/time -l</code> (macOS)
-          or <code>/usr/bin/time -v</code> (Linux) for peak memory.
-        </p>
-        <dl id="timing-summary"></dl>
-        <div class="timing-scroll">
-          <table id="timing-table"></table>
-        </div>
-        <div class="dialog-actions">
-          <button id="timing-export">Download .json</button>
-          <span class="sp"></span>
-          <form method="dialog"><button>Close</button></form>
-        </div>
-      </dialog>
-
-      <dialog id="opcount" aria-labelledby="opcount-title">
-        <h2 id="opcount-title">Op counts</h2>
-        <p id="opcount-note" class="dialog-note"></p>
-        <dl id="opcount-summary"></dl>
-        <div class="opcount-controls">
-          <input
-            id="opcount-filter"
-            type="search"
-            placeholder="Filter ops…"
-            aria-label="Filter ops by name"
-            autocomplete="off"
-          />
-          <label
-            ><input id="opcount-changed-ops" type="checkbox" checked /> Only ops
-            that change</label
-          >
-          <label id="opcount-changed-passes-label"
-            ><input id="opcount-changed-passes" type="checkbox" checked /> Only
-            passes that change counts</label
-          >
-          <span id="opcount-shown" class="dialog-note"></span>
-        </div>
-        <div class="opcount-scroll">
-          <table id="opcount-table"></table>
-        </div>
-        <div class="dialog-actions">
-          <button id="opcount-export">Download .csv</button>
-          <span class="sp"></span>
-          <form method="dialog"><button>Close</button></form>
-        </div>
-      </dialog>
-
-      <dialog id="buffers" aria-labelledby="buffers-title">
-        <h2 id="buffers-title">Buffers</h2>
-        <p class="dialog-note">
-          Buffers the IR allocates (<code>memref.alloc</code>,
-          <code>memref.alloca</code>, <code>gpu.alloc</code>), baseline against
-          current. Each bar is a buffer's live range through its function, top
-          to bottom in the source: from the allocation to its dealloc, to the
-          end when it is returned (marked edge), or else to its last use. A use
-          inside a loop keeps it live until the loop ends. Sizes are static;
-          buffers with dynamic shapes are counted but not sized. Peak live is
-          the largest function's. Click a current buffer to show its line.
-        </p>
-        <dl id="buffers-summary"></dl>
-        <p id="buffers-empty" class="dialog-note" hidden>
-          No memref allocations. Buffers appear after bufferization, for example
-          <code>-one-shot-bufferize</code>.
-        </p>
-        <div class="buf-scroll">
-          <div id="buffers-functions"></div>
-        </div>
-        <div id="buffers-passes">
-          <h3>Across the trace</h3>
-          <div class="opcount-controls">
-            <label
-              ><input id="buffers-changed-passes" type="checkbox" checked />
-              Only passes that change buffers</label
-            >
-            <span id="buffers-pass-shown" class="dialog-note"></span>
-          </div>
-          <div class="buf-scroll">
-            <table id="buffers-pass-table"></table>
-          </div>
-        </div>
-        <div class="dialog-actions">
-          <button id="buffers-export">Download .json</button>
-          <span class="sp"></span>
-          <form method="dialog"><button autofocus>Close</button></form>
-        </div>
-      </dialog>
-
-      <dialog id="symbols" aria-labelledby="symbols-title">
-        <h2 id="symbols-title">Symbol history</h2>
-        <p class="dialog-note">
-          Every function, kernel, GPU module and global in the trace, with the
-          passes that created it, changed its body, lowered it to another op
-          (<code>func.func</code> → <code>llvm.func</code>), or removed it.
-          Nested symbols are named as in <code>gpu.launch_func</code>
-          (<code>@module::@kernel</code>), and a change inside a nested symbol
-          is not counted against its parent. Click a pass to go to it.
-        </p>
-        <p id="symbols-mock" class="mock-note" role="note" hidden>
-          <strong>Mock data.</strong> These kernel timings are invented to show
-          how benchmark results line up with the passes that built each kernel.
-          They were not measured on any GPU. The trace itself is real
-          <code>mlir-opt</code> output. Use <strong>Import current…</strong> and
-          <strong>Import baseline…</strong> to load your own results.
-        </p>
-        <dl id="symbols-summary"></dl>
-        <div class="opcount-controls">
-          <input
-            id="symbols-filter"
-            type="search"
-            placeholder="Filter symbols or ops…"
-            aria-label="Filter symbols by name or op"
-            autocomplete="off"
-          />
-          <label
-            ><input id="symbols-changed" type="checkbox" checked /> Only symbols
-            that change</label
-          >
-          <label
-            ><input id="symbols-at-pass" type="checkbox" /> Only the current
-            pass</label
-          >
-          <label hidden
-            ><input id="symbols-min-change-on" type="checkbox" /> Only kernels
-            that changed by more than
-            <input
-              id="symbols-min-change"
-              type="number"
-              value="5"
-              min="0"
-              step="1"
-              aria-label="Minimum change in percent"
-            />%</label
-          >
-          <span id="symbols-shown" class="dialog-note"></span>
-        </div>
-        <p id="symbols-bench-error" class="dialog-note" role="alert" hidden></p>
-        <div class="opcount-scroll">
-          <table id="symbols-table"></table>
-        </div>
-        <div id="symbols-bench" hidden>
-          <h3>Benchmark kernels not matched to a symbol</h3>
-          <ul id="symbols-unmatched"></ul>
-        </div>
-        <div class="dialog-actions">
-          <button id="symbols-export">Download .json</button>
-          <button id="symbols-bench-current">Import current…</button>
-          <button id="symbols-bench-baseline">Import baseline…</button>
-          <button id="symbols-bench-clear" hidden>Clear benchmarks</button>
-          <input
-            id="symbols-bench-file"
-            type="file"
-            accept=".csv,.json,.txt"
-            hidden
-          />
-          <span class="sp"></span>
-          <form method="dialog"><button>Close</button></form>
-        </div>
       </dialog>
 
       <dialog id="symbol-view" aria-labelledby="symbol-view-title">
@@ -3687,26 +4232,30 @@
                 </p>
                 <ol>
                   <li>
-                    Open the sample. The big panel in the middle is the
-                    <strong>GPU view</strong>: a picture of the work the GPU
-                    will do.
+                    Open the sample. The code is on the left, and the wide
+                    pane next to it is the <strong>GPU view</strong>: a
+                    picture of the work the GPU will do. Its tabs switch
+                    between this picture and a diagram of the code.
                   </li>
                   <li>
-                    Read the card at the top of the GPU view. It says whether
-                    the picked read or write is good for the GPU, what it
-                    costs, and how people usually fix it. Click another row in
-                    <strong>Memory accesses</strong> to change which one it
-                    explains.
+                    Click a row in <strong>Memory accesses</strong>, under the
+                    picture. The <strong>inspector</strong> slides in on the
+                    right with its answer card: whether that read or write is
+                    good for the GPU, what it costs, and how people usually
+                    fix it. The line above the picture keeps the verdict in
+                    view; <kbd>esc</kbd> closes the inspector.
                   </li>
                   <li>
-                    Press <kbd>]</kbd> a few times to step through the
-                    compiler's work. The code on the left changes, and the
-                    picture follows.
+                    Drag the <strong>Pass</strong> slider at the top, or press
+                    <kbd>]</kbd> a few times, to step through the compiler's
+                    work. Hover the slider to preview a pass before you jump.
+                    The code changes, and the picture follows.
                   </li>
                   <li>
-                    Click any line of code on the left. The panel under it,
-                    <strong>What's this line?</strong>, explains that line in
-                    plain words.
+                    Click any line of code. The inspector's
+                    <strong>Line</strong> tab explains that line in plain
+                    words. Its other tabs hold what changed in this pass,
+                    timing, buffers, op counts, and symbol history.
                   </li>
                 </ol>
                 <div class="try">
@@ -3794,8 +4343,8 @@
                 <div class="try">
                   <strong>Try it.</strong>
                   <span
-                    >In the transpose sample, look at the top of the GPU view: a
-                    grid of squares, one per block. The highlighted block is
+                    >In the transpose sample, look at the GPU view: a grid of
+                    squares, one per block. The highlighted block is
                     opened below it, 32 threads to a row; each row is one warp.
                     Hover a square for its number.</span
                   >
@@ -3910,10 +4459,12 @@
                   bank) and to mark its line in the code.
                 </p>
                 <p>
-                  The <strong>answer card</strong> at the top of each launch
-                  sums up the picked access: its verdict, one sentence on what
-                  it costs, and a bar for how much of the memory traffic is
-                  useful. Next to the verdict:
+                  The <strong>answer card</strong>, in the inspector's
+                  <strong>Line</strong> tab, sums up the picked access: its
+                  verdict, one sentence on what it costs, and a bar for how
+                  much of the memory traffic is useful. The line above the GPU
+                  view repeats the verdict in short; click it to open the
+                  card. Next to the verdict:
                 </p>
                 <dl class="docs-terms">
                   <dt><span class="gpu-chip proven">✓ all 32,768 warps</span></dt>
@@ -4075,8 +4626,9 @@
                     >Click any line in the workspace.
                     <strong>What's this line?</strong> names each part, links
                     every value back to the line that made it, and for loads and
-                    stores says how the GPU handles them. <kbd>w</kbd> hides or
-                    shows it.</span
+                    stores says how the GPU handles them. It is the
+                    inspector's Line tab; <kbd>w</kbd> opens or closes
+                    it.</span
                   >
                 </div>
 
@@ -4147,17 +4699,20 @@
                   </li>
                 </ol>
                 <p>
-                  The row of cards along the top of the workspace is this
-                  pipeline, one card per pass. <kbd>[</kbd> and
-                  <kbd>]</kbd> step through it, and the right panel lists what
-                  each pass added, removed, or changed.
+                  The <strong>Pass</strong> slider along the top of the
+                  workspace is this pipeline, one stop per pass. Drag it, or
+                  press <kbd>[</kbd> and <kbd>]</kbd>, to step through it, and
+                  the inspector's <strong>Changes</strong> tab lists what each
+                  pass added, removed, or changed, with every pass listed under
+                  <strong>All passes</strong>.
                 </p>
 
                 <h3>Follow one kernel</h3>
                 <p>
                   Press <kbd>h</kbd>, or click <strong>@ symbols</strong> at the
-                  bottom, to list every function and kernel with the pass that
-                  created, changed, or lowered it. Click one to follow just that
+                  bottom, to open the inspector's <strong>Symbols</strong> tab:
+                  every function and kernel with the pass that created,
+                  changed, or lowered it. Click one to follow just that
                   kernel like a time-lapse, all the way to its PTX.
                 </p>
 
@@ -4230,7 +4785,7 @@ mlir-opt input.mlir -pass-pipeline='…' \
                 </dl>
                 <p>
                   Add <code>-mlir-timing</code> to see how long each pass took
-                  (<kbd>p</kbd>). With <strong>Watch…</strong> (Chrome and
+                  (<kbd>p</kbd>, the inspector's Timing tab). With <strong>Watch…</strong> (Chrome and
                   Edge), VizMLIR reloads the file each time you rerun the
                   command, so you can keep it open beside your terminal. A
                   failed pass is marked ✗, with the compiler's messages over the
@@ -4247,12 +4802,13 @@ mlir-opt input.mlir -pass-pipeline='…' \
                 <div class="docs-kicker">Lab</div>
                 <h2>Diagrams and diffs</h2>
                 <p>
-                  For code without GPU parts, or when you press <kbd>g</kbd>,
-                  the middle panel draws the code as a dataflow graph: every
-                  operation is a box, and arrows show where each value goes
-                  next. The panel on the right lists what the current pass
-                  added, removed, or changed; walk through it with
-                  <kbd>j</kbd> and <kbd>k</kbd>.
+                  For code without GPU parts, or on the
+                  <strong>Graph</strong> tab (<kbd>g</kbd>), the wide pane
+                  draws the code as a dataflow graph: every operation is a
+                  box, and arrows show where each value goes next. The
+                  inspector's <strong>Changes</strong> tab lists what the
+                  current pass added, removed, or changed; walk through it
+                  with <kbd>j</kbd> and <kbd>k</kbd>.
                 </p>
                 <p>
                   You can also compare any two versions by hand: paste the
@@ -4325,8 +4881,8 @@ mlir-opt input.mlir -pass-pipeline='…' \
                   </li>
                   <li>
                     Save the diagram as PNG or SVG from the buttons above it,
-                    and the list of changes as Markdown or JSON from the right
-                    panel. Pick changes with <kbd>x</kbd> and press
+                    and the list of changes as Markdown or JSON from the
+                    inspector's Changes tab. Pick changes with <kbd>x</kbd> and press
                     <kbd>c</kbd> to copy them.
                   </li>
                 </ul>
