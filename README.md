@@ -8,9 +8,9 @@ VizMLIR is a visual companion for computer architecture, compilers, and parallel
 
 🚀 **[Try VizMLIR live](https://joepothiboot.github.io/vizmlir/)**: it opens on a small example with two classic GPU mistakes in it. See if you can spot them.
 
-![VizMLIR showing a transpose kernel: the answer card proves the write is strided for all 32,768 warps and follows it across compiler passes, and "What's this line?" explains the store in plain words](public/demo/vizmlir-workspace.png)
+![VizMLIR showing a transpose kernel: the code, the GPU view, and the inspector, whose answer card proves the write is strided for all 32,768 warps and follows it across compiler passes, with "What's this line?" explaining the store in plain words](public/demo/vizmlir-workspace.png)
 
-_A transpose whose write is strided. The GPU view shows the 32 threads of a warp landing 1024 items apart; under the code, "What's this line?" takes the store apart in plain words._
+_A transpose whose write is strided. The GPU view shows the 32 threads of a warp landing 1024 items apart; beside it, the inspector's Line tab gives the verdict and takes the store apart in plain words._
 
 ## 📚 Learn with the guide
 
@@ -43,24 +43,25 @@ One honest limit: VizMLIR only reads your code; it never runs it. It can spot th
 
 ### 🖥️ See the GPU side
 
-- **The GPU view.** Whenever your code starts work on the GPU, the middle panel shows it as a grid of blocks, with one block opened up into its warps of 32 threads, and lists every array the kernel uses as global, shared, or private memory. Press `g` to switch to a diagram of the code instead.
-- **Memory checks.** Every read and write gets a verdict: are a warp's threads reading neighbors (_coalesced_), far-apart places (_strided_), or the same item (_broadcast_)? In shared memory, are they queueing at the same bank (_bank conflict_)? A card at the top says what it costs ("the GPU moves 8× more data than it uses") and how people usually fix it; click another access to see its 32 threads and, with **Elements** (`e`) in the 3D view, the items they touch.
+- **The GPU view.** Whenever your code starts work on the GPU, the wide pane next to the code shows it as a grid of blocks, with one block opened up into its warps of 32 threads, and lists every array the kernel uses as global, shared, or private memory. Its **Graph** tab (or `g`) switches to a diagram of the code instead.
+- **Memory checks.** Every read and write gets a verdict: are a warp's threads reading neighbors (_coalesced_), far-apart places (_strided_), or the same item (_broadcast_)? In shared memory, are they queueing at the same bank (_bank conflict_)? Click an access and the **inspector** slides in beside the picture with its answer card: what it costs ("the GPU moves 8× more data than it uses") and how people usually fix it, while a one-line verdict stays above the picture. Click another access to see its 32 threads and, with **Elements** (`e`) in the 3D view, the items they touch.
 - **Proven, not guessed.** When an address is a linear function of the thread ids, block ids and loop counters, VizMLIR checks the verdict for every warp of the launch and every loop iteration, and says so ("✓ all 32,768 warps"). Switch the card to **Compiler** to see the math behind it, and follow the same access across every compiler step, down to the LLVM dialect.
 - **Triton, too.** Open Triton GPU IR and see which thread holds which element of a tensor under its `#blocked` layout, with the same proven verdicts for every `tt.load` and `tt.store`. The Triton sample shows the coalesce pass turning a strided load into 16-byte vectors.
-- **What's this line?** Click any line of code to see it explained in plain words: what it produces, what it does, which values it uses (each linked back to the line that made it), and what kind of data it works on. For reads and writes, it also says how the GPU handles them, with a real example like "thread (1, 0, 0) uses `%arg1[1, 0]`". Press `w` to hide it.
+- **What's this line?** Click any line of code to see it explained in plain words: what it produces, what it does, which values it uses (each linked back to the line that made it), and what kind of data it works on. For reads and writes, it also says how the GPU handles them, with a real example like "thread (1, 0, 0) uses `%arg1[1, 0]`". It is the inspector's **Line** tab (`w`).
 - **A kernel's full history.** Press `h` to see which compiler step created, changed, or finished each kernel, then follow one kernel step by step, all the way to the GPU assembly (PTX) at the end.
 - **Your measured timings.** Bring in results from Nsight Systems, Nsight Compute, Google Benchmark, or your own CSV, and compare two runs to see which kernels got faster or slower ([docs/benchmark-format.md](docs/benchmark-format.md)).
 
 ### 🧭 Follow the compiler
 
-- **Step through a pipeline.** Open the log `mlir-opt -mlir-print-ir-after-all` writes (or one from any `*-opt` tool built on MLIR) and move through each step with `[` `]`. Failed steps are marked, and compiler messages appear next to the code. The format is described in [docs/trace-format.md](docs/trace-format.md).
-- **See what changed.** Each operation is drawn as a box with arrows for where its values go, and a side panel lists what the current step added, removed, or changed. Walk through the list with `j` `k`.
-- **How long each step took**, with `-mlir-timing` (press `p`).
+- **Step through a pipeline.** Open the log `mlir-opt -mlir-print-ir-after-all` writes (or one from any `*-opt` tool built on MLIR) and move through each step with the pass slider or `[` `]`; hovering the slider previews a step (its name, size, and how many operations it changed) before you jump. Failed steps are marked, and compiler messages appear next to the code. The format is described in [docs/trace-format.md](docs/trace-format.md).
+- **See what changed.** Each operation is drawn as a box with arrows for where its values go, and the inspector's **Changes** tab lists what the current step added, removed, or changed. Walk through the list with `j` `k`.
+- **How long each step took**, with `-mlir-timing` (press `p` for the inspector's Timing tab).
 - **How many of each operation** every step leaves behind (press `o`), to spot a step that stopped working or one that made the code blow up.
 - **Memory over time** after arrays are allocated (press `b`): when each one is alive, how big it is, and the peak.
 
 ### ⚙️ Work comfortably
 
+- **Details beside the picture.** What changed, the explained line, timing, buffers, op counts, and symbol history are tabs of one inspector next to the picture, not pop-ups, so what you compare against stays in view. `\` shows or hides it, and `esc` closes it.
 - **Live reload.** Watch a file (Chrome/Edge), and VizMLIR refreshes every time you rerun your compiler.
 - **Save and share.** Your work saves itself in the browser. Keep named sessions and share them as `.json`, save diagrams as PNG or SVG, and export changes as Markdown or JSON.
 - **Keyboard friendly.** Jump to any step, operation, or function with ⌘K / Ctrl K. Press `?` for every shortcut.
@@ -78,8 +79,8 @@ npm run dev
 ```
 
 1. Open the address it prints. The transpose example opens on the GPU view.
-2. Scroll to **Memory accesses** and click the orange row to see what went wrong and how it's usually fixed.
-3. Press `]` to step through the compiler's work and watch the picture change.
+2. Scroll to **Memory accesses** and click the orange row; the inspector opens beside the picture with what went wrong and how it's usually fixed.
+3. Press `]`, or drag the pass slider, to step through the compiler's work and watch the picture change.
 4. When you're ready, open your own `mlir-opt` log with **Open…**. The guide (**Learn** in the app) explains which flags to use and what each one does.
 
 ## 🤝 Contributing
