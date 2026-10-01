@@ -28,7 +28,12 @@ import {
 } from "./provenance.js";
 import { diffStats, lineDiff } from "./linediff.js";
 import { analyzeGpu, memorySpace } from "./gpu.js";
-import { focusGpuLine, renderGpuPath, renderGpuView } from "./gpu-view.js";
+import {
+  focusGpuLine,
+  renderGpuPath,
+  renderGpuView,
+  verdictSummary,
+} from "./gpu-view.js";
 import { warpAccess } from "./gpu-access.js";
 import { parseMemref } from "./buffers.js";
 import { explainLine } from "./anatomy.js";
@@ -45,6 +50,8 @@ import {
 } from "./bench.js";
 import { bindHighlighting, highlightMlir } from "./mlir-highlight.js";
 import { CommandPalette } from "./palette.js";
+import { createInspector } from "./inspector.js";
+import { createScrubber } from "./scrubber.js";
 import { loadSampleState, RENAME_SAMPLE, SAMPLES } from "./samples.js";
 import { bindSplitters } from "./splitters.js";
 import { kv, sessionFromFile, sessions, sessionToFile } from "./storage.js";
@@ -92,7 +99,10 @@ const baselineHighlight = document.getElementById("baseline-highlight");
 const editorHighlight = document.getElementById("editor-highlight");
 const docsSampleHighlight = document.getElementById("docs-sample-highlight");
 const diagsEl = document.getElementById("diags");
-const passStrip = document.getElementById("pass-strip");
+const passScrubber = document.getElementById("pass-scrubber");
+const passList = document.getElementById("pass-list");
+const passListWrap = document.getElementById("pass-list-wrap");
+const passListCount = document.getElementById("pass-list-count");
 const fileInput = document.getElementById("file");
 const baselineTitle = document.getElementById("baseline-title");
 const currentTitle = document.getElementById("current-title");
@@ -100,9 +110,14 @@ const sourcePane = document.getElementById("source-pane");
 const splitToggle = document.getElementById("split-toggle");
 const sourceName = document.getElementById("source-name");
 const diffTitle = document.getElementById("diff-title");
-const sideChanges = document.getElementById("side-changes");
-const sideGpu = document.getElementById("side-gpu");
+const inspectorEl = document.getElementById("inspector");
+const inspectorToggle = document.getElementById("inspector-toggle");
+const inspectorBadge = document.getElementById("inspector-badge");
+const inspectorSplitter = document.getElementById("inspector-splitter");
 const gpuPath = document.getElementById("gpu-path");
+const gpuAnswerSection = document.getElementById("gpu-answer-section");
+const gpuAnswerHost = document.getElementById("gpu-answer-host");
+const vizVerdict = document.getElementById("viz-verdict");
 const helpDialog = document.getElementById("help");
 const zoomLevel = document.getElementById("zoom-level");
 const timingOpen = document.getElementById("timing-open");
@@ -111,11 +126,7 @@ const buffersOpen = document.getElementById("buffers-open");
 const symbolsOpen = document.getElementById("symbols-open");
 const stage = document.getElementById("stage");
 const gpuViewEl = document.getElementById("gpu-view");
-const viewToggle = document.getElementById("view-toggle");
-const viewSep = document.getElementById("view-sep");
-const viewGraph = document.getElementById("view-graph");
 const viewGpu = document.getElementById("view-gpu");
-const lineExplain = document.getElementById("line-explain");
 const leTitle = document.getElementById("le-title");
 const leBody = document.getElementById("le-body");
 const leDocs = document.getElementById("le-docs");
@@ -231,6 +242,11 @@ function renderDiff(rows, before, after) {
   } else {
     diffSummary.textContent = "No structural changes";
   }
+  // The counts also ride on the inspector's toggle, so they show while it is
+  // closed.
+  inspectorBadge.replaceChildren(
+    ...(total ? [...diffSummary.childNodes].map((node) => node.cloneNode(true)) : []),
+  );
 
   diffRows = rows;
   diffBefore = before;
@@ -367,6 +383,7 @@ function run() {
       setStatus(`baseline error: ${engine.statusText}`, { error: true });
       setViewCounts(null);
       setViewBuffers(null);
+      refreshInspector();
       return;
     }
     beforeCopy = copySnapshot(before.snapshot);
@@ -388,6 +405,7 @@ function run() {
     setViewCounts(null);
     setViewBuffers(null);
     setGpuModel(null);
+    refreshInspector();
     return;
   }
 
@@ -413,6 +431,7 @@ function run() {
         ? ` · ${diags.length} warning(s): ${diags[0].message} "${diags[0].symbol}"`
         : ""),
   );
+  refreshInspector();
 }
 
 function loadTrace(text, { keepIndex = false } = {}) {
@@ -436,39 +455,18 @@ function loadTrace(text, { keepIndex = false } = {}) {
     0,
     ...profile.matches.map((match) => match?.row.wall.seconds ?? 0),
   );
-  const width = String(trace.events.length).length;
-  passStrip.replaceChildren(
-    ...trace.events.map((event) => {
-      const button = document.createElement("button");
-      const flags = `${event.failed ? " ✗ failed" : ""}${event.diagnostics.length ? ` · ${event.diagnostics.length} diag` : ""}`;
-      const number = document.createElement("span");
-      number.className = "n";
-      number.textContent =
-        String(event.index + 1).padStart(Math.max(2, width), "0") + flags;
-      const name = document.createElement("span");
-      name.className = "name";
-      name.textContent = describeEvent(event);
+  passChanges = new Map();
+  scrubber.setPasses(
+    trace.events.map((event) => {
       const match = profile.matches[event.index];
-      const meta = document.createElement("span");
-      meta.className = "meta";
-      meta.textContent =
-        (match ? `${formatSeconds(match.row.wall.seconds)} · ` : "") +
-        formatBytes(byteLength(event.ir));
-      button.append(number, name, meta);
-      if (match && slowest > 0)
-        button.style.setProperty(
-          "--time",
-          `${(100 * match.row.wall.seconds) / slowest}%`,
-        );
-      button.title =
-        `${event.index + 1}. ${describeEvent(event)}${flags}` +
-        (match ? `\n${describeMatch(match)}` : "");
-      button.classList.toggle("failed", event.failed);
-      button.addEventListener("click", () => selectEvent(event.index));
-      return button;
+      return {
+        failed: event.failed,
+        share: match && slowest > 0 ? match.row.wall.seconds / slowest : null,
+      };
     }),
   );
-  passStrip.hidden = !docsView.hidden;
+  renderPassList(slowest);
+  passScrubber.hidden = !docsView.hidden;
   const firstFailure = trace.events.findIndex((event) => event.failed);
   selectEvent(
     keepIndex && previousIndex >= 0
@@ -484,14 +482,14 @@ function selectEvent(index) {
   const event = trace.events[index];
   const base = baselineFor(trace.events, index);
   traceIndex = index;
-  [...passStrip.children].forEach((button, i) => {
+  scrubber.setValue(index);
+  [...passList.children].forEach((item, i) => {
+    const button = item.firstChild;
     if (i === index) button.setAttribute("aria-current", "step");
     else button.removeAttribute("aria-current");
   });
-  passStrip.children[index]?.scrollIntoView({
-    block: "nearest",
-    inline: "nearest",
-  });
+  if (passListWrap.open)
+    passList.children[index]?.scrollIntoView({ block: "nearest" });
   baseline.value = base?.ir ?? "";
   input.value = event.ir;
   baseline.dispatchEvent(new Event("input"));
@@ -525,6 +523,126 @@ function selectEvent(index) {
   run();
 }
 
+// Every pass as one compact row, in the Changes tab: number, name, wall
+// time and IR size, with a bar for its time against the slowest.
+function renderPassList(slowest) {
+  const width = Math.max(2, String(trace.events.length).length);
+  passList.replaceChildren(
+    ...trace.events.map((event) => {
+      const item = document.createElement("li");
+      const button = document.createElement("button");
+      const flags = `${event.failed ? " ✗" : ""}${event.diagnostics.length ? ` · ${event.diagnostics.length} diag` : ""}`;
+      const number = document.createElement("span");
+      number.className = "n";
+      number.textContent = String(event.index + 1).padStart(width, "0") + flags;
+      const name = document.createElement("span");
+      name.className = "name";
+      name.textContent = describeEvent(event);
+      const match = profile.matches[event.index];
+      const meta = document.createElement("span");
+      meta.className = "meta";
+      meta.textContent =
+        (match ? `${formatSeconds(match.row.wall.seconds)} · ` : "") +
+        formatBytes(byteLength(event.ir));
+      button.append(number, name, meta);
+      if (match && slowest > 0)
+        button.style.setProperty(
+          "--time",
+          `${(100 * match.row.wall.seconds) / slowest}%`,
+        );
+      button.title =
+        `${event.index + 1}. ${describeEvent(event)}${event.failed ? " ✗ failed" : ""}` +
+        (match ? `\n${describeMatch(match)}` : "");
+      button.classList.toggle("failed", event.failed);
+      button.addEventListener("click", () => selectEvent(event.index));
+      item.append(button);
+      return item;
+    }),
+  );
+  passListCount.textContent = `(${trace.events.length})`;
+  passListWrap.hidden = false;
+}
+
+// Ops pass `index` added, removed and changed against its baseline, worked
+// out on demand for the scrubber's preview and kept until the next trace.
+// The engine has one arena, so the graph's snapshot is re-parsed afterwards.
+let passChanges = new Map();
+function changedOpsAt(index) {
+  if (index === traceIndex) {
+    const counts = { added: 0, removed: 0, changed: 0 };
+    for (const row of diffRows) counts[row.type] += 1;
+    return counts;
+  }
+  if (passChanges.has(index)) return passChanges.get(index);
+  const base = baselineFor(trace.events, index);
+  let counts = null;
+  const before = base ? parse(base.ir) : null;
+  if (!before || before.status === STATUS.OK) {
+    const beforeCopy = before && copySnapshot(before.snapshot);
+    const after = parse(trace.events[index].ir);
+    if (after.status === STATUS.OK) {
+      counts = { added: 0, removed: 0, changed: 0 };
+      for (const row of diffSnapshots(beforeCopy, after.snapshot)) counts[row.type] += 1;
+    }
+  }
+  if (renderedText) {
+    const restored = parse(renderedText).snapshot;
+    renderer.snapshot = restored;
+    diffAfter = restored;
+    renderer.requestDraw();
+  }
+  passChanges.set(index, counts);
+  return counts;
+}
+
+let previewTimer = 0;
+const scrubber = createScrubber(passScrubber, {
+  onSelect: (index) => trace && index !== traceIndex && selectEvent(index),
+  label: (index) => {
+    const event = trace?.events[index];
+    if (!event) return "";
+    return (
+      `Pass ${index + 1} of ${trace.events.length}: ${describeEvent(event)}` +
+      (event.failed ? " · failed" : "")
+    );
+  },
+  preview: (index) => {
+    const event = trace.events[index];
+    const base = baselineFor(trace.events, index);
+    const size = byteLength(event.ir);
+    const growth = base ? size - byteLength(base.ir) : 0;
+    const match = profile.matches[index];
+    const lines = [
+      `IR ${formatBytes(size)}` +
+        (growth ? ` (${growth > 0 ? "+" : "−"}${formatBytes(Math.abs(growth))})` : ""),
+    ];
+    // The op diff needs two parses; wait until the pointer settles.
+    const known = index === traceIndex || passChanges.has(index);
+    const counts = known ? changedOpsAt(index) : undefined;
+    if (counts === undefined) {
+      lines.push("changed ops: …");
+      clearTimeout(previewTimer);
+      previewTimer = setTimeout(() => {
+        if (!trace?.events[index]) return;
+        changedOpsAt(index);
+        scrubber.refreshPreview(index);
+      }, 120);
+    } else if (counts === null) {
+      lines.push("changed ops: could not parse");
+    } else {
+      const total = counts.added + counts.removed + counts.changed;
+      lines.push(
+        total
+          ? `changed ops: ${total} (+${counts.added} −${counts.removed} ~${counts.changed})`
+          : "changed ops: none",
+      );
+    }
+    if (match) lines.push(describeMatch(match));
+    if (event.failed) lines.push("✗ failed");
+    return { title: `${index + 1}. ${describeEvent(event)}`, lines };
+  },
+});
+
 function clearTrace() {
   trace = null;
   traceCounts = null;
@@ -535,8 +653,10 @@ function clearTrace() {
   traceNote = "";
   traceIndex = -1;
   traceDiffTitle = "";
-  passStrip.hidden = true;
-  passStrip.replaceChildren();
+  passScrubber.hidden = true;
+  scrubber.setPasses([]);
+  passList.replaceChildren();
+  passListWrap.hidden = true;
   setProfile(null, null, []);
   baselineTitle.textContent = "Baseline";
   currentTitle.textContent = "Current";
@@ -563,7 +683,7 @@ function updateRoute() {
   const isDocs = window.location.hash === "#/docs";
   workspace.hidden = isDocs;
   docsView.hidden = !isDocs;
-  passStrip.hidden = isDocs || !trace;
+  passScrubber.hidden = isDocs || !trace;
   routeLinks.forEach((link) => {
     link.setAttribute(
       "aria-current",
@@ -733,11 +853,84 @@ bindSplitters(document.querySelector("#workspace main"), [
     side: "left",
   },
   {
-    el: document.getElementById("diff-splitter"),
-    pane: document.getElementById("diff-pane"),
+    el: inspectorSplitter,
+    pane: inspectorEl,
     side: "right",
   },
 ]);
+
+// ---- Inspector ---------------------------------------------------------------
+
+// Every detail view is a tab of one drawer beside the visualization, so what
+// it explains stays in sight. Selecting a line, an op, or an access opens it;
+// Escape closes it and returns focus to what was selected. Whether it is
+// open, and on which tab, is remembered.
+const INSPECTOR_KEY = "vizmlir-inspector";
+let inspectorSaved = {};
+try {
+  inspectorSaved = JSON.parse(localStorage.getItem(INSPECTOR_KEY)) || {};
+} catch {}
+
+// Draws a tab's contents when it is shown, and again when the pass or the
+// IR changes under it.
+const PANELS = {
+  line: renderLinePanel,
+  timing: renderTiming,
+  buffers: renderBuffersPanel,
+  opcount: renderOpCountPanel,
+  symbols: renderSymbolsPanel,
+};
+
+const inspector = createInspector(inspectorEl, {
+  toggle: inspectorToggle,
+  closeButton: document.getElementById("inspector-close"),
+  tab: inspectorSaved.tab,
+  onShow: (tab) => PANELS[tab]?.(),
+  onChange: ({ open, tab }) => {
+    try {
+      localStorage.setItem(INSPECTOR_KEY, JSON.stringify({ open, tab }));
+    } catch {}
+  },
+});
+// The column's splitter only shows beside an open inspector.
+inspectorEl.addEventListener("inspector-toggle", (e) => {
+  inspectorSplitter.hidden = !e.detail.open;
+});
+
+// Redraws the open tab after the IR or the pass changed.
+function refreshInspector() {
+  if (inspector.isOpen) PANELS[inspector.active]?.();
+}
+
+// Shows a tab from a command (palette, key, status bar), redrawing it when
+// it is already on screen.
+function showPanel(tab) {
+  goToWorkspace();
+  const shown = inspector.isOpen && inspector.active === tab;
+  inspector.show(tab);
+  if (shown) PANELS[tab]?.();
+}
+
+function toggleInspector() {
+  if (inspector.isOpen) inspector.close();
+  else inspector.open();
+}
+
+// j / k walk the changes, with the Changes tab in view.
+function stepChange(delta) {
+  focusChange(delta > 0 ? diffCursor + 1 : diffCursor < 0 ? -1 : diffCursor - 1);
+  if (diffRows.length) inspector.show("changes", { from: canvas });
+}
+
+// Opens `tab` for something the person selected (`from` gets focus back on
+// close). Selecting an op keeps the Changes or Line tab already open.
+function inspect(tab, from) {
+  if (tab === "changes" && inspector.isOpen && inspector.active === "line") {
+    inspector.open({ from });
+    return;
+  }
+  inspector.show(tab, { from });
+}
 
 // ---- Command palette -------------------------------------------------------
 
@@ -769,6 +962,7 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
       run: () => {
         goToWorkspace();
         renderer.select(i, { center: true });
+        inspect("changes", canvas);
       },
     });
   }
@@ -785,10 +979,16 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
     ["Copy changes as patch", "c", copyChanges],
     ["Export diff as Markdown", "", () => exportDiff("md")],
     ["Export diff as JSON", "", () => exportDiff("json")],
-    ["Show pass timing and memory", "p", openTiming],
-    ["Show op counts per pass", "o", openOpCounts],
-    ["Show buffers and peak memory", "b", openBuffers],
-    ["Show symbol history (which pass made each kernel)", "h", openSymbols],
+    ["Inspector: changes in this pass", "", () => showPanel("changes")],
+    ["Inspector: pass timing and memory", "p", openTiming],
+    ["Inspector: op counts per pass", "o", openOpCounts],
+    ["Inspector: buffers and peak memory", "b", openBuffers],
+    ["Inspector: symbol history (which pass made each kernel)", "h", openSymbols],
+    [
+      inspector.isOpen ? "Close the inspector" : "Open the inspector",
+      "\\",
+      toggleInspector,
+    ],
     ...(gpuModel
       ? [
           [
@@ -798,11 +998,7 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
           ],
         ]
       : []),
-    [
-      explainOn ? "Hide “What's this line?”" : "Show “What's this line?”: explain the clicked line",
-      "w",
-      () => setExplainOn(!explainOn),
-    ],
+    ["Inspector: what's this line? (explain the clicked line)", "w", () => showPanel("line")],
     ["Import current kernel benchmarks…", "", () => importBenchmarks("current")],
     ["Import baseline kernel benchmarks…", "", () => importBenchmarks("baseline")],
     ...(canWatchFiles
@@ -887,16 +1083,17 @@ const WORKSPACE_KEYS = {
   "-": () => renderer.zoomBy(0.8),
   x: () => diffCursor >= 0 && togglePick(diffCursor),
   c: copyChanges,
-  j: () => focusChange(diffCursor + 1),
-  k: () => focusChange(diffCursor < 0 ? -1 : diffCursor - 1),
+  j: () => stepChange(1),
+  k: () => stepChange(-1),
   t: toggleTab,
   s: toggleSplit,
-  p: openTiming,
-  o: openOpCounts,
-  b: openBuffers,
-  h: openSymbols,
+  p: () => inspector.toggleTab("timing"),
+  o: () => inspector.toggleTab("opcount"),
+  b: () => inspector.toggleTab("buffers"),
+  h: () => inspector.toggleTab("symbols"),
+  w: () => inspector.toggleTab("line"),
+  "\\": toggleInspector,
   g: () => gpuModel && setCanvasView(canvasView === "gpu" ? "graph" : "gpu"),
-  w: () => setExplainOn(!explainOn),
   "[": () => trace && traceIndex > 0 && selectEvent(traceIndex - 1),
   "]": () =>
     trace &&
@@ -919,6 +1116,7 @@ window.addEventListener("keydown", (e) => {
   }
   if (isTyping(e.target)) return;
   if (e.key === "Escape" && !workspace.hidden && clearPicks()) return;
+  if (e.key === "Escape" && !workspace.hidden && inspector.handleEscape()) return;
   if (e.key === "/") {
     e.preventDefault();
     palette.open();
@@ -1199,7 +1397,6 @@ document
 
 // ---- Timing and memory -----------------------------------------------------
 
-const timingDialog = document.getElementById("timing");
 const timingSummary = document.getElementById("timing-summary");
 const timingTable = document.getElementById("timing-table");
 const timingEmpty = document.getElementById("timing-empty");
@@ -1228,9 +1425,7 @@ function describeMatch(match) {
 }
 
 function openTiming() {
-  goToWorkspace();
-  renderTiming();
-  timingDialog.showModal();
+  showPanel("timing");
 }
 
 function renderTiming() {
@@ -1286,10 +1481,7 @@ function renderTiming() {
       link.className = "link-btn";
       link.textContent = row.name;
       link.title = `Go to pass #${eventIndex + 1}`;
-      link.addEventListener("click", () => {
-        timingDialog.close();
-        selectEvent(eventIndex);
-      });
+      link.addEventListener("click", () => selectEvent(eventIndex));
       name.append(link);
     } else {
       name.textContent = row.name;
@@ -1336,13 +1528,10 @@ function exportTiming() {
 
 timingOpen.addEventListener("click", openTiming);
 timingExport.addEventListener("click", exportTiming);
-timingDialog.addEventListener("click", (e) => {
-  if (e.target === timingDialog) timingDialog.close();
-});
 
 // ---- Op counts -------------------------------------------------------------
 
-const opCountDialog = document.getElementById("opcount");
+const opCountBody = document.getElementById("opcount-body");
 const opCountNote = document.getElementById("opcount-note");
 const opCountSummary = document.getElementById("opcount-summary");
 const opCountTableEl = document.getElementById("opcount-table");
@@ -1414,16 +1603,21 @@ function buildOpCountModel() {
 }
 
 function openOpCounts() {
-  goToWorkspace();
-  if (!viewCounts && !trace) {
-    setStatus("no parsed IR to count", { error: true });
+  showPanel("opcount");
+}
+
+function renderOpCountPanel() {
+  const none = !viewCounts && !trace;
+  opCountBody.hidden = none;
+  if (none) {
+    opCountModel = null;
+    opCountNote.textContent = "No parsed IR to count.";
     return;
   }
   opCountModel = buildOpCountModel();
   opCountNote.textContent = opCountModel.note;
   renderOpCountSummary();
   renderOpCountTable();
-  opCountDialog.showModal();
 }
 
 function renderOpCountSummary() {
@@ -1485,10 +1679,7 @@ function renderOpCountTable() {
       link.className = "link-btn";
       link.textContent = headers[i];
       link.title = `${titles[i]}\nGo to this pass`;
-      link.addEventListener("click", () => {
-        opCountDialog.close();
-        selectEvent(events[i]);
-      });
+      link.addEventListener("click", () => selectEvent(events[i]));
       th.append(link);
     } else {
       th.textContent = headers[i];
@@ -1567,13 +1758,11 @@ opCountChangedPasses.addEventListener("change", renderOpCountTable);
 document
   .getElementById("opcount-export")
   .addEventListener("click", exportOpCounts);
-opCountDialog.addEventListener("click", (e) => {
-  if (e.target === opCountDialog) opCountDialog.close();
-});
 
 // ---- Buffers ---------------------------------------------------------------
 
-const buffersDialog = document.getElementById("buffers");
+const buffersNone = document.getElementById("buffers-none");
+const buffersBody = document.getElementById("buffers-body");
 const buffersSummary = document.getElementById("buffers-summary");
 const buffersEmpty = document.getElementById("buffers-empty");
 const buffersFunctions = document.getElementById("buffers-functions");
@@ -1602,9 +1791,14 @@ function computeTraceBuffers() {
 }
 
 function openBuffers() {
-  goToWorkspace();
+  showPanel("buffers");
+}
+
+function renderBuffersPanel() {
+  buffersNone.hidden = !!viewBuffers;
+  buffersBody.hidden = !viewBuffers;
   if (!viewBuffers) {
-    setStatus("no parsed IR to analyze", { error: true });
+    buffersModel = null;
     return;
   }
   const { before, after } = viewBuffers;
@@ -1619,15 +1813,11 @@ function openBuffers() {
   });
   const shown = renderFunctions(buffersFunctions, comparison, {
     hasBaseline: !!before,
-    onLine(line) {
-      buffersDialog.close();
-      showSourceLine(line);
-    },
+    onLine: showSourceLine,
   });
   buffersEmpty.hidden = shown > 0;
   buffersPasses.hidden = !trace;
   if (trace) renderBufferPasses();
-  buffersDialog.showModal();
 }
 
 function renderBufferPasses() {
@@ -1639,10 +1829,7 @@ function renderBufferPasses() {
   const { shown, changed } = renderPasses(buffersPassTable, rows, {
     current: traceIndex,
     onlyChanged: buffersChangedPasses.checked,
-    onPass(i) {
-      buffersDialog.close();
-      selectEvent(i);
-    },
+    onPass: selectEvent,
   });
   buffersPassShown.textContent = `${shown} of ${rows.length} dumps · ${changed} change buffers`;
 }
@@ -1665,13 +1852,11 @@ buffersChangedPasses.addEventListener("change", renderBufferPasses);
 document
   .getElementById("buffers-export")
   .addEventListener("click", exportBuffers);
-buffersDialog.addEventListener("click", (e) => {
-  if (e.target === buffersDialog) buffersDialog.close();
-});
 
 // ---- Symbol history --------------------------------------------------------
 
-const symbolsDialog = document.getElementById("symbols");
+const symbolsNone = document.getElementById("symbols-none");
+const symbolsBody = document.getElementById("symbols-body");
 const symbolsSummary = document.getElementById("symbols-summary");
 const symbolsTable = document.getElementById("symbols-table");
 const symbolsFilter = document.getElementById("symbols-filter");
@@ -1698,15 +1883,16 @@ const STEP_TEXT = {
 };
 
 function openSymbols() {
-  goToWorkspace();
-  if (!trace) {
-    setStatus("open a pass trace to see symbol history", { error: true });
-    return;
-  }
   symbolsBenchError.hidden = true;
+  showPanel("symbols");
+}
+
+function renderSymbolsPanel() {
+  symbolsNone.hidden = !!trace;
+  symbolsBody.hidden = !trace;
+  if (!trace) return;
   renderSymbolsSummary();
   renderSymbols();
-  symbolsDialog.showModal();
 }
 
 // Parses benchmark results into `slot` (baseline or current); throws on input
@@ -1747,7 +1933,7 @@ symbolsBenchFile.addEventListener("change", async () => {
   symbolsBenchFile.value = "";
   if (!file || !trace) return;
   const text = await file.text();
-  if (!symbolsDialog.open) openSymbols();
+  if (!inspector.isOpen || inspector.active !== "symbols") openSymbols();
   try {
     setBenchmarks(benchSlot, file.name, text);
     symbolsBenchError.hidden = true;
@@ -1879,10 +2065,7 @@ function renderSymbols() {
     show.title =
       (record.initial ? "In the first dump" : "Created during the trace") +
       "\nOpen its IR at every pass that changed it";
-    show.addEventListener("click", () => {
-      symbolsDialog.close();
-      openSymbolView(record);
-    });
+    show.addEventListener("click", () => openSymbolView(record));
     sym.append(show);
     const steps = document.createElement("div");
     steps.className = "steps";
@@ -1904,10 +2087,7 @@ function renderSymbols() {
         STEP_TEXT[change.kind] +
         (change.kind === "lowered" ? ` to ${change.op}` : "");
       step.title = `${change.index + 1}. ${describeEvent(event)}\nGo to this pass`;
-      step.addEventListener("click", () => {
-        symbolsDialog.close();
-        selectEvent(change.index);
-      });
+      step.addEventListener("click", () => selectEvent(change.index));
       steps.append(step);
     }
     const stepsCell = document.createElement("td");
@@ -2033,60 +2213,111 @@ symbolsMinChange.addEventListener("input", () => {
   renderSymbols();
 });
 symbolsMinChangeOn.addEventListener("change", renderSymbols);
-symbolsDialog.addEventListener("click", (e) => {
-  if (e.target === symbolsDialog) symbolsDialog.close();
-});
 
-// ---- GPU view ----------------------------------------------------------------
+// ---- Visualization tabs and the GPU view ---------------------------------------
 
-// Picking an access marks its line (1-based) in the current source. With a
-// pass trace open, the answer card follows the picked access across passes
-// and a click on a pass selects it.
+// Picking an access marks its line (1-based) in the current source and opens
+// the inspector's Line tab, which holds its answer card and its path into the
+// GPU. With a pass trace open, the answer card follows the picked access
+// across passes and a click on a pass selects it.
 const GPU_VIEW_OPTIONS = {
-  onLine: (line) => showSourceLine(line - 1),
+  onLine: (line) => {
+    showSourceLine(line - 1);
+    inspect("line", document.activeElement);
+  },
+  onAnswer: setGpuAnswer,
   passes: () =>
     trace?.events.length > 1
       ? { events: trace.events, current: traceIndex, select: selectEvent, describe: describeEvent }
       : null,
 };
 
-// The side panel shows the pass diff, or the GPU path of the picked line.
-// It follows the canvas (GPU view → GPU path) until the person picks a tab.
-function showSide(tab) {
-  const gpu = tab === "gpu" && !sideGpu.hidden;
-  sideChanges.setAttribute("aria-selected", String(!gpu));
-  sideGpu.setAttribute("aria-selected", String(gpu));
-  for (const part of ["diff-head", "diff-list"]) document.getElementById(part).hidden = gpu;
-  document.querySelector("#diff-pane .diff-hint").hidden = gpu;
-  gpuPath.hidden = !gpu;
-  if (gpu) renderGpuPath(gpuPath, GPU_VIEW_OPTIONS);
+// The answer card of the picked access lives in the Line tab; the bar above
+// the GPU view keeps a one-line summary of it. Each launch picks an access
+// when drawn; the first launch's pick stands until the person picks another.
+let gpuAnswer = null;
+function setGpuAnswer(card, judged, { initial }) {
+  if (initial && gpuAnswer?.card.isConnected) return;
+  gpuAnswer = { card, judged };
+  gpuAnswerHost.replaceChildren(card);
+  renderVerdictChip();
 }
-sideChanges.addEventListener("click", () => showSide("changes"));
-sideGpu.addEventListener("click", () => showSide("gpu"));
+
+function renderVerdictChip() {
+  const on = canvasView === "gpu" && !!gpuAnswer;
+  vizVerdict.hidden = !on;
+  gpuAnswerSection.hidden = !on;
+  if (on) vizVerdict.replaceChildren(...verdictSummary(gpuAnswer.judged));
+  placeAnswer();
+}
+
+// The answer card leads the Line tab when it is about the explained line
+// (an access was picked), and follows the explanation otherwise.
+function placeAnswer() {
+  const first = gpuAnswer && gpuAnswer.judged.access.line === explainedLine + 1;
+  leBody.parentElement.insertBefore(gpuAnswerSection, first ? leBody : gpuPath);
+}
+
+vizVerdict.addEventListener("click", () => inspect("line", vizVerdict));
+
+// Redraws the GPU view, dropping the last answer (the cards are rebuilt).
+function drawGpuView(options = GPU_VIEW_OPTIONS) {
+  gpuAnswer = null;
+  gpuAnswerHost.replaceChildren();
+  renderGpuView(gpuViewEl, gpuModel, options);
+  renderVerdictChip();
+}
+
+// The path the focused line takes into the GPU, under its answer card.
+function renderPath() {
+  const on = canvasView === "gpu" && !!gpuModel;
+  gpuPath.hidden = !on;
+  if (on) renderGpuPath(gpuPath, GPU_VIEW_OPTIONS);
+}
 
 // Traces 0-based source line `index` in the GPU view (3D IR wall, Memory
 // accesses, GPU path) when that view is open.
 function focusGpu(index) {
   if (canvasView !== "gpu" || !gpuModel) return;
   focusGpuLine(index >= 0 ? index + 1 : null);
-  if (!gpuPath.hidden) renderGpuPath(gpuPath, GPU_VIEW_OPTIONS);
+  renderPath();
 }
 
-// Shows the Graph | GPU toggle only when the rendered IR has GPU code, opens
-// the preferred view, and redraws the GPU view when it is open.
+// Shows the GPU tab only when the rendered IR has GPU code, opens the
+// preferred view, and redraws the GPU view when it is open.
 function setGpuModel(model) {
   gpuModel = model;
-  viewToggle.hidden = !model;
-  viewSep.hidden = !model;
+  viewGpu.hidden = !model;
   if (!model) {
     if (canvasView === "gpu") setCanvasView("graph", { remember: false });
   } else if (canvasView === "gpu") {
-    renderGpuView(gpuViewEl, gpuModel, GPU_VIEW_OPTIONS);
+    drawGpuView();
     focusGpu(markedLine);
   } else if (canvasPreference === "gpu") {
     setCanvasView("gpu", { remember: false });
   }
 }
+
+// The views of the visualization pane, one tab each ([data-view] in
+// #viz-tabs). A new view registers here: `available()` says whether the
+// current IR has anything to show in it, and `show(on)` draws or hides it.
+const VIEWS = {
+  graph: {
+    available: () => true,
+    show(on) {
+      if (on) renderer.requestDraw();
+    },
+  },
+  gpu: {
+    available: () => !!gpuModel,
+    show(on) {
+      stage.classList.toggle("gpu-mode", on);
+      gpuViewEl.hidden = !on;
+      if (on) drawGpuView();
+    },
+  },
+};
+const vizTabs = [...document.querySelectorAll("#viz-tabs [data-view]")];
 
 // `remember` records the choice as the preference, for the person's own
 // toggles; automatic switches pass false.
@@ -2097,32 +2328,46 @@ function setCanvasView(view, { remember = true } = {}) {
       localStorage.setItem(CANVAS_KEY, canvasPreference);
     } catch {}
   }
-  canvasView = view === "gpu" && gpuModel ? "gpu" : "graph";
-  const gpu = canvasView === "gpu";
-  stage.classList.toggle("gpu-mode", gpu);
-  gpuViewEl.hidden = !gpu;
-  viewGraph.setAttribute("aria-pressed", String(!gpu));
-  viewGpu.setAttribute("aria-pressed", String(gpu));
-  if (gpu) renderGpuView(gpuViewEl, gpuModel, GPU_VIEW_OPTIONS);
-  else renderer.requestDraw();
-  sideGpu.hidden = !gpu;
-  showSide(gpu ? "gpu" : "changes");
-  if (gpu) focusGpu(markedLine);
+  canvasView = VIEWS[view]?.available() ? view : "graph";
+  for (const tab of vizTabs) {
+    const on = tab.dataset.view === canvasView;
+    tab.setAttribute("aria-selected", String(on));
+    tab.tabIndex = on ? 0 : -1;
+  }
+  for (const [name, entry] of Object.entries(VIEWS)) entry.show(name === canvasView);
+  renderVerdictChip();
+  renderPath();
+  if (canvasView === "gpu") focusGpu(markedLine);
+  renderExplain(explainedLine);
 }
 
-viewGraph.addEventListener("click", () => setCanvasView("graph"));
-viewGpu.addEventListener("click", () => setCanvasView("gpu"));
+for (const tab of vizTabs) {
+  tab.addEventListener("click", () => setCanvasView(tab.dataset.view));
+  // Arrow keys move between the views (WAI-ARIA tabs pattern).
+  tab.addEventListener("keydown", (e) => {
+    const shown = vizTabs.filter((t) => !t.hidden);
+    const at = shown.indexOf(tab);
+    const next = { ArrowRight: at + 1, ArrowLeft: at - 1 }[e.key];
+    if (next === undefined) return;
+    e.preventDefault();
+    const target = shown[(next + shown.length) % shown.length];
+    setCanvasView(target.dataset.view);
+    target.focus();
+  });
+}
+
+// An op picked in the graph opens the inspector (Changes, or Line if that is
+// the tab on screen).
+canvas.addEventListener("click", () => {
+  if (renderer.selected >= 0) inspect("changes", canvas);
+});
 
 // ---- What's this line ------------------------------------------------------
 
-// The panel under the editor explains the line of the current source that was
+// The inspector's Line tab explains the line of the current source that was
 // clicked, reached with the arrow keys, or marked from the graph or the GPU
-// view. It is on by default; `w` hides it, and the choice is remembered.
-const EXPLAIN_KEY = "vizmlir-explain";
-let explainOn = true;
-try {
-  explainOn = localStorage.getItem(EXPLAIN_KEY) !== "off";
-} catch {}
+// view. With the GPU view open, the picked access's answer card and its path
+// into the GPU follow the explanation.
 let explainedLine = -1;
 
 const VERDICT_MEANING = {
@@ -2131,14 +2376,6 @@ const VERDICT_MEANING = {
   broadcast: "Every thread uses the same item, so it is fetched once and shared.",
   "conflict-free": "Every thread gets its own shared-memory counter (bank), so nobody waits.",
 };
-
-function setExplainOn(on) {
-  explainOn = on;
-  try {
-    localStorage.setItem(EXPLAIN_KEY, on ? "on" : "off");
-  } catch {}
-  renderExplain(explainedLine);
-}
 
 function caretLine() {
   return input.value.slice(0, input.selectionStart).split("\n").length - 1;
@@ -2166,7 +2403,9 @@ function markedLineElement(line, parts) {
   return pre;
 }
 
-// What the GPU view knows about a load or store on line `index` (0-based).
+// What the GPU view knows about a load or store on line `index` (0-based),
+// for when the graph is on screen; with the GPU view open its answer card
+// says it instead.
 function gpuExplain(index) {
   if (!gpuModel) return null;
   for (const launch of gpuModel.launches) {
@@ -2217,7 +2456,8 @@ function gpuExplain(index) {
     show.textContent = "Show in the GPU view";
     show.addEventListener("click", () => {
       setCanvasView("gpu");
-      renderGpuView(gpuViewEl, gpuModel, { ...GPU_VIEW_OPTIONS, focusLine: index + 1 });
+      drawGpuView({ ...GPU_VIEW_OPTIONS, focusLine: index + 1 });
+      focusGpu(index);
     });
     box.append(show);
     return box;
@@ -2228,12 +2468,11 @@ function gpuExplain(index) {
 // Explains 0-based line `index` of the current source, or shows a hint.
 function renderExplain(index) {
   explainedLine = index;
-  lineExplain.hidden = !explainOn;
-  if (!explainOn) return;
   const lines = input.value.split("\n");
   const explained = index >= 0 ? explainLine(lines, index) : null;
   leDocs.hidden = !explained?.op;
   if (!explained) {
+    placeAnswer();
     leTitle.textContent = "What's this line?";
     const hint = document.createElement("p");
     hint.className = "le-hint";
@@ -2279,14 +2518,22 @@ function renderExplain(index) {
     }
     children.push(list);
   }
-  const gpu = gpuExplain(index);
+  const gpu = canvasView === "gpu" ? null : gpuExplain(index);
   if (gpu) children.push(gpu);
   leBody.replaceChildren(...children);
+  placeAnswer();
 }
 
+// The Line tab is drawn as lines are picked; showing it only needs the path.
+function renderLinePanel() {
+  renderPath();
+}
+
+// A click on a line of the current source explains it in the inspector.
 input.addEventListener("click", () => {
   renderExplain(caretLine());
   focusGpu(caretLine());
+  inspect("line", input);
 });
 input.addEventListener("keyup", (e) => {
   if (!/^(Arrow|Page|Home|End)/.test(e.key)) return;
@@ -2295,7 +2542,6 @@ input.addEventListener("keyup", (e) => {
 });
 // New text (another pass, a paste) invalidates the explained line.
 input.addEventListener("input", () => renderExplain(-1));
-document.getElementById("le-close").addEventListener("click", () => setExplainOn(false));
 
 // ---- Symbol view -----------------------------------------------------------
 
@@ -2642,6 +2888,7 @@ async function restoreWatch() {
 document.getElementById("abi").textContent = `wasm abi v${ABI_VERSION}`;
 showTab(input);
 renderExplain(-1);
+renderPath();
 window.addEventListener("hashchange", updateRoute);
 updateRoute();
 updateWatchUi();
@@ -2663,4 +2910,5 @@ if (hasContent(saved)) {
   }
 }
 restored = true;
+if (inspectorSaved.open) inspector.open();
 restoreWatch();
