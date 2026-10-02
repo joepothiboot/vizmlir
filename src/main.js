@@ -35,6 +35,13 @@ import {
   verdictSummary,
 } from "./gpu-view.js";
 import { warpAccess } from "./gpu-access.js";
+import {
+  analyzeLocalMemory,
+  hasLocalMemory,
+  localLineInfo,
+  localTargetOf,
+} from "./local-memory.js";
+import { focusLocalLine, localExplain, renderLocalView } from "./local-view.js";
 import { parseMemref } from "./buffers.js";
 import { explainLine } from "./anatomy.js";
 import { bindGuide } from "./guide.js";
@@ -127,6 +134,8 @@ const symbolsOpen = document.getElementById("symbols-open");
 const stage = document.getElementById("stage");
 const gpuViewEl = document.getElementById("gpu-view");
 const viewGpu = document.getElementById("view-gpu");
+const localViewEl = document.getElementById("local-view");
+const viewLocal = document.getElementById("view-local");
 const leTitle = document.getElementById("le-title");
 const leBody = document.getElementById("le-body");
 const leDocs = document.getElementById("le-docs");
@@ -169,6 +178,11 @@ let canvasPreference = "gpu";
 try {
   if (localStorage.getItem(CANVAS_KEY) === "graph") canvasPreference = "graph";
 } catch {}
+// The scratchpad buffers and DMAs of the rendered IR (src/local-memory.js),
+// and whether the Local memory view should open when they appear: yes until
+// the person picks another view, so stepping through a trace keeps it.
+let localModel = null;
+let localWanted = true;
 // Created / changed / lowered / removed passes for every symbol in the trace,
 // computed when first shown.
 let traceSymbols = null;
@@ -405,6 +419,7 @@ function run() {
     setViewCounts(null);
     setViewBuffers(null);
     setGpuModel(null);
+    setLocalModel(null);
     refreshInspector();
     return;
   }
@@ -413,6 +428,11 @@ function run() {
   renderedText = current;
   renderer.setSnapshot(snap);
   setGpuModel(analyzeGpu(current));
+  setLocalModel(
+    analyzeLocalMemory(current, {
+      target: trace && traceIndex >= 0 ? localTargetOf(trace.events, traceIndex) : null,
+    }),
+  );
   setViewCounts({
     before: beforeCopy ? countOps(beforeCopy) : null,
     after: countOps(snap),
@@ -792,6 +812,7 @@ function showSourceLine(line) {
     renderExplain(markedLine);
   }
   focusGpu(markedLine);
+  if (canvasView === "local") focusLocalLine(localViewEl, markedLine);
   positionLineMark();
 }
 
@@ -995,6 +1016,20 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
             canvasView === "gpu" ? "Show the op graph" : "Show the GPU view: launches and memory",
             "g",
             () => setCanvasView(canvasView === "gpu" ? "graph" : "gpu"),
+          ],
+        ]
+      : []),
+    ...(localModel
+      ? [
+          [
+            canvasView === "local"
+              ? "Show the op graph"
+              : "Show the Local memory view: scratchpad buffers and DMAs",
+            "",
+            () => {
+              localWanted = canvasView !== "local";
+              setCanvasView(localWanted ? "local" : "graph");
+            },
           ],
         ]
       : []),
@@ -2298,6 +2333,33 @@ function setGpuModel(model) {
   }
 }
 
+// Shows the Local memory tab when the rendered IR has local buffers or DMAs,
+// and opens it unless the person picked another view.
+function setLocalModel(model) {
+  localModel = hasLocalMemory(model) ? model : null;
+  viewLocal.hidden = !localModel;
+  if (!localModel) {
+    if (canvasView === "local") setCanvasView("graph", { remember: false });
+  } else if (canvasView === "local") {
+    drawLocalView();
+  } else if (localWanted) {
+    setCanvasView("local", { remember: false });
+  }
+}
+
+function drawLocalView() {
+  if (!localModel) return;
+  const event = trace && traceIndex >= 0 ? trace.events[traceIndex] : null;
+  renderLocalView(localViewEl, localModel, {
+    pass: event ? `Pass ${event.index + 1} · ${describeEvent(event)}` : "",
+    onPick: (line, from) => {
+      showSourceLine(line);
+      inspect("line", from);
+    },
+  });
+  focusLocalLine(localViewEl, markedLine);
+}
+
 // The views of the visualization pane, one tab each ([data-view] in
 // #viz-tabs). A new view registers here: `available()` says whether the
 // current IR has anything to show in it, and `show(on)` draws or hides it.
@@ -2316,13 +2378,21 @@ const VIEWS = {
       if (on) drawGpuView();
     },
   },
+  local: {
+    available: () => !!localModel,
+    show(on) {
+      stage.classList.toggle("local-mode", on);
+      localViewEl.hidden = !on;
+      if (on) drawLocalView();
+    },
+  },
 };
 const vizTabs = [...document.querySelectorAll("#viz-tabs [data-view]")];
 
 // `remember` records the choice as the preference, for the person's own
 // toggles; automatic switches pass false.
 function setCanvasView(view, { remember = true } = {}) {
-  if (remember && gpuModel) {
+  if (remember && gpuModel && view !== "local") {
     canvasPreference = view === "gpu" ? "gpu" : "graph";
     try {
       localStorage.setItem(CANVAS_KEY, canvasPreference);
@@ -2342,7 +2412,10 @@ function setCanvasView(view, { remember = true } = {}) {
 }
 
 for (const tab of vizTabs) {
-  tab.addEventListener("click", () => setCanvasView(tab.dataset.view));
+  tab.addEventListener("click", () => {
+    if (localModel) localWanted = tab.dataset.view === "local";
+    setCanvasView(tab.dataset.view);
+  });
   // Arrow keys move between the views (WAI-ARIA tabs pattern).
   tab.addEventListener("keydown", (e) => {
     const shown = vizTabs.filter((t) => !t.hidden);
@@ -2351,6 +2424,7 @@ for (const tab of vizTabs) {
     if (next === undefined) return;
     e.preventDefault();
     const target = shown[(next + shown.length) % shown.length];
+    if (localModel) localWanted = target.dataset.view === "local";
     setCanvasView(target.dataset.view);
     target.focus();
   });
@@ -2520,6 +2594,8 @@ function renderExplain(index) {
   }
   const gpu = canvasView === "gpu" ? null : gpuExplain(index);
   if (gpu) children.push(gpu);
+  const local = localExplain(localLineInfo(localModel, index));
+  if (local) children.push(local);
   leBody.replaceChildren(...children);
   placeAnswer();
 }
@@ -2533,6 +2609,7 @@ function renderLinePanel() {
 input.addEventListener("click", () => {
   renderExplain(caretLine());
   focusGpu(caretLine());
+  if (canvasView === "local") focusLocalLine(localViewEl, caretLine());
   inspect("line", input);
 });
 input.addEventListener("keyup", (e) => {
