@@ -4965,6 +4965,98 @@
 
               <article
                 class="lesson"
+                id="lesson-scratchpad"
+                data-group="Lessons"
+                data-title="Scratchpads and DMA (beyond GPUs)"
+              >
+                <div class="docs-kicker">Lesson 5 · Beyond GPUs</div>
+                <h2>Scratchpads and DMA (beyond GPUs)</h2>
+                <div class="lesson-goals">
+                  <strong>You'll learn</strong>
+                  <ul>
+                    <li>
+                      why DSPs and NPUs use a local memory the software
+                      manages, instead of a cache;
+                    </li>
+                    <li>what double buffering is and why it needs two slots;</li>
+                    <li>how to read it in the DSP scratchpad sample.</li>
+                  </ul>
+                </div>
+                <p>
+                  A cache decides on its own what to keep close to the
+                  processor. That works well for general code, but its
+                  choices are hard to predict, and the hardware that makes
+                  them costs area and power. Many DSPs and NPUs (Hexagon's
+                  VTCM is one example) offer a <em>scratchpad</em> instead: a
+                  small, fast local memory that holds exactly what the program
+                  puts there. The compiler decides which tile of data lives in
+                  it, and moves the data in with <em>DMA</em>, a copy engine
+                  that runs beside the vector unit. Shared memory on a GPU is
+                  the same idea, managed by the threads of a block.
+                </p>
+
+                <h3>Double buffering</h3>
+                <p>
+                  A DMA takes time. If the loop copied a tile and then computed
+                  on it, the vector unit would sit idle during every copy.
+                  Double buffering gives each tile two <em>slots</em>: while
+                  the loop computes on tile <em>i</em> in one slot, the DMA
+                  fills the other slot with tile <em>i</em>&nbsp;+&nbsp;1. The
+                  first tile is loaded before the loop (the
+                  <em>prologue</em>), and each trip ends by swapping the roles
+                  of the slots. The price is twice the local memory per tile.
+                </p>
+                <p>
+                  In MLIR, <code>memref.dma_start</code> starts a copy and
+                  marks a <em>tag</em>; <code>memref.dma_wait</code> on the
+                  same tag blocks until it has finished. Slots appear as a
+                  leading dimension of 2 on the buffer, and the slot of a trip
+                  is computed as <code>(i floordiv step) mod 2</code>.
+                </p>
+
+                <div class="try">
+                  <strong>Try it.</strong>
+                  <span
+                    >Open the "DSP scratchpad" sample and step to
+                    <code>nanodsp-promote-local</code>. The
+                    <strong>Local memory</strong> tab shows the A and B tiles
+                    as two 64&nbsp;KB slots each, filling the assumed
+                    256&nbsp;KB budget, and a schedule with the prologue
+                    loads, the prefetch of the next tile, and the waits. Click
+                    a prefetch to see its <code>dma_start</code> explained in
+                    the inspector, then step to
+                    <code>nanodsp-lower-local</code>, where each DMA has become
+                    a plain <code>linalg.copy</code>.</span
+                  >
+                </div>
+
+                <p>
+                  Limits: the view shows the order the IR expresses, not
+                  timing. Whether the copy of the next tile really hides
+                  behind the compute depends on the DMA engine, the memory
+                  bandwidth and the size of the compute, none of which are in
+                  the IR. The budget comes from nano-dsp's model of its
+                  target, not from the IR, and is labelled as assumed. After
+                  <code>nanodsp-lower-local</code> the copies are synchronous,
+                  so nothing overlaps at all; that form exists to run the
+                  kernel on a machine without a DMA engine.
+                </p>
+
+                <details class="check">
+                  <summary>
+                    Check yourself: why does the prefetch in the sample sit
+                    inside an <code>scf.if</code>?
+                  </summary>
+                  <p>
+                    On the last trip there is no next tile to fetch. The guard
+                    (<code>i + step &lt; upper bound</code>) skips the DMA there,
+                    so it never reads past the end of the input.
+                  </p>
+                </details>
+              </article>
+
+              <article
+                class="lesson"
                 id="lesson-own"
                 data-group="Lab"
                 data-title="Run your own compiler"
