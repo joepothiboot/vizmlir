@@ -10,7 +10,7 @@ import {
   renderGpuView,
   verdictSummary,
 } from "../../src/gpu-view.js";
-import { parsePassTrace } from "../../src/trace.js";
+import { parsePassTrace } from "../../src/trace/trace.js";
 
 const events = (name) =>
   parsePassTrace(

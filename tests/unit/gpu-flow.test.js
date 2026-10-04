@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { analyzeGpu } from "../../src/gpu.js";
 import { flowSlice, kernelFlow } from "../../src/gpu-flow.js";
-import { parsePassTrace } from "../../src/trace.js";
+import { parsePassTrace } from "../../src/trace/trace.js";
 
 const transpose = () => {
   const events = parsePassTrace(

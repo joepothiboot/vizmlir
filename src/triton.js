@@ -17,7 +17,7 @@
 
 import { add, constant, formatAffine, isConstant, scale } from "./gpu-affine.js";
 import { buildDefs, judgeWarp, WARP } from "./gpu-access.js";
-import { elementBytes as elementSize } from "./buffers.js";
+import { elementBytes as elementSize } from "./trace/index.js";
 
 const SECTOR = 32;
 const LAYOUT = /^\s*(#[\w$.-]+)\s*=\s*#(?:ttg|triton_gpu)\.blocked<\{(.*)\}>\s*$/;

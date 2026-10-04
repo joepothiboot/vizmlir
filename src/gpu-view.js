@@ -2,10 +2,10 @@
 // opened into its warps and threads, and the kernel's buffers by memory
 // space. Built from analyzeGpu() (src/gpu.js); plain DOM and SVG, no canvas.
 
-import { parseMemref } from "./buffers.js";
+import { parseMemref } from "./trace/index.js";
 import { warpAccess } from "./gpu-access.js";
 import { analyzeGpu, memorySpace } from "./gpu.js";
-import { formatBytes } from "./timing.js";
+import { formatBytes } from "./trace/index.js";
 import { gpuScene, matrixWidth } from "./gpu-3d.js";
 import { ownedBy, tritonAccess } from "./triton.js";
 

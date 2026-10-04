@@ -14,7 +14,7 @@
 // (src/gpu-affine.js), proveAccess() checks the verdict for every warp of the
 // launch and every iteration, not just the one shown.
 
-import { elementBytes as elementSize } from "./buffers.js";
+import { elementBytes as elementSize } from "./trace/index.js";
 import {
   add,
   constant,

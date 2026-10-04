@@ -6,7 +6,7 @@ import {
   opCountTable,
   opName,
   totalOps,
-} from "../../src/opcount.js";
+} from "../../src/trace/opcount.js";
 import { KIND } from "../../src/ir/abi.js";
 
 // Builds an object shaped like MlirEngine#snapshot() from [kind, label, parent].

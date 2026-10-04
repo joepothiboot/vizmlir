@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { parseMemref } from "../../src/buffers.js";
+import { parseMemref } from "../../src/trace/buffers.js";
 import {
   buildDefs,
   evaluate,
@@ -9,7 +9,7 @@ import {
   warpLanes,
 } from "../../src/gpu-access.js";
 import { analyzeGpu, loweredArgs, memorySpace } from "../../src/gpu.js";
-import { parsePassTrace } from "../../src/trace.js";
+import { parsePassTrace } from "../../src/trace/trace.js";
 
 const events = (name) =>
   parsePassTrace(

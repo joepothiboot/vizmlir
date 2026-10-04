@@ -7,13 +7,13 @@ import {
   opCountsToCSV,
   opCountTable,
   totalOps,
-} from "./opcount.js";
+} from "./trace/index.js";
 import {
   analyzeBuffers,
   bufferTotals,
   buffersToJSON,
   compareBuffers,
-} from "./buffers.js";
+} from "./trace/index.js";
 import {
   renderFunctions,
   renderPasses,
@@ -25,8 +25,8 @@ import {
   historyToJSON,
   symbolHistory,
   symbolTimeline,
-} from "./provenance.js";
-import { diffStats, lineDiff } from "./linediff.js";
+} from "./trace/index.js";
+import { diffStats, lineDiff } from "./trace/index.js";
 import { analyzeGpu, memorySpace } from "./gpu.js";
 import {
   focusGpuLine,
@@ -35,7 +35,7 @@ import {
   verdictSummary,
 } from "./gpu-view.js";
 import { warpAccess } from "./gpu-access.js";
-import { parseMemref } from "./buffers.js";
+import { parseMemref } from "./trace/index.js";
 import { explainLine } from "./anatomy.js";
 import { bindGuide } from "./guide.js";
 import {
@@ -70,7 +70,7 @@ import {
   isPassTrace,
   moduleStateAt,
   parsePassTrace,
-} from "./trace.js";
+} from "./trace/index.js";
 import {
   byteLength,
   extractReports,
@@ -78,7 +78,7 @@ import {
   formatSeconds,
   matchTiming,
   timingToJSON,
-} from "./timing.js";
+} from "./trace/index.js";
 
 const DIFF_GLYPH = { added: "+", removed: "−", changed: "~" };
 

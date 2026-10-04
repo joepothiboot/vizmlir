@@ -6,7 +6,7 @@
 // perspective projection: no WebGL and no library.
 
 import { flowSlice, kernelFlow } from "./gpu-flow.js";
-import { formatBytes } from "./timing.js";
+import { formatBytes } from "./trace/index.js";
 
 const WARP = 32;
 // Drawing limits; larger launches are drawn in part and the hint says so.

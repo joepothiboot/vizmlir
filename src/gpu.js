@@ -6,9 +6,9 @@
 // sizes that are only known at runtime stay null. Triton GPU IR is read by
 // src/triton.js into the same model.
 
-import { parseMemref } from "./buffers.js";
+import { parseMemref } from "./trace/index.js";
 import { affineAliases, buildDefs, findAccesses } from "./gpu-access.js";
-import { embeddedAssembly, scanSymbols } from "./provenance.js";
+import { embeddedAssembly, scanSymbols } from "./trace/index.js";
 import { analyzeTriton, isTriton } from "./triton.js";
 
 const LAUNCH_FUNC =

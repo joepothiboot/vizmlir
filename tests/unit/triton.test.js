@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { buildDefs } from "../../src/gpu-access.js";
 import { analyzeGpu } from "../../src/gpu.js";
 import { acrossPasses } from "../../src/gpu-view.js";
-import { parsePassTrace } from "../../src/trace.js";
+import { parsePassTrace } from "../../src/trace/trace.js";
 import {
   analyzeTriton,
   isTriton,

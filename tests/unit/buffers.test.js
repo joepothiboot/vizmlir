@@ -7,8 +7,8 @@ import {
   compareBuffers,
   elementBytes,
   parseMemref,
-} from "../../src/buffers.js";
-import { moduleStateAt, parsePassTrace } from "../../src/trace.js";
+} from "../../src/trace/buffers.js";
+import { moduleStateAt, parsePassTrace } from "../../src/trace/trace.js";
 
 const lowering = readFileSync(
   new URL("../../public/samples/lowering.trace.txt", import.meta.url),

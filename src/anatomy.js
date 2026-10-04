@@ -3,8 +3,8 @@
 // and explains each in plain words. It reads the printed form one line at a
 // time, so it labels what it recognizes and leaves the rest undescribed.
 
-import { parseMemref } from "./buffers.js";
-import { formatBytes } from "./timing.js";
+import { parseMemref } from "./trace/index.js";
+import { formatBytes } from "./trace/index.js";
 
 const DOCS = "https://mlir.llvm.org/docs/Dialects/";
 const DIALECT_DOCS = {

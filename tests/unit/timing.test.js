@@ -8,8 +8,8 @@ import {
   hasTimingReport,
   matchTiming,
   timingToJSON,
-} from "../../src/timing.js";
-import { parsePassTrace } from "../../src/trace.js";
+} from "../../src/trace/timing.js";
+import { parsePassTrace } from "../../src/trace/trace.js";
 
 // Traces in tests/fixtures/traces are real mlir-opt output; see generate.sh.
 function fixture(name) {
