@@ -2,6 +2,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { MlirEngine } from "../../src/ir/bridge.js";
 import { copySnapshot } from "../../src/ir/diff.js";
+import { buildLocIndex, linesOf, nodesAt } from "../../src/trace/sources.js";
+import { parsePassTrace } from "../../src/trace/trace.js";
 
 // The wasm is built by `npm run wasm` and is not committed.
 const wasmPath = new URL("../../public/mlir_core.wasm", import.meta.url);
@@ -64,5 +66,41 @@ describe.skipIf(!built)("source locations through the wasm bridge", () => {
     const copy = copySnapshot(mlir.snapshot());
     mlir.parse("func.func @g() {\n  return\n}\n");
     expect(copy.nodes.some((n) => n.loc?.line === 7 && n.line === 2)).toBe(true);
+  });
+
+  it("follows a source line through the saxpy sample's passes", async () => {
+    const mlir = await engine();
+    const trace = parsePassTrace(
+      readFileSync(new URL("../../public/samples/saxpy.trace.txt", import.meta.url), "utf8"),
+    );
+    const at = (index) => {
+      mlir.parse(trace.events[index].ir);
+      return buildLocIndex(mlir.snapshot());
+    };
+    const label = (i) => mlir.snapshot().labelOf(i);
+
+    // Before inlining, line 10 holds the call and the adds and loads around it.
+    let index = at(0);
+    expect(index.files).toEqual(["saxpy.mojo"]);
+    expect(nodesAt(index, "saxpy.mojo", 10).map(label)).toEqual([
+      "memref.load", "func.call @scale", "memref.load", "arith.addf", "memref.store",
+    ]);
+
+    // After inlining, the mulf came from line 4 and was called from line 10.
+    index = at(1);
+    const inlined = nodesAt(index, "saxpy.mojo", 10).find((n) => label(n) === "arith.mulf");
+    expect(linesOf(index, inlined)).toEqual({ file: "saxpy.mojo", lines: [4, 10] });
+    // @scale's own mulf is still there too, on line 4 alone.
+    expect(nodesAt(index, "saxpy.mojo", 4).filter((n) => label(n) === "arith.mulf")).toHaveLength(2);
+
+    // After canonicalize, the mulf and addf are one fma that names lines 4, 10 and 10.
+    index = at(2);
+    const fma = nodesAt(index, "saxpy.mojo", 10).find((n) => label(n) === "math.fma");
+    expect(fma).toBeDefined();
+    expect(new Set(linesOf(index, fma).lines)).toEqual(new Set([4, 10]));
+
+    // The lowering keeps the same lines on the renamed ops.
+    index = at(4);
+    expect(nodesAt(index, "saxpy.mojo", 8).map(label)).toContain("nvvm.read.ptx.sreg.tid.x");
   });
 });

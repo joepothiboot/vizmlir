@@ -757,6 +757,9 @@
         text-overflow: ellipsis;
         white-space: nowrap;
       }
+      #source-title {
+        flex: 0 0 auto;
+      }
       .tabs [role="tab"][aria-selected="true"] {
         background: var(--panel);
         color: var(--fg);
@@ -884,6 +887,73 @@
       }
       .le-gpu p {
         margin: 0 0 6px;
+      }
+      /* The Source tab: a listing with a count of ops per line. */
+      .source-view {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        min-height: 120px;
+        overflow: hidden;
+        background: var(--panel);
+      }
+      .source-view[hidden] {
+        display: none;
+      }
+      .src-head {
+        display: flex;
+        flex: 0 0 auto;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        border-bottom: 1px solid var(--line);
+      }
+      .src-head .src-add {
+        margin: 0 0 0 auto;
+      }
+      .src-empty {
+        flex: 0 0 auto;
+        margin: 0;
+        padding: 8px 16px;
+        color: var(--dim);
+        font-size: 12px;
+      }
+      .src-lines {
+        flex: 1 1 auto;
+        padding: 10px 0;
+        overflow: auto;
+        font: 12px/1.65 var(--code);
+        font-variant-ligatures: none;
+        tab-size: 4;
+      }
+      .src-line {
+        display: grid;
+        grid-template-columns: 3.2em 2.2em 1fr;
+        cursor: pointer;
+        white-space: pre;
+      }
+      .src-line:hover {
+        background: color-mix(in srgb, var(--accent) 8%, transparent);
+      }
+      .src-line.hit {
+        background: color-mix(in srgb, var(--accent) 22%, transparent);
+        box-shadow: inset 3px 0 0 var(--accent);
+      }
+      .src-n {
+        padding-right: 8px;
+        color: var(--faint);
+        text-align: right;
+      }
+      .src-ops {
+        color: var(--dim);
+        font-size: 10px;
+        text-align: center;
+      }
+      .src-line.has-ops .src-ops {
+        color: var(--accent);
+      }
+      .src-t {
+        padding-right: 16px;
       }
       #source-pane.split #baseline-panel {
         border-bottom: 1px solid var(--line);
@@ -3384,6 +3454,16 @@
               >
                 Current
               </button>
+              <button
+                id="source-title"
+                role="tab"
+                aria-selected="false"
+                aria-controls="source-panel"
+                title="The source file the ops came from (loc)"
+                hidden
+              >
+                Source
+              </button>
               <span class="sp"></span>
               <button
                 id="split-toggle"
@@ -3423,6 +3503,21 @@
                 spellcheck="false"
                 placeholder="Paste current MLIR here…"
               ></textarea>
+            </div>
+            <div
+              id="source-panel"
+              class="source-view"
+              role="tabpanel"
+              aria-labelledby="source-title"
+              hidden
+            >
+              <div class="src-head">
+                <select class="src-file" aria-label="Source file" hidden></select>
+                <button class="src-add tab-action" type="button">Add file…</button>
+                <input class="src-input" type="file" multiple hidden />
+              </div>
+              <p class="src-empty" hidden></p>
+              <div class="src-lines" tabindex="0"></div>
             </div>
           </section>
           <div

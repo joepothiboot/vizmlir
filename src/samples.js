@@ -8,6 +8,9 @@
 // (triton-coalesce.trace.txt, flagged `handwritten`): Triton does not run on
 // every machine, so it is written by hand in the format of a Triton 3.x
 // MLIR_ENABLE_DUMP=1 trace; replace it with a real one when one is at hand.
+// The saxpy trace (saxpy.trace.txt, with saxpy.mojo) is hand-written too, in the
+// format of `mlir-opt -mlir-print-ir-after-all -mlir-print-debuginfo`, to show
+// source locations through inlining, fusion and lowering.
 
 export const RENAME_SAMPLE = `module {
   func.func @matmul(%A: tensor<128x256xf32>, %B: tensor<256x64xf32>) -> tensor<128x64xf32> {
@@ -34,6 +37,15 @@ export const SAMPLES = [
     blurb:
       "The same transpose three ways: a naive strided write, a shared tile with a 32-way bank conflict, and the tile padded to 32×33.",
     trace: "gpu-transpose.trace.txt",
+  },
+  {
+    id: "mojo-saxpy",
+    title: "Source locations: a Mojo-style saxpy through the passes",
+    blurb:
+      "Every op carries a loc(...) into saxpy.mojo. Watch one source line follow its ops through inlining (a call site), canonicalization (two ops fused into one fma) and lowering to NVVM. Open the Source tab and click a line, or an op. Hand-written in the format of mlir-opt -mlir-print-debuginfo output.",
+    trace: "saxpy.trace.txt",
+    sources: ["saxpy.mojo"],
+    handwritten: true,
   },
   {
     id: "gpu-patterns",
@@ -123,6 +135,7 @@ export function sampleFiles(sample) {
     sample.baseline,
     sample.current,
     sample.trace,
+    ...(sample.sources ?? []),
     sample.benchmarks?.baseline,
     sample.benchmarks?.current,
   ].filter(Boolean);
@@ -140,6 +153,11 @@ export async function loadSampleState(sample, fetchText) {
       trace: await fetchText(sample.trace),
       traceIndex: -1,
     };
+    if (sample.sources) {
+      state.sources = {};
+      for (const path of sample.sources)
+        state.sources[path.slice(path.lastIndexOf("/") + 1)] = await fetchText(path);
+    }
     if (sample.benchmarks) {
       state.benchmarks = {};
       for (const [slot, path] of Object.entries(sample.benchmarks))

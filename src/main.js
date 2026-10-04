@@ -47,6 +47,7 @@ import {
   renderLocalView,
 } from "./render/index.js";
 import { parseMemref } from "./trace/index.js";
+import { buildLocIndex, findSource, linesOf, nodesAt, opCounts } from "./trace/index.js";
 import { explainLine } from "./anatomy.js";
 import {
   changedBeyond,
@@ -63,6 +64,7 @@ import { CommandPalette } from "./app/index.js";
 import { createInspector } from "./app/index.js";
 import { createScrubber } from "./app/index.js";
 import { createSelection } from "./app/index.js";
+import { createSourceView } from "./app/index.js";
 import { loadSampleState, SAMPLES } from "./samples.js";
 import { bindSplitters } from "./app/index.js";
 import {
@@ -119,6 +121,8 @@ const baselineTitle = document.getElementById("baseline-title");
 const currentTitle = document.getElementById("current-title");
 const sourcePane = document.getElementById("source-pane");
 const splitToggle = document.getElementById("split-toggle");
+const sourceTitle = document.getElementById("source-title");
+const sourcePanel = document.getElementById("source-panel");
 const sourceName = document.getElementById("source-name");
 const diffTitle = document.getElementById("diff-title");
 const inspectorEl = document.getElementById("inspector");
@@ -147,6 +151,11 @@ const TABS = [
   { tab: baselineTitle, textarea: baseline },
   { tab: currentTitle, textarea: input },
 ];
+
+// Source files loaded for the Source tab, by name, and the source locations of
+// the rendered IR (rebuilt on every parse, since the engine reuses its memory).
+let sources = {};
+let locIndex = null;
 
 let trace = null;
 let traceText = "";
@@ -205,7 +214,8 @@ const renderer = new CanvasRenderer(canvas, {
       index < 0
         ? "—"
         : `#${index} ${snap.labelOf(index)}` +
-          (parent < 0 ? "" : ` · parent ${snap.labelOf(parent)}`);
+          (parent < 0 ? "" : ` · parent ${snap.labelOf(parent)}`) +
+          sourceNote(index);
     syncDiffSelection(index);
     selection.select({ node: index });
     markSourceLine(index);
@@ -437,6 +447,8 @@ function run() {
   const snap = after.snapshot;
   renderedText = current;
   renderer.setSnapshot(snap);
+  locIndex = buildLocIndex(snap);
+  refreshSources();
   setGpuModel(analyzeGpu(current));
   setLocalModel(
     analyzeLocalMemory(current, {
@@ -744,10 +756,43 @@ document
 // ---- Source tabs -----------------------------------------------------------
 
 function showTab(textarea) {
+  if (sourcePane.classList.contains("split-source")) {
+    if (textarea === input) return;
+    setSourceSplit(false);
+  }
   for (const entry of TABS) {
     const on = entry.textarea === textarea;
     entry.tab.setAttribute("aria-selected", String(on));
     entry.textarea.parentElement.hidden = !on;
+  }
+  sourceTitle.setAttribute("aria-selected", "false");
+  sourcePanel.hidden = true;
+}
+
+function showSourceTab() {
+  if (sourceTitle.hidden) return;
+  if (sourcePane.classList.contains("split")) toggleSplit();
+  for (const entry of TABS) {
+    entry.tab.setAttribute("aria-selected", "false");
+    entry.textarea.parentElement.hidden = true;
+  }
+  sourceTitle.setAttribute("aria-selected", "true");
+  sourcePanel.hidden = false;
+}
+
+// The current IR above the source file it came from.
+function setSourceSplit(on) {
+  sourcePane.classList.toggle("split-source", on);
+  if (on) {
+    if (sourcePane.classList.contains("split")) toggleSplit();
+    baselineTitle.setAttribute("aria-selected", "false");
+    currentTitle.setAttribute("aria-selected", "true");
+    sourceTitle.setAttribute("aria-selected", "false");
+    baseline.parentElement.hidden = true;
+    input.parentElement.hidden = false;
+    sourcePanel.hidden = false;
+  } else {
+    showTab(input);
   }
 }
 
@@ -758,12 +803,14 @@ function toggleTab() {
 }
 
 function toggleSplit() {
+  if (sourcePane.classList.contains("split-source")) setSourceSplit(false);
   const on = sourcePane.classList.toggle("split");
   splitToggle.setAttribute("aria-pressed", String(on));
 }
 
 for (const { tab, textarea } of TABS)
   tab.addEventListener("click", () => showTab(textarea));
+sourceTitle.addEventListener("click", showSourceTab);
 splitToggle.addEventListener("click", toggleSplit);
 
 // ---- Debug mode ------------------------------------------------------------
@@ -781,7 +828,8 @@ const debugButtons = {
   last: document.getElementById("debug-last"),
 };
 let debugOn = false;
-let debugSplitOwned = false;
+// Which split Debug turned on: "source" (IR above its source), "split", or "".
+let debugSplitOwned = "";
 
 // A pass "changed" when it added, removed or modified an op; one whose IR
 // would not parse counts too, since something happened there.
@@ -813,14 +861,22 @@ function updateDebugBar() {
 function setDebug(on, { save = true } = {}) {
   debugOn = on;
   debugToggle.setAttribute("aria-pressed", String(on));
-  const split = sourcePane.classList.contains("split");
-  if (on && !split) {
-    toggleSplit();
-    debugSplitOwned = true;
-  } else if (!on && debugSplitOwned && split) {
-    toggleSplit();
+  const already =
+    sourcePane.classList.contains("split") ||
+    sourcePane.classList.contains("split-source");
+  if (on && !already) {
+    if (!sourceTitle.hidden) {
+      setSourceSplit(true);
+      debugSplitOwned = "source";
+    } else {
+      toggleSplit();
+      debugSplitOwned = "split";
+    }
+  } else if (!on) {
+    if (debugSplitOwned === "source") setSourceSplit(false);
+    else if (debugSplitOwned === "split") toggleSplit();
+    debugSplitOwned = "";
   }
-  if (!on) debugSplitOwned = false;
   updateDebugBar();
   if (save)
     try {
@@ -928,7 +984,11 @@ selection.subscribe((state, picked) => {
   if (!picked.includes("line")) return;
   const markedLine = state.line;
   if (markedLine >= 0) {
-    if (!sourcePane.classList.contains("split")) showTab(input);
+    if (
+      !sourcePane.classList.contains("split") &&
+      sourceTitle.getAttribute("aria-selected") !== "true"
+    )
+      showTab(input);
     const y = sourceLineBox(markedLine).top;
     if (y < input.scrollTop || y > input.scrollTop + input.clientHeight - 40)
       input.scrollTop = Math.max(0, y - input.clientHeight / 3);
@@ -938,6 +998,86 @@ selection.subscribe((state, picked) => {
   if (canvasView === "local") focusLocalLine(localViewEl, markedLine);
   positionLineMark();
 });
+
+// ---- Source tab ------------------------------------------------------------
+
+const sourceView = createSourceView(sourcePanel, {
+  onPick: pickSourceLine,
+  onAdd: addSourceFiles,
+});
+// Which op of the ones at a line the last click on it selected.
+let sourceCycle = { key: "", at: -1 };
+
+function sourceNote(index) {
+  const entry = locIndex?.byNode.get(index);
+  if (!entry) return "";
+  const { file, line, col } = entry.positions[0];
+  return ` · ${file}:${line}:${col}`;
+}
+
+// The Source tab shows when the IR has locations; its file list, the names the
+// IR refers to that are not loaded, and each line's op count follow the IR.
+function refreshSources() {
+  const named = locIndex?.files ?? [];
+  const has = named.length > 0;
+  sourceTitle.hidden = !has;
+  if (!has) {
+    if (sourcePane.classList.contains("split-source")) setSourceSplit(false);
+    else if (sourceTitle.getAttribute("aria-selected") === "true") showTab(input);
+  }
+  const missing = [...new Set(named.filter((f) => !findSource(sources, f)))];
+  sourceView.setSources(sources, missing);
+  syncSourceView(renderer.selected);
+}
+
+// Ops per line of the file on show, and the lines of the picked op marked.
+function syncSourceView(node) {
+  const hit = node >= 0 && locIndex ? linesOf(locIndex, node) : null;
+  const key = hit && findSource(sources, hit.file);
+  if (key) sourceView.mark(key, hit.lines);
+  else sourceView.mark(null, []);
+  sourceView.setCounts(
+    locIndex && sourceView.file ? opCounts(locIndex, sourceView.file) : new Map(),
+  );
+}
+
+selection.subscribe((state, picked) => {
+  if (picked.includes("node")) syncSourceView(state.node);
+});
+
+// A click on a source line selects an op that came from it; clicking again
+// steps through the others (a line often makes several).
+function pickSourceLine(file, line) {
+  const nodes = locIndex ? nodesAt(locIndex, file, line) : [];
+  if (!nodes.length) {
+    sourceView.mark(file, [line]);
+    setStatus(`${file}:${line} has no ops in this pass`);
+    return;
+  }
+  const key = `${file}:${line}`;
+  const at = sourceCycle.key === key ? (sourceCycle.at + 1) % nodes.length : 0;
+  sourceCycle = { key, at };
+  if (canvasView !== "graph") setCanvasView("graph", { remember: false });
+  renderer.select(nodes[at], { center: true });
+  setStatus(
+    `${file}:${line} · op ${at + 1} of ${nodes.length}` +
+      (nodes.length > 1 ? " (click again for the next)" : ""),
+  );
+}
+
+async function addSourceFiles(files) {
+  const next = { ...sources };
+  const skipped = [];
+  for (const file of files) {
+    const text = file.size > 1024 * 1024 ? null : await file.text();
+    if (text === null || text.includes("\0")) skipped.push(file.name);
+    else next[file.name] = text;
+  }
+  sources = next;
+  refreshSources();
+  scheduleAutosave();
+  if (skipped.length) setStatus(`not a text file under 1 MiB: ${skipped.join(", ")}`);
+}
 
 // Hand edits mark the loaded source as modified, like an editor tab.
 for (const textarea of [baseline, input])
@@ -1398,6 +1538,8 @@ function getState() {
         ? "current"
         : "baseline",
     split: sourcePane.classList.contains("split"),
+    sourceSplit: sourcePane.classList.contains("split-source"),
+    sources: Object.keys(sources).length ? sources : null,
     benchmarks: traceText
       ? Object.fromEntries(
           Object.entries(benchmarks).map(([slot, bench]) => [
@@ -1411,6 +1553,7 @@ function getState() {
 
 function applyState(state) {
   clearTrace();
+  sources = state.sources ? { ...state.sources } : {};
   sourceName.textContent = state.sourceName || "untitled";
   sourceName.title = sourceName.textContent;
   sourcePane.classList.toggle("split", !!state.split);
@@ -1443,6 +1586,7 @@ function applyState(state) {
     run();
   }
   showTab(state.tab === "baseline" ? baseline : input);
+  if (state.sourceSplit && !sourceTitle.hidden) setSourceSplit(true);
 }
 
 let autosaveTimer = 0;
