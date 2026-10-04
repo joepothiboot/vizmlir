@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Regenerates the built-in samples in public/samples from input/*.mlir.
-# Usage: MLIR_OPT=/path/to/mlir-opt samples/generate.sh
+# Usage: MLIR_OPT=/path/to/mlir-opt [NANODSP_OPT=/path/to/nanodsp-opt] samples/generate.sh
 set -euo pipefail
 cd "$(dirname "$0")/input"
 MLIR_OPT="${MLIR_OPT:-mlir-opt}"
@@ -57,3 +57,22 @@ opt failed-transform.trace.txt matmul.mlir \
   -mlir-print-ir-after-all -mlir-print-ir-module-scope
 
 "$MLIR_OPT" --version | grep -m1 -i "llvm version" > "$OUT/MLIR_VERSION"
+
+# Samples from out-of-tree drivers, each skipped unless its driver is given.
+# nano-dsp-mlir (nanodsp-opt): a matmul whose cache tiles are staged in a
+# DSP-style scratchpad (#dsp.local) by double-buffered DMA, then lowered to
+# plain copies. The trace stops after -nanodsp-lower-local: the LLVM half of
+# -nanodsp-lower-to-llvm adds 14 dumps and about 2 MB of unrolled vector code.
+# NANODSP_VERSION records the commit the driver was built from (set
+# NANODSP_COMMIT, or it is read from the driver's source tree).
+if [[ -n "${NANODSP_OPT:-}" ]]; then
+  "$NANODSP_OPT" nanodsp-local-matmul.mlir "${COMMON[@]}" \
+    -convert-dsp-to-linalg -nanodsp-optimize=target=hexagon-hvx128 \
+    -nanodsp-bufferize -nanodsp-promote-local=target=hexagon-hvx128 \
+    -nanodsp-lower-local -mlir-print-ir-after-all \
+    > "$OUT/nanodsp-local-matmul.trace.txt" 2>&1 || true
+  NANODSP_COMMIT="${NANODSP_COMMIT:-$(git -C "$(dirname "$NANODSP_OPT")" rev-parse --short HEAD 2>/dev/null || echo unknown)}"
+  echo "nano-dsp-mlir $NANODSP_COMMIT (nanodsp-opt)" > "$OUT/NANODSP_VERSION"
+else
+  echo "NANODSP_OPT not set: skipping nanodsp-local-matmul.trace.txt" >&2
+fi

@@ -18,6 +18,8 @@ describe("memorySpace", () => {
     ["5", "private"],
     ["private", "private"],
     ["7", "space 7"],
+    ["#dsp.local", "local"],
+    ["#foo.local", "space #foo.local"],
   ])("%j -> %s", (space, name) => {
     expect(memorySpace(space)).toBe(name);
   });

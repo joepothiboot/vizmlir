@@ -28,6 +28,9 @@ export function memorySpace(space, fallback = "global") {
   if (space === "1" || space === "global") return "global";
   if (space === "3" || space === "workgroup") return "shared";
   if (space === "5" || space === "private") return "private";
+  // A DSP scratchpad (nano-dsp's #dsp.local): a named attribute, so it never
+  // collides with the numbered GPU address spaces above.
+  if (space === "#dsp.local") return "local";
   return `space ${space}`;
 }
 
