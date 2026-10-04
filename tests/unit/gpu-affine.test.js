@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildDefs } from "../../src/gpu-access.js";
-import { formatAffine, linearize } from "../../src/gpu-affine.js";
+import { buildDefs } from "../../src/gpu/access.js";
+import { formatAffine, linearize } from "../../src/gpu/affine.js";
 
 const env = { bdx: 32, bdy: 32, bdz: 1, gdx: 32, gdy: null, gdz: 1, args: new Map() };
 const terms = (e) => Object.fromEntries(e.t);

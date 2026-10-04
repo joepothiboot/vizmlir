@@ -8,7 +8,7 @@ import {
   symbolHistory,
   symbolTimeline,
   unescapeMlirString,
-} from "../../src/provenance.js";
+} from "../../src/trace/provenance.js";
 
 describe("findSymbolNode", () => {
   // [label, parent] shaped like MlirEngine#snapshot().
@@ -45,7 +45,7 @@ describe("findSymbolNode", () => {
     expect(findSymbolNode(null, "@k")).toBe(-1);
   });
 });
-import { describeEvent, parsePassTrace } from "../../src/trace.js";
+import { describeEvent, parsePassTrace } from "../../src/trace/trace.js";
 
 const header = (pass, arg, anchor) =>
   `// -----// IR Dump After ${pass}: ${arg} (${anchor}) //----- //`;

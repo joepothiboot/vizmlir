@@ -1,0 +1,16 @@
+# Pure git-mv commits from the src/ restructure. See CONTRIBUTING.md > Blame.
+# Run: git config blame.ignoreRevsFile .git-blame-ignore-revs
+# Move src/wasm to src/ir and diff.js beside it (move only)
+daaba1b224c8d39df4f79616a850a554ad0ff953
+# Move storage, export and watch into src/session (move only)
+6c24b361f5e71055ce4386ce65d555e29ad4d540
+# Move trace, timing, provenance, opcount, linediff and buffers into src/trace (move only)
+cb01e1fe6270f431bf41c44fa11505f0fdc8b028
+# Move gpu, gpu-access, gpu-affine, gpu-flow and triton into src/gpu (move only)
+833a2ea3bf2d4487eaa5db8b85b9ff7555ca97ac
+# Move gpu-view and gpu-3d into src/render (move only)
+09746d4a4d773ce522b9b8726474f676491cd7d9
+# Move palette, inspector, scrubber, splitters, guide, mlir-highlight and buffers-view into src/app (move only)
+772278e0176fde1dca3b4c86626e896b5a7b07b1
+# Move local-memory into src/gpu and local-view into src/render (move only)
+c3972e8ba206ecb0664fcb3c9012c0c9752752cb

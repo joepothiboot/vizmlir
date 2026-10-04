@@ -2,9 +2,9 @@
 import { readFileSync } from "node:fs";
 import { URL as FileURL } from "node:url";
 import { describe, expect, it, vi } from "vitest";
-import { analyzeLocalMemory, localLineInfo, localTargetOf } from "../../src/local-memory.js";
-import { focusLocalLine, localExplain, renderLocalView } from "../../src/local-view.js";
-import { parsePassTrace } from "../../src/trace.js";
+import { analyzeLocalMemory, localLineInfo, localTargetOf } from "../../src/gpu/local-memory.js";
+import { focusLocalLine, localExplain, renderLocalView } from "../../src/render/local-view.js";
+import { parsePassTrace } from "../../src/trace/trace.js";
 
 const events = parsePassTrace(
   readFileSync(

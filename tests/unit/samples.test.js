@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { loadSampleState, SAMPLES, sampleFiles } from "../../src/samples.js";
-import { isPassTrace, parsePassTrace } from "../../src/trace.js";
-import { symbolHistory } from "../../src/provenance.js";
+import { isPassTrace, parsePassTrace } from "../../src/trace/trace.js";
+import { symbolHistory } from "../../src/trace/provenance.js";
 import {
   compareBenchmarks,
   parseBenchmarks,

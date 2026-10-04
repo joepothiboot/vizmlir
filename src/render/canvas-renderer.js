@@ -1,4 +1,4 @@
-import { KIND_STYLE, STRIDE } from "../wasm/abi.js";
+import { KIND_STYLE, STRIDE } from "../ir/index.js";
 
 const MONO = `"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace`;
 

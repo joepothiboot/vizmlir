@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { diffStats, lineDiff } from "../../src/linediff.js";
+import { diffStats, lineDiff } from "../../src/trace/linediff.js";
 
 const render = (lines) =>
   lines.map(({ type, text }) => `${{ same: " ", add: "+", del: "-" }[type]}${text}`);

@@ -1,7 +1,7 @@
 // Renders the Buffers dialog: a summary, one lifetime chart per function
 // (baseline vs current), and, for traces, buffer totals at every pass.
 
-import { formatBytes } from "./timing.js";
+import { formatBytes } from "../trace/index.js";
 
 const GLYPH = { added: "+", removed: "−", changed: "~", same: "" };
 const FREED = {
