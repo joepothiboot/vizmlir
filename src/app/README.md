@@ -8,6 +8,7 @@ These are the pieces `main.js` mounts onto the page. They hold no compiler knowl
 
 - **`palette.js`**: the command palette (⌘K / Ctrl K) and its fuzzy search.
 - **`inspector.js`**: the tabbed drawer beside the picture. Opens on a pick, closes with `esc`, and returns focus.
+- **`selection.js`**: the one store for what is selected (pass, graph node, source line). Views read it and subscribe.
 - **`scrubber.js`**: the pass slider, with ticks for failed and slow passes and a hover preview.
 - **`splitters.js`**: resizable panes.
 - **`mlir-highlight.js`**: syntax highlighting for the code editors.

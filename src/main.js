@@ -62,6 +62,7 @@ import { bindHighlighting, highlightMlir } from "./app/index.js";
 import { CommandPalette } from "./app/index.js";
 import { createInspector } from "./app/index.js";
 import { createScrubber } from "./app/index.js";
+import { createSelection } from "./app/index.js";
 import { loadSampleState, SAMPLES } from "./samples.js";
 import { bindSplitters } from "./app/index.js";
 import {
@@ -194,6 +195,9 @@ let traceSymbols = null;
 // and saved with the session.
 let benchmarks = { baseline: null, current: null };
 
+// What is selected: the pass, the graph node, the marked source line.
+const selection = createSelection();
+
 const renderer = new CanvasRenderer(canvas, {
   onSelect(index, snap) {
     const parent = index < 0 ? -1 : snap.parentOf(index);
@@ -203,6 +207,7 @@ const renderer = new CanvasRenderer(canvas, {
         : `#${index} ${snap.labelOf(index)}` +
           (parent < 0 ? "" : ` · parent ${snap.labelOf(parent)}`);
     syncDiffSelection(index);
+    selection.select({ node: index });
     markSourceLine(index);
   },
   onViewChange(scale) {
@@ -510,6 +515,7 @@ function selectEvent(index) {
   const event = trace.events[index];
   const base = baselineFor(trace.events, index);
   traceIndex = index;
+  selection.select({ pass: index });
   scrubber.setValue(index);
   [...passList.children].forEach((item, i) => {
     const button = item.firstChild;
@@ -549,6 +555,7 @@ function selectEvent(index) {
       : event.diagnostics,
   );
   run();
+  updateDebugBar();
 }
 
 // Every pass as one compact row, in the Changes tab: number, name, wall
@@ -684,6 +691,7 @@ function clearTrace() {
   traceNote = "";
   traceIndex = -1;
   traceDiffTitle = "";
+  updateDebugBar();
   passScrubber.hidden = true;
   scrubber.setPasses([]);
   passList.replaceChildren();
@@ -758,10 +766,85 @@ for (const { tab, textarea } of TABS)
   tab.addEventListener("click", () => showTab(textarea));
 splitToggle.addEventListener("click", toggleSplit);
 
+// ---- Debug mode ------------------------------------------------------------
+
+// Debug mode is opt-in so the default screen stays as it was: it splits the
+// sources and shows a step bar under the pass slider. Later debugger controls
+// (breakpoints, op history) hang off it.
+const debugToggle = document.getElementById("debug-toggle");
+const debugBar = document.getElementById("debug-bar");
+const debugStatus = document.getElementById("debug-status");
+const debugButtons = {
+  first: document.getElementById("debug-first"),
+  prev: document.getElementById("debug-prev-change"),
+  next: document.getElementById("debug-next-change"),
+  last: document.getElementById("debug-last"),
+};
+let debugOn = false;
+let debugSplitOwned = false;
+
+// A pass "changed" when it added, removed or modified an op; one whose IR
+// would not parse counts too, since something happened there.
+function passChanged(index) {
+  const counts = changedOpsAt(index);
+  return !counts || counts.added + counts.removed + counts.changed > 0;
+}
+
+function changedPassFrom(index, delta) {
+  for (let i = index + delta; i >= 0 && i < trace.events.length; i += delta)
+    if (passChanged(i)) return i;
+  return -1;
+}
+
+function updateDebugBar() {
+  debugBar.hidden = !(debugOn && trace);
+  if (debugBar.hidden) return;
+  const last = trace.events.length - 1;
+  debugButtons.first.disabled = traceIndex <= 0;
+  debugButtons.last.disabled = traceIndex >= last;
+  debugButtons.prev.disabled = changedPassFrom(traceIndex, -1) < 0;
+  debugButtons.next.disabled = changedPassFrom(traceIndex, 1) < 0;
+  const counts = changedOpsAt(traceIndex);
+  debugStatus.textContent = counts
+    ? `pass ${traceIndex + 1}: +${counts.added} −${counts.removed} ~${counts.changed} ops`
+    : `pass ${traceIndex + 1}: IR did not parse`;
+}
+
+function setDebug(on, { save = true } = {}) {
+  debugOn = on;
+  debugToggle.setAttribute("aria-pressed", String(on));
+  const split = sourcePane.classList.contains("split");
+  if (on && !split) {
+    toggleSplit();
+    debugSplitOwned = true;
+  } else if (!on && debugSplitOwned && split) {
+    toggleSplit();
+  }
+  if (!on) debugSplitOwned = false;
+  updateDebugBar();
+  if (save)
+    try {
+      localStorage.setItem("vizmlir.debug", on ? "1" : "0");
+    } catch {}
+}
+
+function stepToChange(delta) {
+  if (!debugOn || !trace) return;
+  const index = changedPassFrom(traceIndex, delta);
+  if (index >= 0) selectEvent(index);
+}
+
+debugToggle.addEventListener("click", () => setDebug(!debugOn));
+debugButtons.first.addEventListener("click", () => selectEvent(0));
+debugButtons.last.addEventListener("click", () =>
+  selectEvent(trace.events.length - 1),
+);
+debugButtons.prev.addEventListener("click", () => stepToChange(-1));
+debugButtons.next.addEventListener("click", () => stepToChange(1));
+
 // ---- Source line marker ----------------------------------------------------
 
 const lineMark = input.parentElement.querySelector(".line-mark");
-let markedLine = -1;
 
 function sourceLineBox(line) {
   const style = getComputedStyle(input);
@@ -805,6 +888,7 @@ function sourceLineBox(line) {
 }
 
 function positionLineMark() {
+  const markedLine = selection.state.line;
   if (markedLine < 0) {
     lineMark.hidden = true;
     return;
@@ -819,7 +903,7 @@ function positionLineMark() {
 // node order follows source order, so the n-th node with this op name is
 // (nearly always) on the n-th line that names it.
 function markSourceLine(index) {
-  markedLine = -1;
+  let markedLine = -1;
   const snap = renderer.snapshot;
   if (snap && index >= 0) {
     const op = snap.labelOf(index).split(" ")[0];
@@ -834,9 +918,15 @@ function markSourceLine(index) {
   showSourceLine(markedLine);
 }
 
-// Marks a 0-based line of the current source and scrolls it into view.
+// Marks a 0-based line of the current source. The views that follow a line
+// listen to the selection (below).
 function showSourceLine(line) {
-  markedLine = line;
+  selection.select({ line });
+}
+
+selection.subscribe((state, picked) => {
+  if (!picked.includes("line")) return;
+  const markedLine = state.line;
   if (markedLine >= 0) {
     if (!sourcePane.classList.contains("split")) showTab(input);
     const y = sourceLineBox(markedLine).top;
@@ -847,7 +937,7 @@ function showSourceLine(line) {
   focusGpu(markedLine);
   if (canvasView === "local") focusLocalLine(localViewEl, markedLine);
   positionLineMark();
-}
+});
 
 // Hand edits mark the loaded source as modified, like an editor tab.
 for (const textarea of [baseline, input])
@@ -858,7 +948,7 @@ for (const textarea of [baseline, input])
 
 input.addEventListener("scroll", positionLineMark);
 input.addEventListener("input", () => {
-  markedLine = -1;
+  selection.clear("line");
   positionLineMark();
 });
 
@@ -1020,6 +1110,7 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
     ["Fit graph", "f", fitGraph],
     ["Switch baseline / current", "t", toggleTab],
     ["Toggle split sources", "s", toggleSplit],
+    ["Toggle debug mode", "d", () => setDebug(!debugOn)],
     ["Browse samples…", "", openSamples],
     ["Sessions: save, open, import", "", openSessions],
     ["Download session .json", "", downloadSession],
@@ -1163,6 +1254,9 @@ const WORKSPACE_KEYS = {
   k: () => stepChange(-1),
   t: toggleTab,
   s: toggleSplit,
+  d: () => setDebug(!debugOn),
+  "{": () => stepToChange(-1),
+  "}": () => stepToChange(1),
   p: () => inspector.toggleTab("timing"),
   o: () => inspector.toggleTab("opcount"),
   b: () => inspector.toggleTab("buffers"),
@@ -2377,7 +2471,7 @@ function setGpuModel(model) {
     if (canvasView === "gpu") setCanvasView("graph", { remember: false });
   } else if (canvasView === "gpu") {
     drawGpuView();
-    focusGpu(markedLine);
+    focusGpu(selection.state.line);
   } else if (canvasPreference === "gpu") {
     setCanvasView("gpu", { remember: false });
   }
@@ -2407,7 +2501,7 @@ function drawLocalView() {
       inspect("line", from);
     },
   });
-  focusLocalLine(localViewEl, markedLine);
+  focusLocalLine(localViewEl, selection.state.line);
 }
 
 // The views of the visualization pane, one tab each ([data-view] in
@@ -2458,7 +2552,7 @@ function setCanvasView(view, { remember = true } = {}) {
     entry.show(name === canvasView);
   renderVerdictChip();
   renderPath();
-  if (canvasView === "gpu") focusGpu(markedLine);
+  if (canvasView === "gpu") focusGpu(selection.state.line);
   renderExplain(explainedLine);
 }
 
@@ -3051,5 +3145,9 @@ if (hasContent(saved)) {
   }
 }
 restored = true;
+try {
+  if (localStorage.getItem("vizmlir.debug") === "1")
+    setDebug(true, { save: false });
+} catch {}
 if (inspectorSaved.open) inspector.open();
 restoreWatch();

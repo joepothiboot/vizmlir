@@ -270,6 +270,31 @@
         gap: 8px;
         padding: 6px 20px 10px;
       }
+      .debug-bar {
+        display: flex;
+        flex: 0 0 auto;
+        align-items: center;
+        gap: 8px;
+        padding: 0 20px 8px;
+      }
+      .debug-bar[hidden] {
+        display: none;
+      }
+      .debug-bar button {
+        padding: 2px 8px;
+      }
+      .debug-bar button:disabled {
+        opacity: 0.35;
+        cursor: default;
+      }
+      .debug-status {
+        color: var(--dim);
+        font-size: 12px;
+      }
+      #debug-toggle[aria-pressed="true"] {
+        color: var(--fg);
+        border-color: var(--accent);
+      }
       .scrub-kicker {
         color: var(--dim);
         font-size: 11px;
@@ -3242,6 +3267,13 @@
           Samples
         </button>
         <button id="sessions-open">Sessions</button>
+        <button
+          id="debug-toggle"
+          aria-pressed="false"
+          title="Debug mode: split sources and step by change (d)"
+        >
+          Debug
+        </button>
         <button id="palette-open" class="palette-trigger">
           <kbd class="mod-k">⌘K</kbd><span>Jump to pass, op, or @symbol…</span>
         </button>
@@ -3322,6 +3354,15 @@
         </button>
         <span id="pass-label" class="scrub-label" aria-hidden="true"></span>
       </nav>
+
+      <div id="debug-bar" class="debug-bar" role="toolbar" aria-label="Step through passes" hidden>
+        <span class="scrub-kicker" aria-hidden="true">Step</span>
+        <button id="debug-first" type="button" title="First pass">⏮</button>
+        <button id="debug-prev-change" type="button" title="Previous pass that changed the IR (shift [)">◀ change</button>
+        <button id="debug-next-change" type="button" title="Next pass that changed the IR (shift ])">change ▶</button>
+        <button id="debug-last" type="button" title="Last pass">⏭</button>
+        <span id="debug-status" class="debug-status" aria-live="polite"></span>
+      </div>
 
       <div id="workspace">
         <main>
@@ -3992,6 +4033,10 @@
           <dd>Switch baseline / current tab</dd>
           <dt><kbd>s</kbd></dt>
           <dd>Split: show both sources</dd>
+          <dt><kbd>d</kbd></dt>
+          <dd>Debug mode: split sources and step by change</dd>
+          <dt><kbd>shift</kbd> <kbd>[</kbd> <kbd>]</kbd></dt>
+          <dd>Previous / next pass that changed the IR (Debug mode)</dd>
           <dt><kbd>\</kbd></dt>
           <dd>Show / hide the inspector beside the picture</dd>
           <dt><kbd>esc</kbd></dt>

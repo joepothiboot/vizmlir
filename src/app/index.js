@@ -3,5 +3,6 @@ export { renderFunctions, renderPasses, renderSummary, signedBytes } from "./buf
 export { createInspector } from "./inspector.js";
 export { bindHighlighting, highlightMlir } from "./mlir-highlight.js";
 export { CommandPalette } from "./palette.js";
+export { createSelection } from "./selection.js";
 export { createScrubber } from "./scrubber.js";
 export { bindSplitters } from "./splitters.js";
