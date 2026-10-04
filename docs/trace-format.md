@@ -22,6 +22,7 @@ mlir-opt input.mlir -pass-pipeline='builtin.module(...)' \
 | `-mlir-print-ir-before-all`             | "before" events; can be combined with the above                             |
 | `-mlir-print-ir-after-failure`          | only the IR at the failing pass                                             |
 | `-mlir-print-ir-module-scope`           | every dump is the whole module (otherwise nested passes dump only their op) |
+| `-mlir-print-debuginfo`                 | source locations: the Source tab, op history across passes, the Descent path |
 | `-mlir-timing`                          | per-pass wall time in the timeline (tree, `list` or JSON output)            |
 | `-mlir-disable-threading`               | keeps dumps from interleaving; recommended                                  |
 | `/usr/bin/time -l` (macOS) / `-v` (GNU) | peak memory for the whole process                                           |
@@ -133,3 +134,25 @@ releases. The fixtures record the version they were generated with in
 `tests/fixtures/traces/MLIR_VERSION`. When a new release changes the header
 format, add a case to the `parseHeader` table in `tests/unit/trace.test.js`
 rather than replacing the old one, so both keep parsing.
+
+## Source locations
+
+With `-mlir-print-debuginfo`, MLIR prints a location after each op and defines
+aliases for the repeated ones. VizMLIR reads these forms (the parser is
+`wasm/src/parser/loc.rs`):
+
+```
+#loc1 = loc("kernel.mojo":4:14)
+#loc2 = loc(callsite(#loc1 at "kernel.mojo":10:16))
+#loc3 = loc(fused[#loc2, "kernel.mojo":10:31])
+  %7 = arith.mulf %6, %arg0 : f32 loc(#loc2)
+  scf.if %5 { ... } loc(#loc8)        // a region op's location follows its closing brace
+```
+
+Aliases may be defined before or after the ops that use them, and refer to
+each other. A location is kept as its resolved text, plus the first
+`"file":line:col` in it: for a call site that is the callee, where the op was
+written; the other positions in a call site or fused location are used to map
+the op to every line it came from. `loc(unknown)` and name-only locations
+count as having a location but no source line. IR without locations parses as
+before.
