@@ -12,20 +12,6 @@ VizMLIR is a visual companion for computer architecture, compilers, and parallel
 
 _A transpose whose write is strided. The GPU view shows the 32 threads of a warp landing 1024 items apart; beside it, the inspector's Line tab gives the verdict and takes the store apart in plain words._
 
-## 📚 Learn with the guide
-
-The app comes with a short course (**Learn** in the top bar). It all sits on one page, grouped into parts with a contents list that follows along as you scroll, and each lesson has a picture to explore in the app and a question to check yourself:
-
-1. **How a GPU runs code**: threads, blocks, the grid, warps, and SIMT.
-2. **Memory and access patterns**: global, shared, and private memory; coalesced and strided accesses; bank conflicts and the padding fix.
-3. **Reading MLIR**: intermediate representations, SSA form, operations, and dialects.
-4. **How a compiler builds a kernel**: passes, and lowering from `gpu.launch` down to PTX.
-5. **Scratchpads and DMA (beyond GPUs)**: software-managed local memory and double buffering on a DSP.
-
-Lab chapters show how to run your own `mlir-opt` pipeline, and the reference has the model's limits and a glossary.
-
-![The VizMLIR guide open on the memory lesson, with its chapter list on the left](public/demo/vizmlir-docs.png)
-
 ## 💡 Why VizMLIR?
 
 A GPU is fast when thousands of its threads work side by side and read memory in tidy, neighboring chunks. Whether that happens is often decided inside the compiler, long before you run anything, and the only evidence is pages of intermediate code that are hard to read.
@@ -55,7 +41,7 @@ One honest limit: VizMLIR only reads your code; it never runs it. It can spot th
 ### 🧱 Beyond GPUs
 
 - **Scratchpads and DMA.** DSP and NPU accelerators often have a small local memory that the compiler fills by DMA instead of a cache. When the IR has buffers in such a memory (nano-dsp's `#dsp.local`) or `memref.dma_start` / `memref.dma_wait`, a **Local memory** tab shows the budget as a bar of buffer slots and the loop's first trips as DMA, wait and compute lanes: which tile is loaded before the loop, which is prefetched for the next trip, and where the loop waits. Click any block to see its line explained. It is the order the IR expresses, not measured timing.
-- The "DSP scratchpad" sample is real output of `nanodsp-opt` from [nano-dsp-mlir](https://github.com/joepothiboot/nano-dsp-mlir): a matmul whose tiles are double-buffered in a Hexagon-like scratchpad, then lowered to plain copies. The guide's lesson "Scratchpads and DMA" walks through it.
+- The "DSP scratchpad" sample is real output of `nanodsp-opt` from [nano-dsp-mlir](https://github.com/joepothiboot/nano-dsp-mlir): a matmul whose tiles are double-buffered in a Hexagon-like scratchpad, then lowered to plain copies.
 
 ### 🧭 Follow the compiler
 
@@ -87,7 +73,7 @@ npm run dev
 1. Open the address it prints. The transpose example opens on the GPU view.
 2. Scroll to **Memory accesses** and click the orange row; the inspector opens beside the picture with what went wrong and how it's usually fixed.
 3. Press `]`, or drag the pass slider, to step through the compiler's work and watch the picture change.
-4. When you're ready, open your own `mlir-opt` log with **Open…**. The guide (**Learn** in the app) explains which flags to use and what each one does.
+4. When you're ready, open your own `mlir-opt` log with **Open…**. Use `-mlir-print-ir-after-all` (and `-mlir-timing` for the timing view) so the log has every pass.
 
 ## 🤝 Contributing
 

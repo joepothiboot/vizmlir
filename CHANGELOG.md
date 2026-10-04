@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Removed
+
+- The in-app **Learn** course (`#/docs`), its `src/app/guide.js`, and the ← → chapter keys. The docs live in a separate project.
+
 ### Added
 
 - A **Local memory** view for DSP-style scratchpads. When the IR at the current pass has buffers in nano-dsp's `#dsp.local` memory space, `memref.dma_start` / `memref.dma_wait`, or the `linalg.copy` they are lowered to, a new tab of the visualization pane draws the local budget as a bar of buffer slots (A slot 0/1, B slot 0/1) and the cache loop's first trips as DMA, wait and compute lanes, marking prologue loads, prefetches of the next tile, and waits. Each block and event picks its IR line and the inspector's Line tab explains it. The budget is read from the IR when it carries one, otherwise from nano-dsp's TargetModel and labelled as assumed, and the view states that it shows the order the IR expresses, not timing. The analysis (`src/gpu/local-memory.js`) runs per pass: nothing before `nanodsp-promote-local`, DMAs after it, copies after `nanodsp-lower-local`.

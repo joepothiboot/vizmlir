@@ -39,7 +39,6 @@ the WASM fetch behave as they do on GitHub Pages.
 | V-02 | WASM loads                           | `mlir_core.wasm` request returns 200 with `application/wasm`; there is no ABI-mismatch or bad-magic error                                | P0  |
 | V-03 | WASM served with the wrong MIME type | `instantiateStreaming` fallback still loads the engine                                                                                   | P1  |
 | V-04 | Click **Docs**, then **Workspace**   | Views swap; `aria-current="page"` moves to the active link                                                                               | P0  |
-| V-05 | Deep-link `#/docs` on load           | Docs view shown first                                                                                                                    | P1  |
 | V-06 | Browser back/forward between routes  | View follows the hash                                                                                                                    | P2  |
 
 ### 1.2 Editors and syntax highlighting
@@ -118,7 +117,6 @@ Fixtures come from real `mlir-opt` runs (see [Fixtures](#fixtures)).
 | V-80 | **Load in workspace** | Switches to Workspace with the sample loaded and compared                                                                                      | P0  |
 | V-81 | External links        | `target=_blank rel=noreferrer`                                                                                                                 | P2  |
 | V-82 | Legend colours        | Match `KIND_STYLE` strokes in `abi.js`                                                                                                         | P2  |
-| V-83 | Chapters              | All chapters show on one page under part headings; side list, course map, glossary links, and ← → scroll to a chapter; the hash stays `#/docs` | P1  |
 | V-84 | Contents follows      | Scrolling highlights the chapter in view in the side list (the last one at the bottom); on phones the chip row stays pinned and scrolls to it  | P2  |
 
 ### 1.8 Responsive and accessibility

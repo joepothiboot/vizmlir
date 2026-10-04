@@ -10,7 +10,6 @@ These are the pieces `main.js` mounts onto the page. They hold no compiler knowl
 - **`inspector.js`**: the tabbed drawer beside the picture. Opens on a pick, closes with `esc`, and returns focus.
 - **`scrubber.js`**: the pass slider, with ticks for failed and slow passes and a hover preview.
 - **`splitters.js`**: resizable panes.
-- **`guide.js`**: the "Learn" course page and its contents list.
 - **`mlir-highlight.js`**: syntax highlighting for the code editors.
 - **`buffers-view.js`**: how the Buffers tab is drawn.
 

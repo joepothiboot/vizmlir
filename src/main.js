@@ -48,7 +48,6 @@ import {
 } from "./render/index.js";
 import { parseMemref } from "./trace/index.js";
 import { explainLine } from "./anatomy.js";
-import { bindGuide } from "./app/index.js";
 import {
   changedBeyond,
   compareBenchmarks,
@@ -63,7 +62,7 @@ import { bindHighlighting, highlightMlir } from "./app/index.js";
 import { CommandPalette } from "./app/index.js";
 import { createInspector } from "./app/index.js";
 import { createScrubber } from "./app/index.js";
-import { loadSampleState, RENAME_SAMPLE, SAMPLES } from "./samples.js";
+import { loadSampleState, SAMPLES } from "./samples.js";
 import { bindSplitters } from "./app/index.js";
 import {
   kv,
@@ -107,13 +106,8 @@ const detailEl = document.getElementById("detail");
 const diffSummary = document.getElementById("diff-summary");
 const diffList = document.getElementById("diff-list");
 const diffCopy = document.getElementById("diff-copy");
-const workspace = document.getElementById("workspace");
-const docsView = document.getElementById("docs-view");
-const routeLinks = document.querySelectorAll("[data-route]");
-const docsSample = document.getElementById("docs-sample");
 const baselineHighlight = document.getElementById("baseline-highlight");
 const editorHighlight = document.getElementById("editor-highlight");
-const docsSampleHighlight = document.getElementById("docs-sample-highlight");
 const diagsEl = document.getElementById("diags");
 const passScrubber = document.getElementById("pass-scrubber");
 const passList = document.getElementById("pass-list");
@@ -500,7 +494,7 @@ function loadTrace(text, { keepIndex = false } = {}) {
     }),
   );
   renderPassList(slowest);
-  passScrubber.hidden = !docsView.hidden;
+  passScrubber.hidden = false;
   const firstFailure = trace.events.findIndex((event) => event.failed);
   selectEvent(
     keepIndex && previousIndex >= 0
@@ -716,26 +710,10 @@ function renderDiagnostics(diagnostics) {
   );
 }
 
-function updateRoute() {
-  const isDocs = window.location.hash === "#/docs";
-  workspace.hidden = isDocs;
-  docsView.hidden = !isDocs;
-  passScrubber.hidden = isDocs || !trace;
-  routeLinks.forEach((link) => {
-    link.setAttribute(
-      "aria-current",
-      isDocs === (link.dataset.route === "docs") ? "page" : "false",
-    );
-  });
-}
-
-const guide = bindGuide(docsView);
 
 let timer = 0;
-docsSample.value = RENAME_SAMPLE;
 bindHighlighting(baseline, baselineHighlight);
 bindHighlighting(input, editorHighlight);
-bindHighlighting(docsSample, docsSampleHighlight);
 function scheduleRun() {
   clearTimeout(timer);
   timer = setTimeout(run, 140);
@@ -981,7 +959,6 @@ function refreshInspector() {
 // Shows a tab from a command (palette, key, status bar), redrawing it when
 // it is already on screen.
 function showPanel(tab) {
-  goToWorkspace();
   const shown = inspector.isOpen && inspector.active === tab;
   inspector.show(tab);
   if (shown) PANELS[tab]?.();
@@ -1012,10 +989,6 @@ function inspect(tab, from) {
 
 // ---- Command palette -------------------------------------------------------
 
-function goToWorkspace() {
-  if (workspace.hidden) window.location.hash = "#/";
-}
-
 const palette = new CommandPalette(document.getElementById("palette"), () => {
   const items = [];
   if (trace)
@@ -1025,7 +998,6 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
         text: `${event.index + 1}. ${describeEvent(event)}`,
         hint: event.failed ? "✗ failed" : "",
         run: () => {
-          goToWorkspace();
           selectEvent(event.index);
         },
       });
@@ -1038,7 +1010,6 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
       text: label,
       hint: `#${i}${parent < 0 ? "" : ` · in ${snap.labelOf(parent)}`}`,
       run: () => {
-        goToWorkspace();
         renderer.select(i, { center: true });
         inspect("changes", canvas);
       },
@@ -1120,7 +1091,6 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
       : []),
     ["Show / hide menu", "m", () => toggleMenu()],
     ["Switch light / dark theme", "shift L", toggleTheme],
-    ["Open the guide", "", () => (window.location.hash = "#/docs")],
     ["Keyboard shortcuts", "?", () => helpDialog.showModal()],
   ];
   for (const [text, hint, action] of actions)
@@ -1221,8 +1191,8 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (isTyping(e.target)) return;
-  if (e.key === "Escape" && !workspace.hidden && clearPicks()) return;
-  if (e.key === "Escape" && !workspace.hidden && inspector.handleEscape())
+  if (e.key === "Escape" && clearPicks()) return;
+  if (e.key === "Escape" && inspector.handleEscape())
     return;
   if (e.key === "/") {
     e.preventDefault();
@@ -1233,10 +1203,7 @@ window.addEventListener("keydown", (e) => {
     toggleTheme();
   } else if (e.key === "m") {
     toggleMenu();
-  } else if (!docsView.hidden && ["ArrowLeft", "ArrowRight"].includes(e.key)) {
-    e.preventDefault();
-    guide.step(e.key === "ArrowRight" ? 1 : -1);
-  } else if (!workspace.hidden && WORKSPACE_KEYS[e.key]) {
+  } else if (WORKSPACE_KEYS[e.key]) {
     e.preventDefault();
     WORKSPACE_KEYS[e.key]();
   }
@@ -1282,7 +1249,6 @@ async function fetchSampleText(path) {
 
 async function openSample(sample) {
   samplesDialog.close();
-  goToWorkspace();
   try {
     applyState(await loadSampleState(sample, fetchSampleText));
     statusEl.textContent = `loaded ${sample.title} · ${statusEl.textContent}`;
@@ -1323,14 +1289,6 @@ function openSamples() {
 }
 
 document.getElementById("samples-open").addEventListener("click", openSamples);
-document.getElementById("docs-samples").addEventListener("click", openSamples);
-// The field guide's small graph example, and its GPU starting point.
-document.getElementById("load-sample")?.addEventListener("click", () => {
-  openSample(SAMPLES.find((sample) => sample.id === "rename"));
-});
-document.getElementById("docs-gpu-sample")?.addEventListener("click", () => {
-  openSample(SAMPLES[0]);
-});
 
 // ---- Workspace state (autosave, sessions) --------------------------------
 
@@ -1433,7 +1391,6 @@ async function renderSessions() {
           "Open",
           () => {
             sessionsDialog.close();
-            goToWorkspace();
             applyState(session.state);
           },
         ],
@@ -2041,7 +1998,6 @@ function benchmarkView() {
 }
 
 function importBenchmarks(slot) {
-  goToWorkspace();
   if (!trace) {
     setStatus("open a pass trace before importing benchmarks", { error: true });
     return;
@@ -2256,7 +2212,6 @@ function renderSymbols() {
 // selects the symbol's node, which also marks its line in the source.
 function showSymbol(record, index = record.lastDump) {
   if (index < 0) return;
-  goToWorkspace();
   selectEvent(index);
   const node = findSymbolNode(renderer.snapshot, record.path);
   if (node >= 0) renderer.select(node, { center: true });
@@ -2742,7 +2697,6 @@ const symbolViewTabs = {
 let symbolViewState = null;
 
 function openSymbolView(record) {
-  goToWorkspace();
   if (!trace) return;
   const steps = symbolTimeline(trace.events, record.path);
   if (!steps.length) {
@@ -3012,7 +2966,6 @@ const watcher = new FileWatcher((change, error) => {
   }
   sourceName.textContent = change.name;
   sourceName.title = `${change.name} · watching`;
-  goToWorkspace();
   if (isPassTrace(change.text)) {
     loadTrace(change.text, { keepIndex: !!trace });
   } else {
@@ -3079,8 +3032,6 @@ document.getElementById("abi").textContent = `wasm abi v${ABI_VERSION}`;
 showTab(input);
 renderExplain(-1);
 renderPath();
-window.addEventListener("hashchange", updateRoute);
-updateRoute();
 updateWatchUi();
 
 // An autosave of an emptied workspace would open blank forever; show the

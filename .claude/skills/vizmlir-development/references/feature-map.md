@@ -40,7 +40,6 @@ Where each user-facing feature lives. User-facing descriptions are in `README.md
 | Open… a file (routes `.json` sessions, traces, or plain MLIR) | main.js › Loading (`fileInput` change handler) | TEST_PLAN 1.1 |
 | Resizable panes | `src/app/splitters.js` (`bindSplitters`); main.js › Pane splitters | — |
 | Theme (`L`) and menu (`m`) | main.js › Theme: `applyTheme`, `toggleTheme`; `toggleMenu`, `setMenuHidden`; CSS tokens in `index.html` | — |
-| Guide ("Learn", `#/docs`): every chapter on one scrolling page grouped into parts, a sticky side list that follows the scroll, ← → to jump chapters | `src/app/guide.js` (`bindGuide`, builds the chapter list, part headings, course map, and scroll-spy from `<article class="lesson">`); main.js: `updateRoute`, the ← → keys in the `keydown` handler; content and styles in `index.html` (`#docs-view`) | TEST_PLAN 1.7 |
 | Status bar and error states | main.js: `setStatus`; `STATUS`, `STATUS_TEXT`, `DIAG_CODE` in `src/ir/abi.js` | TEST_PLAN 1.4, 1.5 |
 | Deployment (GitHub Pages) | `.github/workflows/deploy-pages.yml`, `vite.config.js` (base path) | CONTRIBUTING.md › Deployment |
 | README screenshots | `public/demo/` | — |
