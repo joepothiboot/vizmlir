@@ -41,7 +41,11 @@ import {
   localLineInfo,
   localTargetOf,
 } from "./gpu/index.js";
-import { focusLocalLine, localExplain, renderLocalView } from "./render/index.js";
+import {
+  focusLocalLine,
+  localExplain,
+  renderLocalView,
+} from "./render/index.js";
 import { parseMemref } from "./trace/index.js";
 import { explainLine } from "./anatomy.js";
 import { bindGuide } from "./app/index.js";
@@ -61,7 +65,12 @@ import { createInspector } from "./app/index.js";
 import { createScrubber } from "./app/index.js";
 import { loadSampleState, RENAME_SAMPLE, SAMPLES } from "./samples.js";
 import { bindSplitters } from "./app/index.js";
-import { kv, sessionFromFile, sessions, sessionToFile } from "./session/index.js";
+import {
+  kv,
+  sessionFromFile,
+  sessions,
+  sessionToFile,
+} from "./session/index.js";
 import { canWatchFiles, FileWatcher } from "./session/index.js";
 import {
   diffRecords,
@@ -259,7 +268,9 @@ function renderDiff(rows, before, after) {
   // The counts also ride on the inspector's toggle, so they show while it is
   // closed.
   inspectorBadge.replaceChildren(
-    ...(total ? [...diffSummary.childNodes].map((node) => node.cloneNode(true)) : []),
+    ...(total
+      ? [...diffSummary.childNodes].map((node) => node.cloneNode(true))
+      : []),
   );
 
   diffRows = rows;
@@ -430,7 +441,10 @@ function run() {
   setGpuModel(analyzeGpu(current));
   setLocalModel(
     analyzeLocalMemory(current, {
-      target: trace && traceIndex >= 0 ? localTargetOf(trace.events, traceIndex) : null,
+      target:
+        trace && traceIndex >= 0
+          ? localTargetOf(trace.events, traceIndex)
+          : null,
     }),
   );
   setViewCounts({
@@ -602,7 +616,8 @@ function changedOpsAt(index) {
     const after = parse(trace.events[index].ir);
     if (after.status === STATUS.OK) {
       counts = { added: 0, removed: 0, changed: 0 };
-      for (const row of diffSnapshots(beforeCopy, after.snapshot)) counts[row.type] += 1;
+      for (const row of diffSnapshots(beforeCopy, after.snapshot))
+        counts[row.type] += 1;
     }
   }
   if (renderedText) {
@@ -634,7 +649,9 @@ const scrubber = createScrubber(passScrubber, {
     const match = profile.matches[index];
     const lines = [
       `IR ${formatBytes(size)}` +
-        (growth ? ` (${growth > 0 ? "+" : "−"}${formatBytes(Math.abs(growth))})` : ""),
+        (growth
+          ? ` (${growth > 0 ? "+" : "−"}${formatBytes(Math.abs(growth))})`
+          : ""),
     ];
     // The op diff needs two parses; wait until the pointer settles.
     const known = index === traceIndex || passChanges.has(index);
@@ -768,16 +785,55 @@ splitToggle.addEventListener("click", toggleSplit);
 const lineMark = input.parentElement.querySelector(".line-mark");
 let markedLine = -1;
 
+function sourceLineBox(line) {
+  const style = getComputedStyle(input);
+  const lineHeight = parseFloat(style.lineHeight);
+  const fallback = {
+    top: parseFloat(style.paddingTop) + line * lineHeight,
+    height: lineHeight,
+  };
+  const code = input.parentElement.querySelector("code");
+  const lines = input.value.split("\n");
+  if (!code || line >= lines.length || !lines[line]) return fallback;
+  let start = 0;
+  for (let i = 0; i < line; i++) start += lines[i].length + 1;
+  const end = start + lines[line].length;
+  const range = document.createRange();
+  const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+  let seen = 0;
+  let placed = false;
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const len = node.nodeValue.length;
+    if (!placed && start < seen + len) {
+      range.setStart(node, start - seen);
+      placed = true;
+    }
+    if (placed && end <= seen + len) {
+      range.setEnd(node, end - seen);
+      const rects = range.getClientRects();
+      if (!rects.length) return fallback;
+      const first = rects[0];
+      const last = rects[rects.length - 1];
+      const origin = code.getBoundingClientRect().top;
+      const pad = parseFloat(style.paddingTop);
+      return {
+        top: pad + first.top - origin,
+        height: last.bottom - first.top,
+      };
+    }
+    seen += len;
+  }
+  return fallback;
+}
+
 function positionLineMark() {
   if (markedLine < 0) {
     lineMark.hidden = true;
     return;
   }
-  const style = getComputedStyle(input);
-  const lineHeight = parseFloat(style.lineHeight);
-  const top = parseFloat(style.paddingTop) + markedLine * lineHeight;
+  const { top, height } = sourceLineBox(markedLine);
   lineMark.style.top = `${top - input.scrollTop}px`;
-  lineMark.style.height = `${lineHeight}px`;
+  lineMark.style.height = `${height}px`;
   lineMark.hidden = false;
 }
 
@@ -805,8 +861,7 @@ function showSourceLine(line) {
   markedLine = line;
   if (markedLine >= 0) {
     if (!sourcePane.classList.contains("split")) showTab(input);
-    const lineHeight = parseFloat(getComputedStyle(input).lineHeight);
-    const y = markedLine * lineHeight;
+    const y = sourceLineBox(markedLine).top;
     if (y < input.scrollTop || y > input.scrollTop + input.clientHeight - 40)
       input.scrollTop = Math.max(0, y - input.clientHeight / 3);
     renderExplain(markedLine);
@@ -939,7 +994,9 @@ function toggleInspector() {
 
 // j / k walk the changes, with the Changes tab in view.
 function stepChange(delta) {
-  focusChange(delta > 0 ? diffCursor + 1 : diffCursor < 0 ? -1 : diffCursor - 1);
+  focusChange(
+    delta > 0 ? diffCursor + 1 : diffCursor < 0 ? -1 : diffCursor - 1,
+  );
   if (diffRows.length) inspector.show("changes", { from: canvas });
 }
 
@@ -1004,7 +1061,11 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
     ["Inspector: pass timing and memory", "p", openTiming],
     ["Inspector: op counts per pass", "o", openOpCounts],
     ["Inspector: buffers and peak memory", "b", openBuffers],
-    ["Inspector: symbol history (which pass made each kernel)", "h", openSymbols],
+    [
+      "Inspector: symbol history (which pass made each kernel)",
+      "h",
+      openSymbols,
+    ],
     [
       inspector.isOpen ? "Close the inspector" : "Open the inspector",
       "\\",
@@ -1013,7 +1074,9 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
     ...(gpuModel
       ? [
           [
-            canvasView === "gpu" ? "Show the op graph" : "Show the GPU view: launches and memory",
+            canvasView === "gpu"
+              ? "Show the op graph"
+              : "Show the GPU view: launches and memory",
             "g",
             () => setCanvasView(canvasView === "gpu" ? "graph" : "gpu"),
           ],
@@ -1033,9 +1096,21 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
           ],
         ]
       : []),
-    ["Inspector: what's this line? (explain the clicked line)", "w", () => showPanel("line")],
-    ["Import current kernel benchmarks…", "", () => importBenchmarks("current")],
-    ["Import baseline kernel benchmarks…", "", () => importBenchmarks("baseline")],
+    [
+      "Inspector: what's this line? (explain the clicked line)",
+      "w",
+      () => showPanel("line"),
+    ],
+    [
+      "Import current kernel benchmarks…",
+      "",
+      () => importBenchmarks("current"),
+    ],
+    [
+      "Import baseline kernel benchmarks…",
+      "",
+      () => importBenchmarks("baseline"),
+    ],
     ...(canWatchFiles
       ? [
           watcher.watching
@@ -1043,11 +1118,7 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
             : ["Watch a file for changes…", "", pickWatch],
         ]
       : []),
-    [
-      "Show / hide menu",
-      "m",
-      () => toggleMenu(),
-    ],
+    ["Show / hide menu", "m", () => toggleMenu()],
     ["Switch light / dark theme", "shift L", toggleTheme],
     ["Open the guide", "", () => (window.location.hash = "#/docs")],
     ["Keyboard shortcuts", "?", () => helpDialog.showModal()],
@@ -1151,7 +1222,8 @@ window.addEventListener("keydown", (e) => {
   }
   if (isTyping(e.target)) return;
   if (e.key === "Escape" && !workspace.hidden && clearPicks()) return;
-  if (e.key === "Escape" && !workspace.hidden && inspector.handleEscape()) return;
+  if (e.key === "Escape" && !workspace.hidden && inspector.handleEscape())
+    return;
   if (e.key === "/") {
     e.preventDefault();
     palette.open();
@@ -1301,7 +1373,12 @@ function applyState(state) {
     for (const slot of ["baseline", "current"]) {
       if (!trace || !saved?.[slot]) continue;
       try {
-        setBenchmarks(slot, saved[slot].name, saved[slot].text, saved[slot].mock);
+        setBenchmarks(
+          slot,
+          saved[slot].name,
+          saved[slot].text,
+          saved[slot].mock,
+        );
       } catch {}
     }
     updateSymbolsOpen();
@@ -1621,7 +1698,9 @@ function buildOpCountModel() {
       note:
         "Operations in the whole module at each dump, by op name. Nested " +
         "dumps are spliced into the last module dump, as for the baseline." +
-        (failed ? ` ${failed} dump(s) could not be parsed and count as empty.` : ""),
+        (failed
+          ? ` ${failed} dump(s) could not be parsed and count as empty.`
+          : ""),
     };
   }
   const columns = viewCounts.before
@@ -1735,7 +1814,15 @@ function renderOpCountTable() {
       const previous = i > 0 ? counts[i - 1] : counts[i];
       const change = counts[i] - previous;
       const trend =
-        k === 0 ? "" : change > 0 ? "up" : change < 0 ? "down" : many ? "same" : "";
+        k === 0
+          ? ""
+          : change > 0
+            ? "up"
+            : change < 0
+              ? "down"
+              : many
+                ? "same"
+                : "";
       const td = cell(
         "td",
         String(counts[i]),
@@ -2020,7 +2107,9 @@ function renderSymbolsSummary() {
     ]);
   }
   if (view?.both) {
-    const rows = [...view.comparison.values()].filter((row) => row.change !== null);
+    const rows = [...view.comparison.values()].filter(
+      (row) => row.change !== null,
+    );
     const threshold = Number(symbolsMinChange.value) || 0;
     const slower = rows.filter((row) => row.change * 100 > threshold).length;
     const faster = rows.filter((row) => row.change * 100 < -threshold).length;
@@ -2081,7 +2170,8 @@ function renderSymbols() {
   head.append(cell("th", "Symbol"), cell("th", "Defined by"));
   // One run reads as "Time / call" (or "Baseline / call"); two as columns.
   for (const slot of slots) {
-    const title = slot === "baseline" ? "Baseline" : view.both ? "Current" : "Time";
+    const title =
+      slot === "baseline" ? "Baseline" : view.both ? "Current" : "Time";
     head.append(cell("th", view.both ? title : `${title} / call`, "time"));
   }
   if (view?.both) head.append(cell("th", "Δ", "time"));
@@ -2263,7 +2353,12 @@ const GPU_VIEW_OPTIONS = {
   onAnswer: setGpuAnswer,
   passes: () =>
     trace?.events.length > 1
-      ? { events: trace.events, current: traceIndex, select: selectEvent, describe: describeEvent }
+      ? {
+          events: trace.events,
+          current: traceIndex,
+          select: selectEvent,
+          describe: describeEvent,
+        }
       : null,
 };
 
@@ -2404,7 +2499,8 @@ function setCanvasView(view, { remember = true } = {}) {
     tab.setAttribute("aria-selected", String(on));
     tab.tabIndex = on ? 0 : -1;
   }
-  for (const [name, entry] of Object.entries(VIEWS)) entry.show(name === canvasView);
+  for (const [name, entry] of Object.entries(VIEWS))
+    entry.show(name === canvasView);
   renderVerdictChip();
   renderPath();
   if (canvasView === "gpu") focusGpu(markedLine);
@@ -2445,10 +2541,14 @@ canvas.addEventListener("click", () => {
 let explainedLine = -1;
 
 const VERDICT_MEANING = {
-  coalesced: "Neighboring threads use neighboring items, so the GPU fetches them in one trip.",
-  strided: "Neighboring threads use items far apart, so the GPU fetches much more than it uses.",
-  broadcast: "Every thread uses the same item, so it is fetched once and shared.",
-  "conflict-free": "Every thread gets its own shared-memory counter (bank), so nobody waits.",
+  coalesced:
+    "Neighboring threads use neighboring items, so the GPU fetches them in one trip.",
+  strided:
+    "Neighboring threads use items far apart, so the GPU fetches much more than it uses.",
+  broadcast:
+    "Every thread uses the same item, so it is fetched once and shared.",
+  "conflict-free":
+    "Every thread gets its own shared-memory counter (bank), so nobody waits.",
 };
 
 function caretLine() {
@@ -2517,7 +2617,11 @@ function gpuExplain(index) {
           const code = document.createElement("code");
           code.textContent = `${access.buffer}[${lane.index.join(", ")}]`;
           return [
-            i ? (i === lanes.length - 1 ? ", and thread " : ", thread ") : "thread ",
+            i
+              ? i === lanes.length - 1
+                ? ", and thread "
+                : ", thread "
+              : "thread ",
             `(${lane.tx}, ${lane.ty}, ${lane.tz}) uses `,
             code,
           ];
@@ -2555,7 +2659,8 @@ function renderExplain(index) {
     leBody.replaceChildren(hint);
     return;
   }
-  leTitle.textContent = `Line ${index + 1}` + (explained.op ? ` · ${explained.op}` : "");
+  leTitle.textContent =
+    `Line ${index + 1}` + (explained.op ? ` · ${explained.op}` : "");
   if (explained.op) {
     leDocs.href = explained.docs;
     leDocs.title = `The ${explained.dialect} family in the MLIR documentation`;
@@ -2668,11 +2773,14 @@ function renderSymbolViewHead() {
   ];
   const row = benchmarkView()?.comparison.get(record.path);
   if (row?.current || row?.baseline) {
-    const time = (slot) => row[slot] && `${slot} ${formatDuration(row[slot].timeNs)}`;
+    const time = (slot) =>
+      row[slot] && `${slot} ${formatDuration(row[slot].timeNs)}`;
     facts.push(
       [time("baseline"), time("current")].filter(Boolean).join(" → ") +
         (row.change !== null ? ` (${formatChange(row.change)})` : "") +
-        (benchmarks.current?.mock || benchmarks.baseline?.mock ? " · mock data" : ""),
+        (benchmarks.current?.mock || benchmarks.baseline?.mock
+          ? " · mock data"
+          : ""),
     );
   }
   symbolViewMeta.textContent = facts.filter(Boolean).join(" · ");
@@ -2707,7 +2815,8 @@ function renderSymbolViewHead() {
 // The IR of the latest step at or before `i` that has any.
 function stepText(i) {
   for (let k = i; k >= 0; k--)
-    if (symbolViewState.steps[k].text !== null) return symbolViewState.steps[k].text;
+    if (symbolViewState.steps[k].text !== null)
+      return symbolViewState.steps[k].text;
   return null;
 }
 
@@ -2746,10 +2855,11 @@ function renderSymbolView() {
   } else if (step.text === null) {
     note(
       `Removed by #${step.index + 1} ${describeEvent(event)}.` +
-        (assembly.length ? " Its code is now embedded in the enclosing binary; see the assembly tab." : ""),
+        (assembly.length
+          ? " Its code is now embedded in the enclosing binary; see the assembly tab."
+          : ""),
     );
-    if (mode === "diff" && before)
-      lines.push(...lineDiff(before, null));
+    if (mode === "diff" && before) lines.push(...lineDiff(before, null));
   } else if (mode === "diff" && before !== null) {
     const diff = lineDiff(before, step.text);
     const { added, removed } = diffStats(diff);
@@ -2760,8 +2870,10 @@ function renderSymbolView() {
     );
     lines.push(...diff);
   } else {
-    if (mode === "diff") note("First appearance, so there is nothing to compare.");
-    for (const text of step.text.split("\n")) lines.push({ type: "same", text });
+    if (mode === "diff")
+      note("First appearance, so there is nothing to compare.");
+    for (const text of step.text.split("\n"))
+      lines.push({ type: "same", text });
   }
 
   symbolViewStep.textContent = `#${step.index + 1} ${describeEvent(event)}`;
@@ -2773,7 +2885,8 @@ function renderSymbolView() {
         // A space keeps blank lines one line tall.
         div.textContent = line.text || " ";
       } else {
-        const sign = line.type === "add" ? "+" : line.type === "del" ? "−" : " ";
+        const sign =
+          line.type === "add" ? "+" : line.type === "del" ? "−" : " ";
         div.innerHTML = `${sign} ${highlightMlir(line.text).slice(0, -1)}`;
       }
       return div;
