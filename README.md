@@ -20,6 +20,7 @@ The app comes with a short course (**Learn** in the top bar). It all sits on one
 2. **Memory and access patterns**: global, shared, and private memory; coalesced and strided accesses; bank conflicts and the padding fix.
 3. **Reading MLIR**: intermediate representations, SSA form, operations, and dialects.
 4. **How a compiler builds a kernel**: passes, and lowering from `gpu.launch` down to PTX.
+5. **Scratchpads and DMA (beyond GPUs)**: software-managed local memory and double buffering on a DSP.
 
 Lab chapters show how to run your own `mlir-opt` pipeline, and the reference has the model's limits and a glossary.
 
@@ -50,6 +51,11 @@ One honest limit: VizMLIR only reads your code; it never runs it. It can spot th
 - **What's this line?** Click any line of code to see it explained in plain words: what it produces, what it does, which values it uses (each linked back to the line that made it), and what kind of data it works on. For reads and writes, it also says how the GPU handles them, with a real example like "thread (1, 0, 0) uses `%arg1[1, 0]`". It is the inspector's **Line** tab (`w`).
 - **A kernel's full history.** Press `h` to see which compiler step created, changed, or finished each kernel, then follow one kernel step by step, all the way to the GPU assembly (PTX) at the end.
 - **Your measured timings.** Bring in results from Nsight Systems, Nsight Compute, Google Benchmark, or your own CSV, and compare two runs to see which kernels got faster or slower ([docs/benchmark-format.md](docs/benchmark-format.md)).
+
+### 🧱 Beyond GPUs
+
+- **Scratchpads and DMA.** DSP and NPU accelerators often have a small local memory that the compiler fills by DMA instead of a cache. When the IR has buffers in such a memory (nano-dsp's `#dsp.local`) or `memref.dma_start` / `memref.dma_wait`, a **Local memory** tab shows the budget as a bar of buffer slots and the loop's first trips as DMA, wait and compute lanes: which tile is loaded before the loop, which is prefetched for the next trip, and where the loop waits. Click any block to see its line explained. It is the order the IR expresses, not measured timing.
+- The "DSP scratchpad" sample is real output of `nanodsp-opt` from [nano-dsp-mlir](https://github.com/joepothiboot/nano-dsp-mlir): a matmul whose tiles are double-buffered in a Hexagon-like scratchpad, then lowered to plain copies. The guide's lesson "Scratchpads and DMA" walks through it.
 
 ### 🧭 Follow the compiler
 
