@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { camera, elementTiles, layoutLaunch } from "../../src/gpu-3d.js";
+import { camera, elementTiles, layoutLaunch } from "../../src/render/gpu-3d.js";
 
 describe("elementTiles", () => {
   // Warp 0 of a 32-wide block over a 1024 × 1024 buffer of f32.

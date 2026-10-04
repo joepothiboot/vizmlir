@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { buildDefs } from "../../src/gpu/access.js";
 import { analyzeGpu } from "../../src/gpu/model.js";
-import { acrossPasses } from "../../src/gpu-view.js";
+import { acrossPasses } from "../../src/render/gpu-view.js";
 import { parsePassTrace } from "../../src/trace/trace.js";
 import {
   analyzeTriton,

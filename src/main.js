@@ -33,7 +33,7 @@ import {
   renderGpuPath,
   renderGpuView,
   verdictSummary,
-} from "./gpu-view.js";
+} from "./render/index.js";
 import { warpAccess } from "./gpu/index.js";
 import { parseMemref } from "./trace/index.js";
 import { explainLine } from "./anatomy.js";

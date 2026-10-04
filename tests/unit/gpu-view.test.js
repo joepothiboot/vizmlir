@@ -9,7 +9,7 @@ import {
   renderGpuPath,
   renderGpuView,
   verdictSummary,
-} from "../../src/gpu-view.js";
+} from "../../src/render/gpu-view.js";
 import { parsePassTrace } from "../../src/trace/trace.js";
 
 const events = (name) =>
