@@ -1,7 +1,15 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { loadSampleState, SAMPLES, sampleFiles } from "../../src/samples.js";
-import { isPassTrace, parsePassTrace } from "../../src/trace/trace.js";
+import {
+  DEFAULT_SAMPLE_ID,
+  groupSamples,
+  loadSampleState,
+  SAMPLES,
+  SCOPES,
+  sampleFiles,
+  scopeOf,
+} from "../../src/samples.js";
+import { describeEvent, isPassTrace, parsePassTrace } from "../../src/trace/trace.js";
 import { symbolHistory } from "../../src/trace/provenance.js";
 import {
   compareBenchmarks,
@@ -17,6 +25,45 @@ const read = async (path) =>
   );
 
 describe("samples", () => {
+  it("each belong to a known scenario", () => {
+    const known = new Set(SCOPES.map((scope) => scope.id));
+    for (const sample of SAMPLES) expect(known.has(sample.scope), sample.id).toBe(true);
+    expect(new Set(SCOPES.map((scope) => scope.id)).size).toBe(SCOPES.length);
+    for (const scope of SCOPES) expect(scope.short.length, scope.id).toBeLessThanOrEqual(12);
+  });
+
+  it("group by scenario without losing or repeating any", () => {
+    const groups = groupSamples();
+    expect(groups.flatMap((g) => g.samples.map((s) => s.id)).sort()).toEqual(SAMPLES.map((s) => s.id).sort());
+    for (const { scope, samples } of groups) for (const sample of samples) expect(scopeOf(sample)).toBe(scope);
+  });
+
+  it("leave out a scenario that has no samples", () => {
+    const only = SAMPLES.filter((s) => s.scope === "gpu");
+    expect(groupSamples(only).map((g) => g.scope.id)).toEqual(["gpu"]);
+  });
+
+  it("open a first visit on a debugging sample with Debug on", () => {
+    const sample = SAMPLES.find((s) => s.id === DEFAULT_SAMPLE_ID);
+    expect(sample).toBeDefined();
+    expect(scopeOf(sample)).toMatchObject({ id: "debug", debug: true });
+  });
+
+  it("only turn Debug on for scenarios that have source locations", async () => {
+    for (const scope of SCOPES.filter((s) => s.debug))
+      for (const sample of SAMPLES.filter((s) => s.scope === scope.id))
+        expect(sample.sources?.length, sample.id).toBeGreaterThan(0);
+  });
+
+  it("open on the pass they say they start at", async () => {
+    for (const sample of SAMPLES.filter((s) => s.startPass !== undefined)) {
+      const state = await loadSampleState(sample, read);
+      const events = parsePassTrace(state.trace).events;
+      expect(state.traceIndex, sample.id).toBe(sample.startPass);
+      expect(describeEvent(events[sample.startPass]), sample.id).toContain(sample.startsAt);
+    }
+  });
+
   it("have unique ids", () => {
     const ids = SAMPLES.map((s) => s.id);
     expect(new Set(ids).size).toBe(ids.length);

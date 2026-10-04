@@ -1,7 +1,8 @@
 # A three-minute tour
 
-Start the app (`npm run dev`) and open **Samples → Source locations: a
-Mojo-style saxpy through the passes**. It is a small hand-written trace in the
+Start the app (`npm run dev`). A dialog offers a scenario to start from; close
+it, or pick **Source tracing and debugging**. (**Scenario ▾** in the top bar
+reopens it.) The sample is a small hand-written trace in the
 format of `mlir-opt -mlir-print-ir-after-all -mlir-print-debuginfo`, with a
 real `saxpy.mojo` beside it: a kernel that calls `scale(x[i], a)` and adds
 `y[i]`. Five passes: inlining, canonicalization, dead-symbol removal, and
@@ -9,7 +10,8 @@ lowering to NVVM.
 
 ## 1. Source to ops (30 s)
 
-1. Press `d` for Debug mode. The current IR sits above `saxpy.mojo`.
+1. Debug mode is already on in this scenario (`d` toggles it). The current IR
+   sits above `saxpy.mojo`.
 2. Click line 10 (`y[i] = scale(x[i], a) + y[i]`) in the **Source** tab. The
    graph selects the first op from it, and the status line says "op 1 of 5".
    Click again to step through the rest.
@@ -21,8 +23,11 @@ lowering to NVVM.
    at pass 2, where `func.call @scale` is gone, because the inliner replaced it.
 2. Click line 4 until the inlined `arith.mulf` is selected. It marks lines 4
    *and* 10: its location is a call site, `callsite(line 4 at line 10)`.
-3. Open **History** (`y`). It was inlined at pass 2 from the callee's `mulf`,
-   then fused into `math.fma` at pass 3.
+3. Look at the pass slider: passes 2 and 3 now have lit ticks (inlined, then
+   fused) and passes 4 and 5 faint ones (still there, unchanged). Hover the
+   slider for the details, or open **History** (`y`) for the full list. It was
+   inlined at pass 2 from the callee's `mulf`, then fused into `math.fma` at
+   pass 3.
 4. Press `op ▶` (or `>`). The run goes to pass 3. The `fma` marks lines 4 and
    10, and the History tab lists the two ops it merged, each one clickable.
 

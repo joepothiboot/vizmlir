@@ -8,7 +8,7 @@ VizMLIR is a visual companion for computer architecture, compilers, and parallel
 
 It also works as a **debugger for the compiler's own passes**: follow one op from the source line it came from, through every pass that inlined, fused, lowered or removed it, and stop the run when a condition you set becomes true.
 
-🚀 **[Try VizMLIR live](https://joepothiboot.github.io/vizmlir/)**: it opens on a small example with two classic GPU mistakes in it. See if you can spot them.
+🚀 **[Try VizMLIR live](https://joepothiboot.github.io/vizmlir/)**: it opens on a small source-tracing example, with a dialog that lets you pick another scenario (GPU memory mistakes, Triton, DSP scratchpads, generic passes) or just close it and play.
 
 ![VizMLIR showing a transpose kernel: the code, the GPU view, and the inspector, whose answer card proves the write is strided for all 32,768 warps and follows it across compiler passes, with "What's this line?" explaining the store in plain words](public/demo/vizmlir-workspace.png)
 
@@ -32,10 +32,10 @@ One honest limit: VizMLIR only reads your code; it never runs it. It can spot th
 
 ### 🐞 Debug the compiler
 
-Open the **Source locations** sample (Samples → "a Mojo-style saxpy through the passes") and press `d`. The walkthrough is in [docs/DEMO.md](docs/DEMO.md).
+The app opens on this scenario, with Debug mode on. The walkthrough is in [docs/DEMO.md](docs/DEMO.md).
 
 - **Source view with location tracing.** MLIR prints a `loc(...)` after each op when run with `-mlir-print-debuginfo`. VizMLIR reads them (inline, after a region's closing brace, and through `#loc` aliases, including `callsite` and `fused`) and shows the source file beside the ops in a **Source** tab. Each line shows how many ops it made. Click a line to select an op that came from it (click again for the next), or pick an op to see its lines marked. Drop your own source files on the tab, or use **Add file…**; they are matched to the names in the IR.
-- **Op history.** Select an op and open **History** (`y`) to see its life: when it was made, which later pass lowered or renamed it, and when it was removed. An inlined op links back to its callee, and a fused op lists every op it merged, each one clickable.
+- **Op history.** Select an op and open **History** (`y`) to see its life: when it was made, which later pass lowered or renamed it, and when it was removed. An inlined op links back to its callee, and a fused op lists every op it merged, each one clickable. The same life is marked on the pass slider: a lit tick where a pass changed the op, a faint one where it merely exists.
 - **Stepping and conditional breakpoints.** In Debug mode, **◀ change / change ▶** jump between passes that changed the IR, and **◀ op / op ▶** between passes that changed the selected op. **Break when…** stops when a condition *becomes* true: `linalg.matmul == 0`, `ops < 20`, `live > 1MB`, `appears gpu.launch`, `gone func.call`, `fails` or `diag`. Hits show as dots on the pass slider; **continue** (`.`) and **back** (`,`) run to the next and previous one.
 - **Descent.** A **Descent** tab stacks every pass as a layer in 3D, first at the top and last at the bottom. Stepping slides the camera down to the next layer, and stepping the selected op (**op ▶**, or a step in History) sends a pulse along its path, drawn dashed where ops were inlined or fused. Put the caret on a line of IR and that line's ops, with the edges into and out of them, light up.
 
@@ -97,10 +97,10 @@ npm install
 npm run dev
 ```
 
-1. Open the address it prints. The transpose example opens on the GPU view.
-2. Scroll to **Memory accesses** and click the orange row; the inspector opens beside the picture with what went wrong and how it's usually fixed.
+1. Open the address it prints. A dialog offers a scenario to start from; close it to keep the default (source tracing and debugging), or pick one. **Scenario ▾** in the top bar changes it later.
+2. For the GPU side, pick **GPU memory**, scroll to **Memory accesses** and click the orange row; the inspector opens beside the picture with what went wrong and how it's usually fixed.
 3. Press `]`, or drag the pass slider, to step through the compiler's work and watch the picture change.
-4. To debug instead: open the **Source locations** sample, press `d`, then `.` to run to the first breakpoint, and click a line in the **Source** tab.
+4. To debug: pick the **Source tracing and debugging** scenario, press `.` to run to the first breakpoint, and click a line in the **Source** tab.
 5. When you're ready, open your own `mlir-opt` log with **Open…**. Use `-mlir-print-ir-after-all` (and `-mlir-timing` for the timing view) so the log has every pass.
 
 ## 🤝 Contributing

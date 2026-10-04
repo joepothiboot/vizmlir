@@ -9,6 +9,56 @@ const page = new DOMParser().parseFromString(
   "text/html",
 );
 
+describe("scrubber op marks", () => {
+  let root;
+  let scrubber;
+  const classes = () =>
+    [...root.querySelectorAll(".scrub-ticks span")].map((t) =>
+      ["op", "life"].find((c) => t.classList.contains(c)) ?? "",
+    );
+
+  beforeEach(() => {
+    document.body.replaceChildren();
+    root = document.importNode(page.getElementById("pass-scrubber"), true);
+    root.hidden = false;
+    document.body.append(root);
+    scrubber = createScrubber(root, { onSelect: vi.fn(), schedule: (run) => run() });
+    scrubber.setPasses([{ failed: false }, { failed: false }, { failed: false }, { failed: false }]);
+  });
+
+  it("marks changes and the passes an op merely exists in differently", () => {
+    scrubber.setOpMarks([
+      { pass: 1, kind: "op" },
+      { pass: 2, kind: "life" },
+    ]);
+    expect(classes()).toEqual(["", "op", "life", ""]);
+  });
+
+  it("replaces earlier marks, and clears", () => {
+    scrubber.setOpMarks([{ pass: 0, kind: "op" }]);
+    scrubber.setOpMarks([{ pass: 3, kind: "life" }]);
+    expect(classes()).toEqual(["", "", "", "life"]);
+    scrubber.setOpMarks([]);
+    expect(classes()).toEqual(["", "", "", ""]);
+  });
+
+  it("keeps them when the selected pass changes, and alongside a breakpoint mark", () => {
+    scrubber.setOpMarks([{ pass: 1, kind: "op" }]);
+    scrubber.setMarks([1]);
+    scrubber.setValue(1);
+    scrubber.setValue(3);
+    const tick = root.querySelectorAll(".scrub-ticks span")[1];
+    expect(tick.classList.contains("op")).toBe(true);
+    expect(tick.classList.contains("bp")).toBe(true);
+  });
+
+  it("survive the ticks being rebuilt for the same trace", () => {
+    scrubber.setOpMarks([{ pass: 2, kind: "op" }]);
+    scrubber.setPasses([{ failed: false }, { failed: false }, { failed: false }]);
+    expect(classes()).toEqual(["", "", "op"]);
+  });
+});
+
 describe("scrubber breakpoint marks", () => {
   let root;
   let scrubber;

@@ -33,6 +33,7 @@ export function createScrubber(root, { onSelect, preview, label, schedule } = {}
   let count = 0;
   let previewed = -1;
   let marks = new Set();
+  let opMarks = new Map();
   let pending = false;
   const value = () => Number(range.value) - 1;
 
@@ -134,7 +135,11 @@ export function createScrubber(root, { onSelect, preview, label, schedule } = {}
       ticks?.replaceChildren(
         ...passes.map((pass, i) => {
           const tick = document.createElement("span");
-          tick.className = [pass.failed ? "failed" : "", marks.has(i) ? "bp" : ""]
+          tick.className = [
+            pass.failed ? "failed" : "",
+            marks.has(i) ? "bp" : "",
+            opMarks.get(i) ?? "",
+          ]
             .filter(Boolean)
             .join(" ");
           tick.style.left = at(i);
@@ -144,6 +149,16 @@ export function createScrubber(root, { onSelect, preview, label, schedule } = {}
         }),
       );
       hidePreview();
+    },
+    // Marks the life of the selected op: `{ pass, kind }` where kind is
+    // "op" for a pass that changed it (made, lowered, fused, removed) and
+    // "life" for one it merely exists in. Replaces the last marks.
+    setOpMarks(list) {
+      opMarks = new Map(list.map(({ pass, kind }) => [pass, kind]));
+      [...(ticks?.children ?? [])].forEach((tick, i) => {
+        tick.classList.toggle("op", opMarks.get(i) === "op");
+        tick.classList.toggle("life", opMarks.get(i) === "life");
+      });
     },
     // Marks the passes where a breakpoint hits (indices), replacing the last
     // marks. They survive `setValue` and are cleared by `setPasses`.

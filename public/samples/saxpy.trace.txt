@@ -1,18 +1,4 @@
 // -----// IR Dump Before Inliner (inline) ('builtin.module' operation) //----- //
-#loc1 = loc("saxpy.mojo":4:14)
-#loc2 = loc("saxpy.mojo":8:13)
-#loc3 = loc("saxpy.mojo":8:27)
-#loc4 = loc("saxpy.mojo":8:25)
-#loc5 = loc("saxpy.mojo":8:41)
-#loc6 = loc("saxpy.mojo":8:39)
-#loc7 = loc("saxpy.mojo":9:10)
-#loc8 = loc("saxpy.mojo":9:5)
-#loc9 = loc("saxpy.mojo":10:22)
-#loc10 = loc("saxpy.mojo":10:16)
-#loc11 = loc("saxpy.mojo":10:33)
-#loc12 = loc("saxpy.mojo":10:31)
-#loc13 = loc("saxpy.mojo":10:9)
-#loc14 = loc("saxpy.mojo":6:1)
 module attributes {gpu.container_module} {
   gpu.module @kernels {
     func.func @scale(%arg0: f32, %arg1: f32) -> f32 {
@@ -37,7 +23,6 @@ module attributes {gpu.container_module} {
     }
   }
 }
-// -----// IR Dump After Inliner (inline) ('builtin.module' operation) //----- //
 #loc1 = loc("saxpy.mojo":4:14)
 #loc2 = loc("saxpy.mojo":8:13)
 #loc3 = loc("saxpy.mojo":8:27)
@@ -52,7 +37,7 @@ module attributes {gpu.container_module} {
 #loc12 = loc("saxpy.mojo":10:31)
 #loc13 = loc("saxpy.mojo":10:9)
 #loc14 = loc("saxpy.mojo":6:1)
-#loc15 = loc(callsite(#loc1 at #loc10))
+// -----// IR Dump After Inliner (inline) ('builtin.module' operation) //----- //
 module attributes {gpu.container_module} {
   gpu.module @kernels {
     func.func @scale(%arg0: f32, %arg1: f32) -> f32 {
@@ -77,7 +62,6 @@ module attributes {gpu.container_module} {
     }
   }
 }
-// -----// IR Dump After Canonicalizer (canonicalize) ('builtin.module' operation) //----- //
 #loc1 = loc("saxpy.mojo":4:14)
 #loc2 = loc("saxpy.mojo":8:13)
 #loc3 = loc("saxpy.mojo":8:27)
@@ -93,7 +77,7 @@ module attributes {gpu.container_module} {
 #loc13 = loc("saxpy.mojo":10:9)
 #loc14 = loc("saxpy.mojo":6:1)
 #loc15 = loc(callsite(#loc1 at #loc10))
-#loc16 = loc(fused[#loc15, #loc12])
+// -----// IR Dump After Canonicalizer (canonicalize) ('builtin.module' operation) //----- //
 module attributes {gpu.container_module} {
   gpu.module @kernels {
     func.func @scale(%arg0: f32, %arg1: f32) -> f32 {
@@ -117,7 +101,6 @@ module attributes {gpu.container_module} {
     }
   }
 }
-// -----// IR Dump After SymbolDCE (symbol-dce) ('builtin.module' operation) //----- //
 #loc1 = loc("saxpy.mojo":4:14)
 #loc2 = loc("saxpy.mojo":8:13)
 #loc3 = loc("saxpy.mojo":8:27)
@@ -134,6 +117,7 @@ module attributes {gpu.container_module} {
 #loc14 = loc("saxpy.mojo":6:1)
 #loc15 = loc(callsite(#loc1 at #loc10))
 #loc16 = loc(fused[#loc15, #loc12])
+// -----// IR Dump After SymbolDCE (symbol-dce) ('builtin.module' operation) //----- //
 module attributes {gpu.container_module} {
   gpu.module @kernels {
     gpu.func @saxpy(%arg0: f32, %arg1: memref<?xf32>, %arg2: memref<?xf32>, %arg3: index) kernel {
@@ -153,7 +137,6 @@ module attributes {gpu.container_module} {
     }
   }
 }
-// -----// IR Dump After ConvertGpuOpsToNVVMOps (convert-gpu-to-nvvm) ('builtin.module' operation) //----- //
 #loc1 = loc("saxpy.mojo":4:14)
 #loc2 = loc("saxpy.mojo":8:13)
 #loc3 = loc("saxpy.mojo":8:27)
@@ -170,6 +153,7 @@ module attributes {gpu.container_module} {
 #loc14 = loc("saxpy.mojo":6:1)
 #loc15 = loc(callsite(#loc1 at #loc10))
 #loc16 = loc(fused[#loc15, #loc12])
+// -----// IR Dump After ConvertGpuOpsToNVVMOps (convert-gpu-to-nvvm) ('builtin.module' operation) //----- //
 module attributes {gpu.container_module} {
   gpu.module @kernels {
     gpu.func @saxpy(%arg0: f32, %arg1: memref<?xf32>, %arg2: memref<?xf32>, %arg3: index) kernel {
@@ -189,3 +173,19 @@ module attributes {gpu.container_module} {
     }
   }
 }
+#loc1 = loc("saxpy.mojo":4:14)
+#loc2 = loc("saxpy.mojo":8:13)
+#loc3 = loc("saxpy.mojo":8:27)
+#loc4 = loc("saxpy.mojo":8:25)
+#loc5 = loc("saxpy.mojo":8:41)
+#loc6 = loc("saxpy.mojo":8:39)
+#loc7 = loc("saxpy.mojo":9:10)
+#loc8 = loc("saxpy.mojo":9:5)
+#loc9 = loc("saxpy.mojo":10:22)
+#loc10 = loc("saxpy.mojo":10:16)
+#loc11 = loc("saxpy.mojo":10:33)
+#loc12 = loc("saxpy.mojo":10:31)
+#loc13 = loc("saxpy.mojo":10:9)
+#loc14 = loc("saxpy.mojo":6:1)
+#loc15 = loc(callsite(#loc1 at #loc10))
+#loc16 = loc(fused[#loc15, #loc12])

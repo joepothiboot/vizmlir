@@ -33,6 +33,7 @@ export const RENAME_SAMPLE = `module {
 export const SAMPLES = [
   {
     id: "gpu-transpose",
+    scope: "gpu",
     title: "Transpose: strided, bank conflict, fixed",
     blurb:
       "The same transpose three ways: a naive strided write, a shared tile with a 32-way bank conflict, and the tile padded to 32×33.",
@@ -40,6 +41,7 @@ export const SAMPLES = [
   },
   {
     id: "mojo-saxpy",
+    scope: "debug",
     title: "Source locations: a Mojo-style saxpy through the passes",
     blurb:
       "Every op carries a loc(...) into saxpy.mojo. Watch one source line follow its ops through inlining (a call site), canonicalization (two ops fused into one fma) and lowering to NVVM. Open the Source tab and click a line, or an op. Hand-written in the format of mlir-opt -mlir-print-debuginfo output.",
@@ -52,6 +54,7 @@ export const SAMPLES = [
   },
   {
     id: "gpu-patterns",
+    scope: "gpu",
     title: "Memory patterns: six ways a warp reads",
     blurb:
       "One small kernel per pattern: {x, y} pairs vs. separate arrays, a read shifted by one, a sliding window, a shared bias, and 16×16 blocks. Each looks different in the 3D view.",
@@ -59,6 +62,7 @@ export const SAMPLES = [
   },
   {
     id: "gpu-tiled-matmul",
+    scope: "gpu",
     title: "Tiled matmul on the GPU",
     blurb:
       "An 8×8 grid of 16×16-thread blocks staging tiles of A and B in shared memory, from gpu.launch to PTX.",
@@ -66,6 +70,7 @@ export const SAMPLES = [
   },
   {
     id: "triton-coalesce",
+    scope: "triton",
     title: "Triton: the coalesce pass fixes a strided load",
     blurb:
       "A Triton kernel reads a 32×32 tile of a column-major matrix. The default layout puts lanes along the wrong axis; tritongpu-coalesce switches to 4-wide vectors down the columns. Hand-written in Triton 3.x TTGIR format.",
@@ -74,6 +79,7 @@ export const SAMPLES = [
   },
   {
     id: "gpu-kernels",
+    scope: "gpu",
     title: "GPU kernels + benchmarks (mock)",
     blurb:
       "Two kernels outlined, lowered to NVVM and serialized to PTX, with mock baseline and current timings: saxpy_kernel looks 26% slower. The timings are invented to show the feature.",
@@ -86,6 +92,11 @@ export const SAMPLES = [
   },
   {
     id: "nanodsp-local-matmul",
+    scope: "dsp",
+    // Local memory only exists from nanodsp-promote-local on, so open there
+    // (0-based pass); a test keeps this in step with the trace.
+    startPass: 11,
+    startsAt: "nanodsp-promote-local",
     title: "DSP scratchpad: double-buffered DMA",
     blurb:
       "A DSP-style scratchpad: tiles copied into local memory by DMA, double-buffered. A matmul for nano-dsp-mlir's Hexagon-like target: one pass gives the A and B tiles two slots each in local memory and fetches the next tile by DMA while the current one is used; the next turns the DMAs into plain copies. Open the Local memory tab.",
@@ -93,6 +104,7 @@ export const SAMPLES = [
   },
   {
     id: "lowering",
+    scope: "generic",
     title: "Lowering pipeline trace",
     blurb:
       "Seven passes, from linalg on tensors through bufferization to loops, with pass timing. Step with [ and ].",
@@ -100,6 +112,7 @@ export const SAMPLES = [
   },
   {
     id: "failed",
+    scope: "generic",
     title: "Failed pass trace",
     blurb:
       "A transform script targets the wrong op; the trace stops on the failing pass.",
@@ -107,6 +120,7 @@ export const SAMPLES = [
   },
   {
     id: "tiling",
+    scope: "generic",
     title: "Tile a matmul",
     blurb:
       "Transform dialect tiles the matmul 32×32×64 into nested scf.for loops.",
@@ -115,6 +129,7 @@ export const SAMPLES = [
   },
   {
     id: "canonicalize",
+    scope: "generic",
     title: "Canonicalize + CSE",
     blurb:
       "Identity arithmetic folded, a constant computed, dead code removed.",
@@ -123,6 +138,7 @@ export const SAMPLES = [
   },
   {
     id: "rename",
+    scope: "generic",
     title: "Op rename",
     blurb: "One op swapped in a matmul. The smallest possible diff.",
     inline: {
@@ -131,6 +147,66 @@ export const SAMPLES = [
     },
   },
 ];
+
+/**
+ * The scenarios: the kinds of work the samples are grouped under. Picking a
+ * sample sets its scenario's starting layout: the view the canvas opens on and
+ * whether Debug mode is on. Nothing is locked; every view stays one click away.
+ */
+export const SCOPES = [
+  {
+    id: "debug",
+    title: "Source tracing and debugging",
+    short: "Debugging",
+    blurb: "Follow an op from its source line through the passes, and stop on a condition.",
+    view: "graph",
+    debug: true,
+  },
+  {
+    id: "gpu",
+    title: "GPU memory",
+    short: "GPU memory",
+    blurb: "How a kernel is launched, and whether its reads and writes suit the GPU.",
+    view: "gpu",
+    debug: false,
+  },
+  {
+    id: "triton",
+    title: "Triton",
+    short: "Triton",
+    blurb: "Tensor layouts and the coalesce pass in Triton GPU IR.",
+    view: "gpu",
+    debug: false,
+  },
+  {
+    id: "dsp",
+    title: "DSP and scratchpad",
+    short: "DSP",
+    blurb: "Local memory filled by DMA, double-buffered.",
+    view: "local",
+    debug: false,
+  },
+  {
+    id: "generic",
+    title: "Generic MLIR passes",
+    short: "Generic",
+    blurb: "Pass pipelines, diffs and failures with no GPU in them.",
+    view: "graph",
+    debug: false,
+  },
+];
+
+/** The sample a first visit opens on. */
+export const DEFAULT_SAMPLE_ID = "mojo-saxpy";
+
+export const scopeOf = (sample) => SCOPES.find((scope) => scope.id === sample.scope) ?? SCOPES.at(-1);
+
+/** The scenarios that have samples, each with its samples, in list order. */
+export function groupSamples(samples = SAMPLES, scopes = SCOPES) {
+  return scopes
+    .map((scope) => ({ scope, samples: samples.filter((sample) => sample.scope === scope.id) }))
+    .filter((group) => group.samples.length);
+}
 
 /** Every file a sample needs, relative to the samples directory. */
 export function sampleFiles(sample) {
@@ -154,7 +230,7 @@ export async function loadSampleState(sample, fetchText) {
     const state = {
       sourceName,
       trace: await fetchText(sample.trace),
-      traceIndex: -1,
+      traceIndex: sample.startPass ?? -1,
     };
     if (sample.breakpoints)
       state.breakpoints = sample.breakpoints.map((text) => ({ text, on: true }));

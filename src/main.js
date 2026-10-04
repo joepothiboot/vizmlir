@@ -67,7 +67,7 @@ import { createInspector } from "./app/index.js";
 import { createScrubber } from "./app/index.js";
 import { createSelection } from "./app/index.js";
 import { createSourceView } from "./app/index.js";
-import { loadSampleState, SAMPLES } from "./samples.js";
+import { DEFAULT_SAMPLE_ID, groupSamples, loadSampleState, SAMPLES, scopeOf } from "./samples.js";
 import { bindSplitters } from "./app/index.js";
 import {
   kv,
@@ -502,6 +502,8 @@ function loadTrace(text, { keepIndex = false } = {}) {
   opPinned = null;
   bpHits = new Map();
   scrubber.setMarks([]);
+  scrubber.setOpMarks([]);
+  opMarkInfo = new Map();
   if (!trace.events.length) {
     clearTrace();
     setStatus("no IR dumps found in trace", { error: true });
@@ -706,6 +708,8 @@ const scrubber = createScrubber(passScrubber, {
           : "changed ops: none",
       );
     }
+    const life = opMarkInfo.get(index);
+    if (life) lines.push(`selected op: ${OP_MARK_TEXT[life]}`);
     if (match) lines.push(describeMatch(match));
     if (event.failed) lines.push("✗ failed");
     return { title: `${index + 1}. ${describeEvent(event)}`, lines };
@@ -730,6 +734,8 @@ function clearTrace() {
   passScrubber.hidden = true;
   bpHits = new Map();
   scrubber.setMarks([]);
+  scrubber.setOpMarks([]);
+  opMarkInfo = new Map();
   scrubber.setPasses([]);
   passList.replaceChildren();
   passListWrap.hidden = true;
@@ -1473,7 +1479,7 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
     ["Continue to the next breakpoint", ".", () => runToBreakpoint(1)],
     ["Run back to the previous breakpoint", ",", () => runToBreakpoint(-1)],
     ["Op history: follow the selected op", "y", () => showPanel("ophistory")],
-    ["Browse samples…", "", openSamples],
+    ["Choose a scenario…", "", () => openSamples()],
     ["Sessions: save, open, import", "", openSessions],
     ["Download session .json", "", downloadSession],
     ["Export graph as PNG", "", exportPNG],
@@ -1684,6 +1690,7 @@ fileInput.addEventListener("change", async () => {
     applyState(session.state);
     return;
   }
+  setScenario(null);
   sourceName.textContent = file.name;
   sourceName.title = file.name;
   if (isPassTrace(text)) {
@@ -1712,6 +1719,7 @@ async function openSample(sample) {
   samplesDialog.close();
   try {
     applyState(await loadSampleState(sample, fetchSampleText));
+    applyScenario(sample);
     statusEl.textContent = `loaded ${sample.title} · ${statusEl.textContent}`;
     if (sample.benchmarks) openSymbols();
   } catch (error) {
@@ -1719,37 +1727,111 @@ async function openSample(sample) {
   }
 }
 
-sampleList.replaceChildren(
-  ...SAMPLES.map((sample) => {
-    const item = document.createElement("li");
-    const button = document.createElement("button");
-    const title = document.createElement("span");
-    title.className = "title";
-    title.textContent = sample.title;
-    const kind = document.createElement("span");
-    kind.className = "kind";
-    kind.textContent = sample.benchmarks
-      ? "trace + mock benchmarks"
-      : sample.trace
-        ? sample.handwritten
-          ? "pass trace (hand-written)"
-          : "pass trace"
-        : "before / after";
-    const blurb = document.createElement("span");
-    blurb.className = "blurb";
-    blurb.textContent = sample.blurb;
-    button.append(title, kind, blurb);
-    button.addEventListener("click", () => openSample(sample));
-    item.append(button);
-    return item;
-  }),
-);
+// The scenario in force: the kind of work the loaded sample belongs to, shown
+// on the top-bar button and marked in the dialog. Picking a sample sets it and
+// the layout that suits it (the view the canvas opens on, Debug mode); every
+// view stays one click away. Opening your own file clears it.
+const SAMPLE_KEY = "vizmlir.sample";
+const WELCOMED_KEY = "vizmlir.welcomed";
+const scenarioButton = document.getElementById("samples-open");
+const samplesWelcome = document.getElementById("samples-welcome");
+const samplesClose = document.getElementById("samples-close");
+const sampleButtons = new Map(); // sample id -> its button
+const scopeHeads = new Map(); // scenario id -> its heading
+let currentSample = null;
+let scenario = null;
+try {
+  currentSample = SAMPLES.find((s) => s.id === localStorage.getItem(SAMPLE_KEY)) ?? null;
+} catch {}
 
-function openSamples() {
-  samplesDialog.showModal();
+function setScenario(sample) {
+  currentSample = sample;
+  scenario = sample ? scopeOf(sample) : null;
+  scenarioButton.textContent = `Scenario: ${scenario ? scenario.short : "your IR"} ▾`;
+  scenarioButton.title = scenario
+    ? `${scenario.blurb} Click to choose another scenario.`
+    : "Choose a scenario: a sample and the views that suit it";
+  for (const [id, button] of sampleButtons)
+    if (id === sample?.id) button.setAttribute("aria-current", "true");
+    else button.removeAttribute("aria-current");
+  for (const [id, head] of scopeHeads) head.classList.toggle("current", id === scenario?.id);
+  try {
+    if (sample) localStorage.setItem(SAMPLE_KEY, sample.id);
+    else localStorage.removeItem(SAMPLE_KEY);
+  } catch {}
 }
 
-document.getElementById("samples-open").addEventListener("click", openSamples);
+function applyScenario(sample) {
+  const scope = scopeOf(sample);
+  setScenario(sample);
+  setDebug(scope.debug);
+  localWanted = scope.view === "local";
+  setCanvasView(VIEWS[scope.view]?.available() ? scope.view : "graph", { remember: false });
+}
+
+function sampleItem(sample) {
+  const item = document.createElement("li");
+  const button = document.createElement("button");
+  const title = document.createElement("span");
+  title.className = "title";
+  title.textContent = sample.title;
+  const kind = document.createElement("span");
+  kind.className = "kind";
+  kind.textContent = sample.benchmarks
+    ? "trace + mock benchmarks"
+    : sample.trace
+      ? sample.handwritten
+        ? "pass trace (hand-written)"
+        : "pass trace"
+      : "before / after";
+  const blurb = document.createElement("span");
+  blurb.className = "blurb";
+  blurb.textContent = sample.blurb;
+  button.append(title, kind, blurb);
+  button.addEventListener("click", () => openSample(sample));
+  sampleButtons.set(sample.id, button);
+  item.append(button);
+  return item;
+}
+
+sampleList.replaceChildren(
+  ...groupSamples().flatMap(({ scope, samples }) => {
+    const head = document.createElement("li");
+    head.className = "scope-head";
+    const name = document.createElement("strong");
+    name.textContent = scope.title;
+    const note = document.createElement("span");
+    note.textContent = scope.blurb;
+    head.append(name, note);
+    scopeHeads.set(scope.id, head);
+    return [head, ...samples.map(sampleItem)];
+  }),
+);
+setScenario(currentSample);
+
+// `welcome` is the first visit: the dialog shows what the app started on, and
+// closing it (Esc, the button, or a click outside) keeps that.
+function openSamples({ welcome = false } = {}) {
+  samplesWelcome.hidden = !welcome || !currentSample;
+  if (!samplesWelcome.hidden)
+    samplesWelcome.textContent = `Starting with \u201c${currentSample.title}\u201d in the ${scenario.short} scenario. Close this to keep it, or pick another.`;
+  samplesClose.textContent = welcome ? "Keep this one" : "Close";
+  samplesDialog.showModal();
+  const current = sampleButtons.get(currentSample?.id);
+  current?.focus();
+  current?.scrollIntoView?.({ block: "nearest" });
+}
+
+// A click on the backdrop closes the dialog. The target is the dialog itself
+// for the backdrop and for its padding, so the box decides which.
+samplesDialog.addEventListener("click", (e) => {
+  if (e.target !== samplesDialog) return;
+  const box = samplesDialog.getBoundingClientRect();
+  if (e.clientX < box.left || e.clientX > box.right || e.clientY < box.top || e.clientY > box.bottom)
+    samplesDialog.close();
+});
+
+document.getElementById("samples-open").addEventListener("click", () => openSamples());
 
 // ---- Workspace state (autosave, sessions) --------------------------------
 
@@ -3158,9 +3240,53 @@ input.addEventListener("input", () => renderExplain(-1));
 
 const ophNone = document.getElementById("oph-none");
 const ophBody = document.getElementById("oph-body");
+const ophSliderNote = document.getElementById("oph-slider-note");
 const ophTitle = document.getElementById("oph-title");
 const ophSummary = document.getElementById("oph-summary");
 const ophSteps = document.getElementById("oph-steps");
+
+// The selected op's life on the pass slider: a lit tick at each pass that
+// changed it and a faint one where it merely exists, and a line in the slider's
+// hover preview. It needs the history of every pass, so it is worked out a tick
+// after the selection (never in the middle of a parse, which would invalidate
+// the snapshot being drawn) and skipped for very large traces; the History tab
+// still builds it on request.
+const OP_MARK_BUDGET = 4_000_000;
+let opMarkInfo = new Map(); // pass -> change kind, or "present"
+const OP_MARK_TEXT = {
+  present: "unchanged here",
+  created: "made here",
+  renamed: "renamed (lowered) here",
+  inlined: "inlined here",
+  fused: "fused here",
+  removed: "removed here",
+};
+let opMarkTimer = 0;
+
+function refreshOpMarks() {
+  clearTimeout(opMarkTimer);
+  opMarkTimer = setTimeout(applyOpMarks, 0);
+}
+
+function applyOpMarks() {
+  let entries = [];
+  const node = renderer.selected;
+  if (trace && trace.events.length > 1 && (node >= 0 || opPinned)) {
+    const small = trace.events.reduce((n, event) => n + event.ir.length, 0) <= OP_MARK_BUDGET;
+    if (opModel || small) {
+      opModel ??= computeOpModel();
+      entries = node >= 0 ? opHistory(opModel, traceIndex, node) : opPinned;
+    }
+  }
+  opMarkInfo = new Map(entries.map((e) => [e.pass, e.change === "kept" ? "present" : e.change]));
+  scrubber.setOpMarks(
+    [...opMarkInfo].map(([pass, kind]) => ({ pass, kind: kind === "present" ? "life" : "op" })),
+  );
+}
+
+selection.subscribe((_, picked) => {
+  if (picked.includes("node")) refreshOpMarks();
+});
 
 // Every dump parsed once, as what history needs (the engine has one arena, so
 // the graph's snapshot is re-parsed afterwards). Uses the text each pass shows,
@@ -3207,6 +3333,7 @@ function renderOpHistoryPanel() {
     ophNone.textContent = text;
     ophNone.hidden = false;
     ophBody.hidden = true;
+    ophSliderNote.hidden = true;
   };
   if (!trace || trace.events.length < 2)
     return hint("Open a pass trace to follow an op through the passes.");
@@ -3223,6 +3350,7 @@ function renderOpHistoryPanel() {
 
   ophNone.hidden = true;
   ophBody.hidden = false;
+  ophSliderNote.hidden = false;
   const here = entries.find((e) => e.pass === traceIndex) ?? entries[0];
   ophTitle.textContent = here.label;
   const passName = (i) => `#${i + 1} ${describeEvent(trace.events[i])}`;
@@ -3695,14 +3823,17 @@ updateWatchUi();
 // first sample instead (a GPU trace), or the inline one if it cannot be
 // fetched.
 const saved = await kv.get("autosave");
+let firstVisit = false;
 const hasContent = (state) =>
   !!(state?.trace || state?.baseline?.trim() || state?.current?.trim());
 if (hasContent(saved)) {
   applyState(saved);
 } else {
-  const [first] = SAMPLES;
+  const first = SAMPLES.find((sample) => sample.id === DEFAULT_SAMPLE_ID) ?? SAMPLES[0];
   try {
     applyState(await loadSampleState(first, fetchSampleText));
+    applyScenario(first);
+    firstVisit = true;
   } catch {
     applyState(await loadSampleState(SAMPLES.find((sample) => sample.inline)));
   }
@@ -3714,3 +3845,14 @@ try {
 } catch {}
 if (inspectorSaved.open) inspector.open();
 restoreWatch();
+// A new visitor sees the scenario dialog once, over the default it started on.
+if (firstVisit) {
+  try {
+    if (!localStorage.getItem(WELCOMED_KEY)) {
+      localStorage.setItem(WELCOMED_KEY, "1");
+      openSamples({ welcome: true });
+    }
+  } catch {
+    openSamples({ welcome: true });
+  }
+}
