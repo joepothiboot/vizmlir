@@ -47,6 +47,7 @@ import {
   renderLocalView,
 } from "./render/index.js";
 import { parseMemref } from "./trace/index.js";
+import { buildOpModel, opHistory, opRecords } from "./trace/index.js";
 import { buildLocIndex, findSource, linesOf, nodesAt, opCounts } from "./trace/index.js";
 import { explainLine } from "./anatomy.js";
 import {
@@ -199,6 +200,11 @@ let localWanted = true;
 // Created / changed / lowered / removed passes for every symbol in the trace,
 // computed when first shown.
 let traceSymbols = null;
+// How each op of a trace was made and changed, computed when first shown.
+let opModel = null;
+// The history on show after jumping to the pass that removed its op, where
+// nothing is selected; cleared by the next pick.
+let opPinned = null;
 // Imported kernel benchmark results, a baseline and a current run, each
 // { name, text, mock, result } or null; `mock` marks a sample's invented data. Kept with the trace (and its live reloads)
 // and saved with the session.
@@ -486,6 +492,8 @@ function loadTrace(text, { keepIndex = false } = {}) {
   traceCounts = null;
   traceBuffers = null;
   traceSymbols = null;
+  opModel = null;
+  opPinned = null;
   if (!trace.events.length) {
     clearTrace();
     setStatus("no IR dumps found in trace", { error: true });
@@ -698,6 +706,8 @@ function clearTrace() {
   traceCounts = null;
   traceBuffers = null;
   traceSymbols = null;
+  opModel = null;
+  opPinned = null;
   benchmarks = { baseline: null, current: null };
   traceText = "";
   traceNote = "";
@@ -955,13 +965,17 @@ function positionLineMark() {
   lineMark.hidden = false;
 }
 
-// Nodes carry no source locations, so find the n-th line mentioning the op:
-// node order follows source order, so the n-th node with this op name is
-// (nearly always) on the n-th line that names it.
+// The parser records each node's line in the printed IR. The module node has
+// none, so for it (and any engine without the table) fall back to finding the
+// n-th line that mentions the op: node order follows source order, so the n-th
+// node with this op name is (nearly always) on the n-th line that names it.
 function markSourceLine(index) {
   let markedLine = -1;
   const snap = renderer.snapshot;
-  if (snap && index >= 0) {
+  const printed = snap && index >= 0 ? (snap.irLineOf?.(index) ?? 0) : 0;
+  if (printed > 0) {
+    markedLine = printed - 1;
+  } else if (snap && index >= 0) {
     const op = snap.labelOf(index).split(" ")[0];
     let nth = 0;
     for (let i = 0; i < index; i++)
@@ -1163,6 +1177,7 @@ const PANELS = {
   buffers: renderBuffersPanel,
   opcount: renderOpCountPanel,
   symbols: renderSymbolsPanel,
+  ophistory: renderOpHistoryPanel,
 };
 
 const inspector = createInspector(inspectorEl, {
@@ -1251,6 +1266,7 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
     ["Switch baseline / current", "t", toggleTab],
     ["Toggle split sources", "s", toggleSplit],
     ["Toggle debug mode", "d", () => setDebug(!debugOn)],
+    ["Op history: follow the selected op", "y", () => showPanel("ophistory")],
     ["Browse samples…", "", openSamples],
     ["Sessions: save, open, import", "", openSessions],
     ["Download session .json", "", downloadSession],
@@ -1402,6 +1418,7 @@ const WORKSPACE_KEYS = {
   b: () => inspector.toggleTab("buffers"),
   h: () => inspector.toggleTab("symbols"),
   w: () => inspector.toggleTab("line"),
+  y: () => inspector.toggleTab("ophistory"),
   "\\": toggleInspector,
   g: () => gpuModel && setCanvasView(canvasView === "gpu" ? "graph" : "gpu"),
   "[": () => trace && traceIndex > 0 && selectEvent(traceIndex - 1),
@@ -2917,6 +2934,123 @@ input.addEventListener("keyup", (e) => {
 });
 // New text (another pass, a paste) invalidates the explained line.
 input.addEventListener("input", () => renderExplain(-1));
+
+// ---- Op history ------------------------------------------------------------
+
+const ophNone = document.getElementById("oph-none");
+const ophBody = document.getElementById("oph-body");
+const ophTitle = document.getElementById("oph-title");
+const ophSummary = document.getElementById("oph-summary");
+const ophSteps = document.getElementById("oph-steps");
+
+// Every dump parsed once, as what history needs (the engine has one arena, so
+// the graph's snapshot is re-parsed afterwards). Uses the text each pass shows,
+// so node numbers agree with the graph.
+function computeOpModel() {
+  const records = trace.events.map((event) => {
+    const result = parse(event.ir);
+    return result.status === STATUS.OK ? opRecords(result.snapshot) : null;
+  });
+  if (renderedText) {
+    const restored = parse(renderedText).snapshot;
+    renderer.snapshot = restored;
+    diffAfter = restored;
+    renderer.requestDraw();
+  }
+  return buildOpModel(records);
+}
+
+const OP_CHANGE = {
+  created: "created",
+  kept: "unchanged",
+  renamed: "renamed (lowered)",
+  inlined: "inlined from",
+  fused: "fused from",
+  removed: "removed",
+};
+
+// Selects `node` of pass `pass`: the pass loads, then the op is picked in it.
+function goToOp(pass, node) {
+  // Going to where the op is gone keeps its history up instead of clearing it.
+  opPinned = node < 0 ? lastOpEntries : null;
+  if (pass !== traceIndex) selectEvent(pass);
+  if (node >= 0) renderer.select(node, { center: true });
+  else renderOpHistoryPanel();
+}
+let lastOpEntries = null;
+
+function renderOpHistoryPanel() {
+  const hint = (text) => {
+    ophNone.textContent = text;
+    ophNone.hidden = false;
+    ophBody.hidden = true;
+  };
+  if (!trace || trace.events.length < 2)
+    return hint("Open a pass trace to follow an op through the passes.");
+  const node = renderer.selected;
+  if (node >= 0) opPinned = null;
+  if (node < 0 && !opPinned)
+    return hint(
+      "Pick an op in the graph, or a line in the Source tab, to see where it came from and what each pass did to it.",
+    );
+  opModel ??= computeOpModel();
+  const entries = node >= 0 ? opHistory(opModel, traceIndex, node) : opPinned;
+  lastOpEntries = entries;
+  if (!entries.length) return hint("This pass's IR did not parse, so there is no history.");
+
+  ophNone.hidden = true;
+  ophBody.hidden = false;
+  const here = entries.find((e) => e.pass === traceIndex) ?? entries[0];
+  ophTitle.textContent = here.label;
+  const passName = (i) => `#${i + 1} ${describeEvent(trace.events[i])}`;
+  const made = entries[0];
+  const gone = entries.find((e) => e.change === "removed");
+  const lowered = entries.filter((e) => e.change === "renamed");
+  ophSummary.textContent =
+    `${made.change === "created" ? "Made" : made.change === "inlined" ? "Inlined" : "Fused"} at ${passName(made.pass)}` +
+    (lowered.length ? `; lowered at #${lowered.map((e) => e.pass + 1).join(", #")}` : "") +
+    (gone ? `; removed at #${gone.pass + 1}` : "; still there at the last pass") +
+    (here.loc ? ` · loc ${here.loc}` : "");
+
+  ophSteps.replaceChildren(
+    ...entries.map((entry) => {
+      const item = document.createElement("li");
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `oph-step ${entry.change}`;
+      if (entry.pass === traceIndex) button.setAttribute("aria-current", "step");
+      const what = document.createElement("div");
+      what.className = "what";
+      what.textContent = `${passName(entry.pass)} · ${OP_CHANGE[entry.change]}`;
+      const op = document.createElement("div");
+      op.className = "op";
+      op.textContent = entry.label;
+      button.append(what, op);
+      button.addEventListener("click", () => goToOp(entry.pass, entry.node));
+      item.append(button);
+      if (entry.from.length && ["inlined", "fused"].includes(entry.change)) {
+        const parts = document.createElement("ul");
+        parts.className = "oph-from";
+        for (const from of entry.from) {
+          const part = document.createElement("li");
+          const go = document.createElement("button");
+          go.type = "button";
+          go.textContent = `${from.label} (#${from.pass + 1})`;
+          go.addEventListener("click", () => goToOp(from.pass, from.node));
+          part.append(go);
+          parts.append(part);
+        }
+        item.append(parts);
+      }
+      return item;
+    }),
+  );
+}
+
+selection.subscribe((state, picked) => {
+  if (picked.includes("node") && inspector.isOpen && inspector.active === "ophistory")
+    renderOpHistoryPanel();
+});
 
 // ---- Symbol view -----------------------------------------------------------
 

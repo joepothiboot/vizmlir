@@ -42,7 +42,7 @@ describe("inspector", () => {
     expect(root.hidden).toBe(true);
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     const tabs = [...root.querySelectorAll('[role="tab"]')].map((t) => t.textContent.trim());
-    expect(tabs).toEqual(["Changes", "Line", "Timing", "Buffers", "Op count", "Symbols"]);
+    expect(tabs).toEqual(["Changes", "Line", "Timing", "Buffers", "Op count", "Symbols", "History"]);
   });
 
   it("opens on the tab for a selection, and draws it", () => {
@@ -103,7 +103,7 @@ describe("inspector", () => {
     expect(inspector.active).toBe("buffers");
     expect(document.activeElement).toBe(root.querySelector("#tab-buffers"));
     key(document.activeElement, "End");
-    expect(inspector.active).toBe("symbols");
+    expect(inspector.active).toBe("ophistory");
     key(document.activeElement, "ArrowRight");
     expect(inspector.active).toBe("changes");
   });

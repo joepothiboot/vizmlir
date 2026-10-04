@@ -270,6 +270,59 @@
         gap: 8px;
         padding: 6px 20px 10px;
       }
+      .oph-title {
+        margin: 0 0 4px;
+        font: 600 13px/1.4 var(--code);
+        overflow-wrap: anywhere;
+      }
+      .oph-steps {
+        margin: 8px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+      .oph-steps li {
+        margin: 0 0 4px;
+      }
+      .oph-step {
+        display: block;
+        width: 100%;
+        padding: 6px 10px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        text-align: left;
+        white-space: normal;
+      }
+      .oph-step[aria-current="step"] {
+        border-color: var(--accent);
+        box-shadow: inset 3px 0 0 var(--accent);
+      }
+      .oph-step .what {
+        color: var(--dim);
+        font-size: 11px;
+      }
+      .oph-step .op {
+        font: 12px/1.4 var(--code);
+        overflow-wrap: anywhere;
+      }
+      .oph-step.removed .op {
+        color: var(--dim);
+        text-decoration: line-through;
+      }
+      .oph-from {
+        margin: 2px 0 0 12px;
+        padding: 0;
+        list-style: none;
+        font-size: 11px;
+      }
+      .oph-from button {
+        padding: 0 4px;
+        border: 0;
+        background: none;
+        color: var(--accent);
+        text-decoration: underline;
+        font: inherit;
+        cursor: pointer;
+      }
       .debug-bar {
         display: flex;
         flex: 0 0 auto;
@@ -3706,6 +3759,15 @@
                 >
                   Symbols
                 </button>
+                <button
+                  id="tab-ophistory"
+                  role="tab"
+                  data-tab="ophistory"
+                  aria-controls="panel-ophistory"
+                  title="Op history: follow the selected op through the passes (y)"
+                >
+                  History
+                </button>
               </div>
               <button
                 id="inspector-close"
@@ -3922,6 +3984,21 @@
             </section>
 
             <section
+              id="panel-ophistory"
+              class="inspector-panel"
+              role="tabpanel"
+              data-panel="ophistory"
+              aria-labelledby="tab-ophistory"
+              hidden
+            >
+              <p id="oph-none" class="dialog-note"></p>
+              <div id="oph-body" hidden>
+                <h3 id="oph-title" class="oph-title"></h3>
+                <p id="oph-summary" class="dialog-note"></p>
+                <ol id="oph-steps" class="oph-steps"></ol>
+              </div>
+            </section>
+            <section
               id="panel-symbols"
               class="inspector-panel"
               role="tabpanel"
@@ -4128,6 +4205,8 @@
           <dd>Switch baseline / current tab</dd>
           <dt><kbd>s</kbd></dt>
           <dd>Split: show both sources</dd>
+          <dt><kbd>y</kbd></dt>
+          <dd>Op history: follow the selected op through the passes</dd>
           <dt><kbd>d</kbd></dt>
           <dd>Debug mode: split sources and step by change</dd>
           <dt><kbd>shift</kbd> <kbd>[</kbd> <kbd>]</kbd></dt>
