@@ -1,5 +1,5 @@
 export const ABI_MAGIC = 0x4d4c5231;
-export const ABI_VERSION = 3;
+export const ABI_VERSION = 4;
 
 export const HDR = Object.freeze({
   MAGIC: 0,
@@ -15,6 +15,7 @@ export const HDR = Object.freeze({
   STRINGS_LEN: 10,
   PTR_DIAG: 11,
   PTR_BOUNDS: 12,
+  PTR_NODE_LOC: 13,
   LEN: 16,
 });
 
@@ -23,6 +24,9 @@ export const STRIDE = Object.freeze({
   NODE_META: 4,
   EDGE: 2,
   DIAG: 4,
+  // IR line, source line, source column, file (offset, length), loc text
+  // (offset, length), flags.
+  NODE_LOC: 8,
 });
 
 export const STATUS = Object.freeze({
@@ -60,6 +64,14 @@ export const KIND_STYLE = Object.freeze({
 export const DIAG_CODE = Object.freeze({
   1: "undefined SSA value",
   2: "unbalanced brace",
+});
+
+// How the parser classified a node's `loc(...)`; combine with `&`.
+export const LOC_FLAG = Object.freeze({
+  HAS: 1,
+  CALLSITE: 2,
+  FUSED: 4,
+  UNKNOWN: 8,
 });
 
 export const NONE = 0xffffffff;

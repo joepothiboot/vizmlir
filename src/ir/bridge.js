@@ -7,6 +7,7 @@ import {
   STATUS,
   STATUS_TEXT,
   DIAG_CODE,
+  LOC_FLAG,
   NONE,
 } from "./abi.js";
 
@@ -113,6 +114,13 @@ export class MlirEngine {
       nodeCount * STRIDE.NODE_META,
     );
 
+    const locs = this.#views.u32At(
+      h[HDR.PTR_NODE_LOC],
+      nodeCount * STRIDE.NODE_LOC,
+    );
+    const text = (off, len) =>
+      len === 0 ? "" : decoder.decode(strings.subarray(off, off + len));
+
     return {
       status: h[HDR.STATUS],
       nodeCount,
@@ -137,6 +145,26 @@ export class MlirEngine {
         return len === 0
           ? ""
           : decoder.decode(strings.subarray(off, off + len));
+      },
+      // The 1-based line of node `i` in the printed IR, or 0 for the module.
+      irLineOf: (i) => locs[i * STRIDE.NODE_LOC],
+      // Where node `i` came from in the source, read from its `loc(...)`:
+      // { file, line, col, text, callsite, fused, unknown }, or null when it
+      // has none. `file`, `line` and `col` are empty / 0 when the location is
+      // not a plain `"file":line:col` (a fused or unknown one, say).
+      locOf: (i) => {
+        const b = i * STRIDE.NODE_LOC;
+        const flags = locs[b + 7];
+        if (!(flags & LOC_FLAG.HAS)) return null;
+        return {
+          file: text(locs[b + 3], locs[b + 4]),
+          line: locs[b + 1],
+          col: locs[b + 2],
+          text: text(locs[b + 5], locs[b + 6]),
+          callsite: (flags & LOC_FLAG.CALLSITE) !== 0,
+          fused: (flags & LOC_FLAG.FUSED) !== 0,
+          unknown: (flags & LOC_FLAG.UNKNOWN) !== 0,
+        };
       },
       diagnostics: () => {
         const dv = this.#views.u32At(h[HDR.PTR_DIAG], diagCount * STRIDE.DIAG);

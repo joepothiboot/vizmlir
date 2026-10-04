@@ -7,11 +7,20 @@ export function normalizeLabel(label) {
 export function copySnapshot(snapshot) {
   return {
     nodeCount: snapshot.nodeCount,
-    nodes: Array.from({ length: snapshot.nodeCount }, (_, index) => ({
-      kind: snapshot.kindOf(index),
-      parent: snapshot.parentOf(index),
-      label: snapshot.labelOf(index),
-    })),
+    nodes: Array.from({ length: snapshot.nodeCount }, (_, index) => {
+      const node = {
+        kind: snapshot.kindOf(index),
+        parent: snapshot.parentOf(index),
+        label: snapshot.labelOf(index),
+      };
+      // Snapshots from the engine carry source locations; hand-built ones
+      // (tests) may not.
+      if (snapshot.locOf) {
+        node.line = snapshot.irLineOf(index);
+        node.loc = snapshot.locOf(index);
+      }
+      return node;
+    }),
   };
 }
 

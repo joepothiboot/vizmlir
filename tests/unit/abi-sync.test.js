@@ -48,6 +48,7 @@ describe("ABI constants", () => {
     ["STRIDE_", "STRIDE"],
     ["STATUS_", "STATUS"],
     ["KIND_", "KIND"],
+    ["LOC_FLAG_", "LOC_FLAG"],
   ])("%s* matches abi.js %s", (prefix, jsName) => {
     expect({ ...abi[jsName] }).toEqual(rustGroup(prefix));
   });

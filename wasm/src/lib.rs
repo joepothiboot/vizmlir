@@ -4,6 +4,8 @@ pub mod intern;
 
 #[path = "parser/lexer.rs"]
 pub mod lexer;
+#[path = "parser/loc.rs"]
+pub mod loc;
 #[path = "parser/ast.rs"]
 pub mod ast;
 
@@ -19,6 +21,7 @@ struct Layout {
     off_strings: usize,
     off_diag: usize,
     off_bounds: usize,
+    off_loc: usize,
 }
 
 pub struct Engine {
@@ -122,6 +125,7 @@ pub extern "C" fn mlir_parse(len: u32) -> u32 {
     let alloc = |a: &mut Arena, bytes: usize, align: usize| a.alloc(bytes, align);
     let off_xywh = match alloc(&mut e.arena, n * STRIDE_NODE_XYWH * 4, 4) { Some(o) => o, None => return oom(e) };
     let off_meta = match alloc(&mut e.arena, n * STRIDE_NODE_META * 4, 4) { Some(o) => o, None => return oom(e) };
+    let off_loc = match alloc(&mut e.arena, n * STRIDE_NODE_LOC * 4, 4) { Some(o) => o, None => return oom(e) };
     let off_edges = match alloc(&mut e.arena, m * STRIDE_EDGE * 4, 4) { Some(o) => o, None => return oom(e) };
     let off_diag = match alloc(&mut e.arena, d * STRIDE_DIAG * 4, 4) { Some(o) => o, None => return oom(e) };
     let off_bounds = match alloc(&mut e.arena, 4 * 4, 4) { Some(o) => o, None => return oom(e) };
@@ -139,6 +143,24 @@ pub extern "C" fn mlir_parse(len: u32) -> u32 {
             meta[b + 1] = spans[i].0;
             meta[b + 2] = spans[i].1;
             meta[b + 3] = kinds[i].1;
+        }
+    }
+
+    {
+        let rows: Vec<[u32; STRIDE_NODE_LOC]> = e
+            .ast
+            .nodes
+            .iter()
+            .zip(&e.ast.locs)
+            .map(|(nd, lc)| {
+                let (file_off, file_len) = if lc.file == NONE { (0, 0) } else { e.interner.span(lc.file) };
+                let (text_off, text_len) = if lc.text == NONE { (0, 0) } else { e.interner.span(lc.text) };
+                [nd.line, lc.line, lc.col, file_off, file_len, text_off, text_len, lc.flags]
+            })
+            .collect();
+        let lv = e.arena.u32s(off_loc, n * STRIDE_NODE_LOC);
+        for (i, row) in rows.iter().enumerate() {
+            lv[i * STRIDE_NODE_LOC..(i + 1) * STRIDE_NODE_LOC].copy_from_slice(row);
         }
     }
 
@@ -171,7 +193,7 @@ pub extern "C" fn mlir_parse(len: u32) -> u32 {
         }
     }
 
-    e.layout = Some(Layout { off_xywh, off_meta, off_edges, off_strings, off_diag, off_bounds });
+    e.layout = Some(Layout { off_xywh, off_meta, off_edges, off_strings, off_diag, off_bounds, off_loc });
 
     let h = &mut e.header;
     h[HDR_STATUS] = STATUS_OK;
@@ -185,6 +207,7 @@ pub extern "C" fn mlir_parse(len: u32) -> u32 {
     h[HDR_STRINGS_LEN] = pool_len as u32;
     h[HDR_PTR_DIAG] = e.arena.addr(off_diag);
     h[HDR_PTR_BOUNDS] = e.arena.addr(off_bounds);
+    h[HDR_PTR_NODE_LOC] = e.arena.addr(off_loc);
 
     mlir_layout(180.0, 30.0, 70.0, 14.0);
     STATUS_OK
@@ -206,6 +229,7 @@ pub extern "C" fn mlir_layout(node_w: f32, node_h: f32, col_gap: f32, row_gap: f
             off_strings: l.off_strings,
             off_diag: l.off_diag,
             off_bounds: l.off_bounds,
+            off_loc: l.off_loc,
         },
         None => return STATUS_EMPTY,
     };
