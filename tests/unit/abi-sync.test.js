@@ -1,4 +1,4 @@
-// Keeps src/wasm/abi.js in step with wasm/src/abi.rs. The Rust file is the
+// Keeps src/ir/abi.js in step with wasm/src/abi.rs. The Rust file is the
 // source of truth; every constant the bridge reads must match it.
 
 import { readFileSync } from "node:fs";

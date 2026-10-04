@@ -12,7 +12,7 @@
 // tt.broadcast, elementwise arith). Offsets are written as linear expressions
 // over the element coordinates (`i`, `j`, ...) and program ids, so the bytes
 // each lane touches are exact and the verdict can be proven for every warp,
-// every repetition of the layout and every program, like src/gpu-access.js
+// every repetition of the layout and every program, like src/gpu/access.js
 // does for memref code.
 
 import { add, constant, formatAffine, isConstant, scale } from "./affine.js";

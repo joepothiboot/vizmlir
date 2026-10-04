@@ -15,8 +15,8 @@ behaviours to cover, and the cases that matter most.
 | L1  | View / end-to-end | `index.html`, whole app                                             | Playwright           | Chromium + Firefox + WebKit, against `vite preview` |
 | L2  | App controller    | `src/main.js`                                                       | Playwright (via L1)  | browser                                             |
 | L3  | Canvas renderer   | `src/render/canvas-renderer.js`                                     | Vitest + stub canvas | Node (jsdom)                                        |
-| L4  | Pure JS modules   | `src/diff.js`, `src/trace.js`, `src/mlir-highlight.js`              | Vitest               | Node                                                |
-| L5  | Bridge and ABI    | `src/wasm/bridge.js`, `views.js`, `abi.js` + built `mlir_core.wasm` | Vitest               | Node (real WASM)                                    |
+| L4  | Pure JS modules   | `src/ir/diff.js`, `src/trace/trace.js`, `src/app/mlir-highlight.js`              | Vitest               | Node                                                |
+| L5  | Bridge and ABI    | `src/ir/bridge.js`, `views.js`, `abi.js` + built `mlir_core.wasm` | Vitest               | Node (real WASM)                                    |
 | L6  | Rust engine       | `wasm/src/*.rs`                                                     | `cargo test`         | native host                                         |
 
 Priorities: **P0** blocks a release, **P1** should be covered, **P2** nice to have.
@@ -263,7 +263,7 @@ have run first.
 ### 5.1 ABI sync (P0, cheap, catches the most common contributor mistake)
 
 Read `wasm/src/abi.rs` as text, pull out every `pub const`, and compare with
-`src/wasm/abi.js`:
+`src/ir/abi.js`:
 
 - `ABI_MAGIC`, `ABI_VERSION`, all `HDR_*`, `STRIDE_*`, `STATUS_*`, `KIND_*`,
   `DIAG_*`, `NONE`.

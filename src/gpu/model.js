@@ -4,7 +4,7 @@
 // thread). After gpu-module-to-binary{format=isa}, the PTX register and shared
 // memory declarations are read too. Nothing here runs the kernel, so launch
 // sizes that are only known at runtime stay null. Triton GPU IR is read by
-// src/triton.js into the same model.
+// src/gpu/triton.js into the same model.
 
 import { parseMemref } from "../trace/index.js";
 import { affineAliases, buildDefs, findAccesses } from "./access.js";

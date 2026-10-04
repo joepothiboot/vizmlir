@@ -8,4 +8,4 @@ The shortest useful validation is:
 npm run build
 ```
 
-Changes to the Rust ABI require corresponding updates in `src/wasm/abi.js`. Keep generated files out of hand-edited patches.
+Changes to the Rust ABI require corresponding updates in `src/ir/abi.js`. Keep generated files out of hand-edited patches.

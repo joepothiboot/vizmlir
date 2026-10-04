@@ -20,4 +20,4 @@ else
 fi
 
 echo "==> ${OUT_DIR}/${CRATE}.wasm ($(wc -c < "${OUT_DIR}/${CRATE}.wasm") bytes)"
-echo "==> reminder: if abi.rs changed, sync src/wasm/abi.js"
+echo "==> reminder: if abi.rs changed, sync src/ir/abi.js"

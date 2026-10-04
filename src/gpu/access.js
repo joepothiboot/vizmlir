@@ -11,7 +11,7 @@
 // rather than guessed.
 //
 // When the index is affine in the thread ids, block ids and loop counters
-// (src/gpu-affine.js), proveAccess() checks the verdict for every warp of the
+// (src/gpu/affine.js), proveAccess() checks the verdict for every warp of the
 // launch and every iteration, not just the one shown.
 
 import { elementBytes as elementSize } from "../trace/index.js";

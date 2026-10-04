@@ -1,6 +1,6 @@
 // Draws the GPU view: for each kernel launch, the grid of blocks and one block
 // opened into its warps and threads, and the kernel's buffers by memory
-// space. Built from analyzeGpu() (src/gpu.js); plain DOM and SVG, no canvas.
+// space. Built from analyzeGpu() (src/gpu/model.js); plain DOM and SVG, no canvas.
 
 import { parseMemref } from "../trace/index.js";
 import { warpAccess } from "../gpu/index.js";

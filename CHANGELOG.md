@@ -61,6 +61,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Function arguments (`func.func @f(%arg0: T)`), the ids and buffers `gpu.launch` binds in `blocks(..)`, `threads(..)`, `clusters(..)`, `workgroup(..)` and `private(..)`, and the induction variables of `scf.forall` and `scf.parallel` are now definitions. They were reported as undefined SSA values (60 warnings on the transpose sample), and their uses had no edges in the graph.
 - The launch facts write the warp count with a thousands separator ("32,768 warps"), like the rest of the GPU view.
 
+### Internal / Chore
+
+- Group `src/` by domain instead of one flat folder: `ir/` (renamed from `wasm/`, so it no longer looks like the Rust crate in `wasm/src/`), `trace/`, `gpu/`, `render/`, `session/` and `app/`, each with an `index.js` barrel. Moves were done with `git mv` in content-free commits listed in `.git-blame-ignore-revs`; imports were then rewritten mechanically. No behavior, rendering, shortcut or export format changed. `src/main.js` is still the entry. Anything that imports `src/wasm/bridge.js` or `src/diff.js` directly must switch to `src/ir/bridge.js` and `src/ir/diff.js`.
+
 ## [0.3.0] - 2026-09-26
 
 ### Added
