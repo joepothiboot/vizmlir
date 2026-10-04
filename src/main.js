@@ -178,7 +178,7 @@ let canvasPreference = "gpu";
 try {
   if (localStorage.getItem(CANVAS_KEY) === "graph") canvasPreference = "graph";
 } catch {}
-// The scratchpad buffers and DMAs of the rendered IR (src/local-memory.js),
+// The scratchpad buffers and DMAs of the rendered IR (src/gpu/local-memory.js),
 // and whether the Local memory view should open when they appear: yes until
 // the person picks another view, so stepping through a trace keeps it.
 let localModel = null;

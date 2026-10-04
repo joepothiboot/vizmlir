@@ -17,8 +17,8 @@ Source is grouped by domain, not by file type. Each folder under `src/` has an `
 | `src/main.js` | The entry (`index.html` loads it) and the wiring of the UI and application state. | Logic another module could own. |
 | `src/ir/` | The JavaScript side of the Rust module: ABI constants (`abi.js`), the `MlirEngine` bridge, memory views, and snapshot copy and diff (`diff.js`). | Anything that reads IR text; the Rust source (`wasm/src/`). |
 | `src/trace/` | Pass-trace parsing, timing, op counts, buffer liveness, symbol history and line diffs: analyses of IR text and pass events. | DOM code, rendering, `wasm` bindings. |
-| `src/gpu/` | The GPU model, memory-access verdicts, the affine proof engine, kernel flow and Triton layouts. DOM-free analysis. | Drawing code; it belongs in `render/`. |
-| `src/render/` | Everything drawn: the graph canvas, the GPU view and the 3D scene. | Analysis; put it in `gpu/` or `trace/` and import it. |
+| `src/gpu/` | The GPU model, scratchpad (local memory) analysis, memory-access verdicts, the affine proof engine, kernel flow and Triton layouts. DOM-free analysis. | Drawing code; it belongs in `render/`. |
+| `src/render/` | Everything drawn: the graph canvas, the GPU view, the Local memory view and the 3D scene. | Analysis; put it in `gpu/` or `trace/` and import it. |
 | `src/session/` | Autosave and named sessions, `.json` share files, Markdown/JSON/patch export, and live-reload file watching. | Analysis or drawing. |
 | `src/app/` | The shell: command palette, inspector drawer, pass slider, splitters, the guide, editor highlighting and the buffers tab view. | Domain analysis. |
 | `src/anatomy.js`, `bench.js`, `samples.js` | Line explainer, benchmark import and the built-in sample list. They stay at the root until they have company: a folder needs three files. | |

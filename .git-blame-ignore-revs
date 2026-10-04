@@ -12,3 +12,5 @@ cb01e1fe6270f431bf41c44fa11505f0fdc8b028
 09746d4a4d773ce522b9b8726474f676491cd7d9
 # Move palette, inspector, scrubber, splitters, guide, mlir-highlight and buffers-view into src/app (move only)
 772278e0176fde1dca3b4c86626e896b5a7b07b1
+# Move local-memory into src/gpu and local-view into src/render (move only)
+c3972e8ba206ecb0664fcb3c9012c0c9752752cb

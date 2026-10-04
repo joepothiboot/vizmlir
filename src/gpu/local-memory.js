@@ -10,7 +10,7 @@
 // before which compute, and into which slot. It does not know how long a DMA
 // or a compute takes, so it never claims that they overlap in time.
 //
-// Lines are 0-based line numbers in `ir`, as in src/buffers.js.
+// Lines are 0-based line numbers in `ir`, as in src/trace/buffers.js.
 
 import { analyzeBuffers, elementBytes, parseMemref } from "../trace/index.js";
 import { memorySpace } from "./model.js";
@@ -292,7 +292,7 @@ function budgetFor(ir, target) {
  *   slots, slotBytes, source, lowered }`, label "A", "B", ... in source order;
  * - `tags`: the DMA tag buffers `{ name, line, slots }`;
  * - `peakLocalBytes`: the most local-buffer bytes live at once (from the
- *   lifetimes of src/buffers.js);
+ *   lifetimes of src/trace/buffers.js);
  * - `transfers`: `{ line, op, role, src, dst, buffer, slot, tag, elements,
  *   bytes, strided }`, role "prologue" (before the loop), "prefetch" (the
  *   next iteration's tile, under a guard), "load" (this iteration's tile,
