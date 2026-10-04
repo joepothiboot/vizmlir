@@ -5,8 +5,8 @@ import {
   diffToMarkdown,
   diffToPatch,
   slug,
-} from "../../src/export.js";
-import { sessionFromFile, sessionToFile } from "../../src/storage.js";
+} from "../../src/session/export.js";
+import { sessionFromFile, sessionToFile } from "../../src/session/storage.js";
 
 const rows = [
   { type: "added", after: { label: "memref.alloc", parent: 1 } },

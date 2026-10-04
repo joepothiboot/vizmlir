@@ -11,7 +11,7 @@ Use this workflow for changes that cross the JavaScript frontend and the Rust WA
 
 1. Read `CONTRIBUTING.md`. To find where a feature lives, start from `references/feature-map.md`, then inspect the nearest implementation and call sites.
 2. Make the smallest change that preserves the existing browser-only design.
-3. If the exported Rust ABI changes, update `src/wasm/abi.js` in the same change.
+3. If the exported Rust ABI changes, update `src/ir/abi.js` in the same change.
 4. Run `npm run build`.
 5. For parser or rendering changes, exercise a representative valid and invalid MLIR input in the app.
 6. If you added, moved, or removed a feature, a module, or a `main.js` section banner, update `references/feature-map.md` in the same change.
@@ -25,6 +25,8 @@ Use this workflow for changes that cross the JavaScript frontend and the Rust WA
 ## Boundaries
 
 - `wasm/src/` owns parsing and the Rust-side ABI.
-- `src/wasm/` owns JavaScript bindings and views.
-- `src/render/` owns graph drawing.
+- `src/ir/` owns JavaScript bindings and views.
+- `src/render/` owns drawing: the graph canvas, the GPU view and the 3D scene.
+- `src/gpu/` and `src/trace/` own DOM-free analysis; they must not import `render/` or `app/`.
+- Cross-folder imports go through each folder's `index.js` barrel; see "Project layout" in `CONTRIBUTING.md`.
 - `public/mlir_core.wasm` is generated; do not edit it directly.

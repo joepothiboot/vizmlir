@@ -5,8 +5,8 @@ import {
   hasLocalMemory,
   localLineInfo,
   localTargetOf,
-} from "../../src/local-memory.js";
-import { parsePassTrace } from "../../src/trace.js";
+} from "../../src/gpu/local-memory.js";
+import { parsePassTrace } from "../../src/trace/trace.js";
 
 // Real nanodsp-opt output; see samples/generate.sh.
 const events = parsePassTrace(

@@ -1,5 +1,5 @@
 // The "Local memory" view: for IR that stages tiles in a software-managed
-// local memory (see src/local-memory.js), a memory map of the budget with
+// local memory (see src/gpu/local-memory.js), a memory map of the budget with
 // each buffer's slots as blocks, and a timeline of the first loop trips with
 // a DMA lane, the wait points and a compute lane. Every block and event is a
 // button that picks its IR line.
@@ -7,7 +7,7 @@
 // The timeline is the order the IR issues things in, not measured time: the
 // boxes have equal widths because the IR says nothing about durations.
 
-import { formatBytes } from "./timing.js";
+import { formatBytes } from "../trace/index.js";
 
 const ROLE_TEXT = {
   prologue: "loaded before the loop",

@@ -1,50 +1,50 @@
-import { MlirEngine } from "./wasm/bridge.js";
-import { CanvasRenderer } from "./render/canvas-renderer.js";
-import { ABI_VERSION, STATUS } from "./wasm/abi.js";
-import { copySnapshot, diffSnapshots } from "./diff.js";
+import { MlirEngine } from "./ir/index.js";
+import { CanvasRenderer } from "./render/index.js";
+import { ABI_VERSION, STATUS } from "./ir/index.js";
+import { copySnapshot, diffSnapshots } from "./ir/index.js";
 import {
   countOps,
   opCountsToCSV,
   opCountTable,
   totalOps,
-} from "./opcount.js";
+} from "./trace/index.js";
 import {
   analyzeBuffers,
   bufferTotals,
   buffersToJSON,
   compareBuffers,
-} from "./buffers.js";
+} from "./trace/index.js";
 import {
   renderFunctions,
   renderPasses,
   renderSummary,
   signedBytes,
-} from "./buffers-view.js";
+} from "./app/index.js";
 import {
   findSymbolNode,
   historyToJSON,
   symbolHistory,
   symbolTimeline,
-} from "./provenance.js";
-import { diffStats, lineDiff } from "./linediff.js";
-import { analyzeGpu, memorySpace } from "./gpu.js";
+} from "./trace/index.js";
+import { diffStats, lineDiff } from "./trace/index.js";
+import { analyzeGpu, memorySpace } from "./gpu/index.js";
 import {
   focusGpuLine,
   renderGpuPath,
   renderGpuView,
   verdictSummary,
-} from "./gpu-view.js";
-import { warpAccess } from "./gpu-access.js";
+} from "./render/index.js";
+import { warpAccess } from "./gpu/index.js";
 import {
   analyzeLocalMemory,
   hasLocalMemory,
   localLineInfo,
   localTargetOf,
-} from "./local-memory.js";
-import { focusLocalLine, localExplain, renderLocalView } from "./local-view.js";
-import { parseMemref } from "./buffers.js";
+} from "./gpu/index.js";
+import { focusLocalLine, localExplain, renderLocalView } from "./render/index.js";
+import { parseMemref } from "./trace/index.js";
 import { explainLine } from "./anatomy.js";
-import { bindGuide } from "./guide.js";
+import { bindGuide } from "./app/index.js";
 import {
   changedBeyond,
   compareBenchmarks,
@@ -55,14 +55,14 @@ import {
   parseBenchmarks,
   symbolTimes,
 } from "./bench.js";
-import { bindHighlighting, highlightMlir } from "./mlir-highlight.js";
-import { CommandPalette } from "./palette.js";
-import { createInspector } from "./inspector.js";
-import { createScrubber } from "./scrubber.js";
+import { bindHighlighting, highlightMlir } from "./app/index.js";
+import { CommandPalette } from "./app/index.js";
+import { createInspector } from "./app/index.js";
+import { createScrubber } from "./app/index.js";
 import { loadSampleState, RENAME_SAMPLE, SAMPLES } from "./samples.js";
-import { bindSplitters } from "./splitters.js";
-import { kv, sessionFromFile, sessions, sessionToFile } from "./storage.js";
-import { canWatchFiles, FileWatcher } from "./watch.js";
+import { bindSplitters } from "./app/index.js";
+import { kv, sessionFromFile, sessions, sessionToFile } from "./session/index.js";
+import { canWatchFiles, FileWatcher } from "./session/index.js";
 import {
   diffRecords,
   diffToJSON,
@@ -70,14 +70,14 @@ import {
   diffToPatch,
   download,
   slug,
-} from "./export.js";
+} from "./session/index.js";
 import {
   baselineFor,
   describeEvent,
   isPassTrace,
   moduleStateAt,
   parsePassTrace,
-} from "./trace.js";
+} from "./trace/index.js";
 import {
   byteLength,
   extractReports,
@@ -85,7 +85,7 @@ import {
   formatSeconds,
   matchTiming,
   timingToJSON,
-} from "./timing.js";
+} from "./trace/index.js";
 
 const DIFF_GLYPH = { added: "+", removed: "−", changed: "~" };
 
@@ -178,7 +178,7 @@ let canvasPreference = "gpu";
 try {
   if (localStorage.getItem(CANVAS_KEY) === "graph") canvasPreference = "graph";
 } catch {}
-// The scratchpad buffers and DMAs of the rendered IR (src/local-memory.js),
+// The scratchpad buffers and DMAs of the rendered IR (src/gpu/local-memory.js),
 // and whether the Local memory view should open when they appear: yes until
 // the person picks another view, so stepping through a trace keeps it.
 let localModel = null;

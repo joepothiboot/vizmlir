@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- A **Local memory** view for DSP-style scratchpads. When the IR at the current pass has buffers in nano-dsp's `#dsp.local` memory space, `memref.dma_start` / `memref.dma_wait`, or the `linalg.copy` they are lowered to, a new tab of the visualization pane draws the local budget as a bar of buffer slots (A slot 0/1, B slot 0/1) and the cache loop's first trips as DMA, wait and compute lanes, marking prologue loads, prefetches of the next tile, and waits. Each block and event picks its IR line and the inspector's Line tab explains it. The budget is read from the IR when it carries one, otherwise from nano-dsp's TargetModel and labelled as assumed, and the view states that it shows the order the IR expresses, not timing. The analysis (`src/local-memory.js`) runs per pass: nothing before `nanodsp-promote-local`, DMAs after it, copies after `nanodsp-lower-local`.
+- A **Local memory** view for DSP-style scratchpads. When the IR at the current pass has buffers in nano-dsp's `#dsp.local` memory space, `memref.dma_start` / `memref.dma_wait`, or the `linalg.copy` they are lowered to, a new tab of the visualization pane draws the local budget as a bar of buffer slots (A slot 0/1, B slot 0/1) and the cache loop's first trips as DMA, wait and compute lanes, marking prologue loads, prefetches of the next tile, and waits. Each block and event picks its IR line and the inspector's Line tab explains it. The budget is read from the IR when it carries one, otherwise from nano-dsp's TargetModel and labelled as assumed, and the view states that it shows the order the IR expresses, not timing. The analysis (`src/gpu/local-memory.js`) runs per pass: nothing before `nanodsp-promote-local`, DMAs after it, copies after `nanodsp-lower-local`.
 - A "DSP scratchpad: double-buffered DMA" sample, real `nanodsp-opt` output from nano-dsp-mlir 8c23df8 (`NANODSP_OPT=... samples/generate.sh`; the version is in `public/samples/NANODSP_VERSION`).
 - A guide lesson, "Scratchpads and DMA (beyond GPUs)".
 
@@ -66,6 +66,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Stop treating a region op's trailing types (`} -> tensor<..>`, `} : ..`) as a separate `->` op.
 - Function arguments (`func.func @f(%arg0: T)`), the ids and buffers `gpu.launch` binds in `blocks(..)`, `threads(..)`, `clusters(..)`, `workgroup(..)` and `private(..)`, and the induction variables of `scf.forall` and `scf.parallel` are now definitions. They were reported as undefined SSA values (60 warnings on the transpose sample), and their uses had no edges in the graph.
 - The launch facts write the warp count with a thousands separator ("32,768 warps"), like the rest of the GPU view.
+
+### Internal / Chore
+
+- Group `src/` by domain instead of one flat folder: `ir/` (renamed from `wasm/`, so it no longer looks like the Rust crate in `wasm/src/`), `trace/`, `gpu/`, `render/`, `session/` and `app/`, each with an `index.js` barrel. Moves were done with `git mv` in content-free commits listed in `.git-blame-ignore-revs`; imports were then rewritten mechanically. No behavior, rendering, shortcut or export format changed. `src/main.js` is still the entry. Anything that imports `src/ir/bridge.js` or `src/ir/diff.js` directly must switch to `src/ir/bridge.js` and `src/ir/diff.js`.
 
 ## [0.3.0] - 2026-09-26
 

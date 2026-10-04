@@ -1,7 +1,7 @@
 // Counts operations by name so a pass's effect on the op mix (and regressions
 // such as a canonicalization that stopped firing) can be read at a glance.
 
-import { KIND } from "./wasm/abi.js";
+import { KIND } from "../ir/index.js";
 
 // `func.func @f` → `func.func`; `arith.addf (2×)` → `arith.addf`.
 export function opName(label) {

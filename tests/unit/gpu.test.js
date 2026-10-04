@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { analyzeGpu, memorySpace, ptxEntries } from "../../src/gpu.js";
-import { parsePassTrace } from "../../src/trace.js";
+import { analyzeGpu, memorySpace, ptxEntries } from "../../src/gpu/model.js";
+import { parsePassTrace } from "../../src/trace/trace.js";
 
 const sample = (name) =>
   parsePassTrace(

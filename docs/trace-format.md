@@ -2,7 +2,7 @@
 
 VizMLIR reads the plain-text log that an MLIR driver writes when it is asked
 to print IR between passes. It has no format of its own; this document
-describes what the parser (`src/trace.js`, `src/timing.js`) accepts and the
+describes what the parser (`src/trace/trace.js`, `src/trace/timing.js`) accepts and the
 structure it builds, so other tools can produce or consume the same thing.
 
 ## Producing a trace

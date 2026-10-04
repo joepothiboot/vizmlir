@@ -1,9 +1,9 @@
 // How a kernel's IR reaches the GPU: the values each load and store uses to
 // pick its element, traced back through the SSA definitions to the thread
 // and block ids they start from. Built from a kernel of analyzeGpu()
-// (src/gpu.js), whose `defs` and `accesses` carry source lines. Pure data;
-// src/gpu-3d.js draws it as nodes and edges over the launch, and
-// src/gpu-view.js lists it as steps.
+// (src/gpu/model.js), whose `defs` and `accesses` carry source lines. Pure data;
+// src/render/gpu-3d.js draws it as nodes and edges over the launch, and
+// src/render/gpu-view.js lists it as steps.
 
 const MAX_NODES = 60;
 const AXES = ["x", "y", "z"];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterItems, fuzzyScore } from "../../src/palette.js";
+import { filterItems, fuzzyScore } from "../../src/app/palette.js";
 
 const item = (text, hint = "") => ({ group: "op", text, hint, run() {} });
 

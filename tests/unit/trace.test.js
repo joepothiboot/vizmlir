@@ -8,7 +8,7 @@ import {
   moduleStateAt,
   parseHeader,
   parsePassTrace,
-} from "../../src/trace.js";
+} from "../../src/trace/trace.js";
 
 // Traces in tests/fixtures/traces are real mlir-opt output; see generate.sh.
 function fixture(name) {

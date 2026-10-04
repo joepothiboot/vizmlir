@@ -2,15 +2,15 @@
 import { readFileSync } from "node:fs";
 import { URL as FileURL } from "node:url";
 import { describe, expect, it, vi } from "vitest";
-import { analyzeGpu } from "../../src/gpu.js";
+import { analyzeGpu } from "../../src/gpu/model.js";
 import {
   acrossPasses,
   passSummary,
   renderGpuPath,
   renderGpuView,
   verdictSummary,
-} from "../../src/gpu-view.js";
-import { parsePassTrace } from "../../src/trace.js";
+} from "../../src/render/gpu-view.js";
+import { parsePassTrace } from "../../src/trace/trace.js";
 
 const events = (name) =>
   parsePassTrace(
