@@ -10,7 +10,7 @@ Thanks for taking the time to improve VizMLIR. Small, focused changes are welcom
 
 ## 🗺️ Project layout
 
-Source is grouped by domain, not by file type. Each folder under `src/` has an `index.js` barrel that lists what other folders may import.
+Source is grouped by domain, not by file type. Each folder under `src/` has an `index.js` barrel that lists what other folders may import, and a README with the details: [`ir`](src/ir/README.md), [`trace`](src/trace/README.md), [`gpu`](src/gpu/README.md), [`render`](src/render/README.md), [`session`](src/session/README.md) and [`app`](src/app/README.md).
 
 | Path | Belongs here | Does not belong here |
 | --- | --- | --- |
