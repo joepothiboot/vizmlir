@@ -7,7 +7,7 @@
 // The timeline is the order the IR issues things in, not measured time: the
 // boxes have equal widths because the IR says nothing about durations.
 
-import { formatBytes } from "./trace/index.js";
+import { formatBytes } from "../trace/index.js";
 
 const ROLE_TEXT = {
   prologue: "loaded before the loop",

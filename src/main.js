@@ -40,8 +40,8 @@ import {
   hasLocalMemory,
   localLineInfo,
   localTargetOf,
-} from "./local-memory.js";
-import { focusLocalLine, localExplain, renderLocalView } from "./local-view.js";
+} from "./gpu/index.js";
+import { focusLocalLine, localExplain, renderLocalView } from "./render/index.js";
 import { parseMemref } from "./trace/index.js";
 import { explainLine } from "./anatomy.js";
 import { bindGuide } from "./app/index.js";

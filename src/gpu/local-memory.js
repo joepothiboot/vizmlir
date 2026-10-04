@@ -12,8 +12,8 @@
 //
 // Lines are 0-based line numbers in `ir`, as in src/buffers.js.
 
-import { analyzeBuffers, elementBytes, parseMemref } from "./trace/index.js";
-import { memorySpace } from "./gpu/index.js";
+import { analyzeBuffers, elementBytes, parseMemref } from "../trace/index.js";
+import { memorySpace } from "./model.js";
 
 /**
  * Local memory per target, from nano-dsp-mlir's TargetModel
