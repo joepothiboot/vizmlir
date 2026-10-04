@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- A **Local memory** view for DSP-style scratchpads. When the IR at the current pass has buffers in nano-dsp's `#dsp.local` memory space, `memref.dma_start` / `memref.dma_wait`, or the `linalg.copy` they are lowered to, a new tab of the visualization pane draws the local budget as a bar of buffer slots (A slot 0/1, B slot 0/1) and the cache loop's first trips as DMA, wait and compute lanes, marking prologue loads, prefetches of the next tile, and waits. Each block and event picks its IR line and the inspector's Line tab explains it. The budget is read from the IR when it carries one, otherwise from nano-dsp's TargetModel and labelled as assumed, and the view states that it shows the order the IR expresses, not timing. The analysis (`src/local-memory.js`) runs per pass: nothing before `nanodsp-promote-local`, DMAs after it, copies after `nanodsp-lower-local`.
+- A "DSP scratchpad: double-buffered DMA" sample, real `nanodsp-opt` output from nano-dsp-mlir 8c23df8 (`NANODSP_OPT=... samples/generate.sh`; the version is in `public/samples/NANODSP_VERSION`).
+- A guide lesson, "Scratchpads and DMA (beyond GPUs)".
+
 ### Changed
 
 - The workspace is the code, one wide picture, and an inspector drawer, instead of three columns that showed each verdict twice and dialogs that covered what you compare against. Graph and GPU are tabs of the picture, and over the GPU view one line keeps the picked access's verdict. The inspector holds every detail as a tab: Changes, Line ("What's this line?" with the GPU answer card and the GPU path), Timing, Buffers, Op count and Symbols, which redraw as you change passes. Picking a line, an op or an access opens it on the right tab; `esc` closes it and returns focus to what you picked, and the Inspector button or `\` reopens it. It takes a resizable column on wide screens, overlays the picture below 1100px, and is a bottom sheet on phones. `w`, `p`, `b`, `o` and `h` open their tabs, and the palette's actions point at them. The palette, samples, sessions, help and symbol view stay dialogs.

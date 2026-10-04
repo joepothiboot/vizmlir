@@ -1,0 +1,642 @@
+// -----// IR Dump After ConvertDSPToLinalg: convert-dsp-to-linalg //----- //
+#map = affine_map<(d0, d1, d2) -> (d0, d2)>
+#map1 = affine_map<(d0, d1, d2) -> (d2, d1)>
+#map2 = affine_map<(d0, d1, d2) -> (d0, d1)>
+module {
+  func.func @matmul_local(%arg0: tensor<128x256xf32>, %arg1: tensor<256x128xf32>) -> tensor<128x128xf32> attributes {llvm.emit_c_interface} {
+    %0 = tensor.empty() : tensor<128x128xf32>
+    %cst = arith.constant 0.000000e+00 : f32
+    %1 = linalg.fill ins(%cst : f32) outs(%0 : tensor<128x128xf32>) -> tensor<128x128xf32>
+    %2 = linalg.generic {indexing_maps = [#map, #map1, #map2], iterator_types = ["parallel", "parallel", "reduction"]} ins(%arg0, %arg1 : tensor<128x256xf32>, tensor<256x128xf32>) outs(%1 : tensor<128x128xf32>) {
+    ^bb0(%in: f32, %in_0: f32, %out: f32):
+      %3 = arith.mulf %in, %in_0 : f32
+      %4 = arith.addf %out, %3 : f32
+      linalg.yield %4 : f32
+    } -> tensor<128x128xf32>
+    return %2 : tensor<128x128xf32>
+  }
+}
+
+
+// -----// IR Dump After NanoDSPOptimize: nanodsp-optimize{schedule-file= target=hexagon-hvx128} //----- //
+#map = affine_map<(d0) -> (d0, 0)>
+#map1 = affine_map<(d0) -> (0, d0)>
+module {
+  func.func @matmul_local(%arg0: tensor<128x256xf32>, %arg1: tensor<256x128xf32>) -> tensor<128x128xf32> attributes {llvm.emit_c_interface} {
+    %0 = ub.poison : f32
+    %c1 = arith.constant 1 : index
+    %c4 = arith.constant 4 : index
+    %c128 = arith.constant 128 : index
+    %c256 = arith.constant 256 : index
+    %c0 = arith.constant 0 : index
+    %cst = arith.constant 0.000000e+00 : f32
+    %1 = tensor.empty() : tensor<128x128xf32>
+    %2 = linalg.fill ins(%cst : f32) outs(%1 : tensor<128x128xf32>) -> tensor<128x128xf32>
+    %3 = scf.for %arg2 = %c0 to %c256 step %c128 iter_args(%arg3 = %2) -> (tensor<128x128xf32>) {
+      %extracted_slice = tensor.extract_slice %arg0[0, %arg2] [128, 128] [1, 1] : tensor<128x256xf32> to tensor<128x128xf32>
+      %extracted_slice_0 = tensor.extract_slice %arg1[%arg2, 0] [128, 128] [1, 1] : tensor<256x128xf32> to tensor<128x128xf32>
+      %4 = scf.for %arg4 = %c0 to %c128 step %c4 iter_args(%arg5 = %arg3) -> (tensor<128x128xf32>) {
+        %5 = scf.for %arg6 = %c0 to %c128 step %c1 iter_args(%arg7 = %arg5) -> (tensor<128x128xf32>) {
+          %extracted_slice_1 = tensor.extract_slice %extracted_slice[%arg4, %arg6] [4, 1] [1, 1] : tensor<128x128xf32> to tensor<4x1xf32>
+          %extracted_slice_2 = tensor.extract_slice %extracted_slice_0[%arg6, 0] [1, 128] [1, 1] : tensor<128x128xf32> to tensor<1x128xf32>
+          %extracted_slice_3 = tensor.extract_slice %arg7[%arg4, 0] [4, 128] [1, 1] : tensor<128x128xf32> to tensor<4x128xf32>
+          %extracted_slice_4 = tensor.extract_slice %extracted_slice_1[0, 0] [4, 1] [1, 1] : tensor<4x1xf32> to tensor<4xf32>
+          %extracted_slice_5 = tensor.extract_slice %extracted_slice_2[0, 0] [1, 128] [1, 1] : tensor<1x128xf32> to tensor<128xf32>
+          %6 = vector.transfer_read %extracted_slice_4[%c0], %0 {in_bounds = [true, true], permutation_map = #map} : tensor<4xf32>, vector<4x128xf32>
+          %7 = vector.transfer_read %extracted_slice_5[%c0], %0 {in_bounds = [true, true], permutation_map = #map1} : tensor<128xf32>, vector<4x128xf32>
+          %8 = vector.transfer_read %extracted_slice_3[%c0, %c0], %0 {in_bounds = [true, true]} : tensor<4x128xf32>, vector<4x128xf32>
+          %9 = arith.mulf %6, %7 : vector<4x128xf32>
+          %10 = arith.addf %8, %9 : vector<4x128xf32>
+          %11 = vector.transfer_write %10, %extracted_slice_3[%c0, %c0] {in_bounds = [true, true]} : vector<4x128xf32>, tensor<4x128xf32>
+          %inserted_slice = tensor.insert_slice %11 into %arg7[%arg4, 0] [4, 128] [1, 1] : tensor<4x128xf32> into tensor<128x128xf32>
+          scf.yield %inserted_slice : tensor<128x128xf32>
+        }
+        scf.yield %5 : tensor<128x128xf32>
+      }
+      scf.yield %4 : tensor<128x128xf32>
+    } {nanodsp.cache_loop}
+    return %3 : tensor<128x128xf32>
+  }
+}
+
+
+// -----// IR Dump After OneShotBufferizePass: one-shot-bufferize{allow-return-allocs-from-loops=false allow-unknown-ops=false analysis-fuzzer-seed=0 analysis-heuristic=bottom-up buffer-alignment=64 bufferize-function-boundaries=true check-parallel-regions=true copy-before-write=false  dump-alias-sets=false function-boundary-type-conversion=identity-layout-map must-infer-memory-space=false  print-conflicts=false test-analysis-only=false unknown-type-conversion=fully-dynamic-layout-map use-encoding-for-memory-space=false} //----- //
+#map = affine_map<(d0) -> (d0, 0)>
+#map1 = affine_map<(d0) -> (0, d0)>
+module {
+  func.func @matmul_local(%arg0: memref<128x256xf32>, %arg1: memref<256x128xf32>) -> memref<128x128xf32> attributes {llvm.emit_c_interface} {
+    %0 = ub.poison : f32
+    %c1 = arith.constant 1 : index
+    %c4 = arith.constant 4 : index
+    %c128 = arith.constant 128 : index
+    %c256 = arith.constant 256 : index
+    %c0 = arith.constant 0 : index
+    %cst = arith.constant 0.000000e+00 : f32
+    %alloc = memref.alloc() {alignment = 64 : i64} : memref<128x128xf32>
+    linalg.fill ins(%cst : f32) outs(%alloc : memref<128x128xf32>)
+    %1 = scf.for %arg2 = %c0 to %c256 step %c128 iter_args(%arg3 = %alloc) -> (memref<128x128xf32>) {
+      %subview = memref.subview %arg0[0, %arg2] [128, 128] [1, 1] : memref<128x256xf32> to memref<128x128xf32, strided<[256, 1], offset: ?>>
+      %subview_0 = memref.subview %arg1[%arg2, 0] [128, 128] [1, 1] : memref<256x128xf32> to memref<128x128xf32, strided<[128, 1], offset: ?>>
+      %2 = scf.for %arg4 = %c0 to %c128 step %c4 iter_args(%arg5 = %arg3) -> (memref<128x128xf32>) {
+        %3 = scf.for %arg6 = %c0 to %c128 step %c1 iter_args(%arg7 = %arg5) -> (memref<128x128xf32>) {
+          %subview_1 = memref.subview %subview[%arg4, %arg6] [4, 1] [1, 1] : memref<128x128xf32, strided<[256, 1], offset: ?>> to memref<4x1xf32, strided<[256, 1], offset: ?>>
+          %subview_2 = memref.subview %subview_0[%arg6, 0] [1, 128] [1, 1] : memref<128x128xf32, strided<[128, 1], offset: ?>> to memref<1x128xf32, strided<[128, 1], offset: ?>>
+          %subview_3 = memref.subview %arg7[%arg4, 0] [4, 128] [1, 1] : memref<128x128xf32> to memref<4x128xf32, strided<[128, 1], offset: ?>>
+          %subview_4 = memref.subview %subview_1[0, 0] [4, 1] [1, 1] : memref<4x1xf32, strided<[256, 1], offset: ?>> to memref<4xf32, strided<[256], offset: ?>>
+          %subview_5 = memref.subview %subview_2[0, 0] [1, 128] [1, 1] : memref<1x128xf32, strided<[128, 1], offset: ?>> to memref<128xf32, strided<[1], offset: ?>>
+          %4 = vector.transfer_read %subview_4[%c0], %0 {in_bounds = [true, true], permutation_map = #map} : memref<4xf32, strided<[256], offset: ?>>, vector<4x128xf32>
+          %5 = vector.transfer_read %subview_5[%c0], %0 {in_bounds = [true, true], permutation_map = #map1} : memref<128xf32, strided<[1], offset: ?>>, vector<4x128xf32>
+          %6 = vector.transfer_read %subview_3[%c0, %c0], %0 {in_bounds = [true, true]} : memref<4x128xf32, strided<[128, 1], offset: ?>>, vector<4x128xf32>
+          %7 = arith.mulf %4, %5 : vector<4x128xf32>
+          %8 = arith.addf %6, %7 : vector<4x128xf32>
+          vector.transfer_write %8, %subview_3[%c0, %c0] {in_bounds = [true, true]} : vector<4x128xf32>, memref<4x128xf32, strided<[128, 1], offset: ?>>
+          %subview_6 = memref.subview %arg7[%arg4, 0] [4, 128] [1, 1] : memref<128x128xf32> to memref<4x128xf32, strided<[128, 1], offset: ?>>
+          memref.copy %subview_3, %subview_6 : memref<4x128xf32, strided<[128, 1], offset: ?>> to memref<4x128xf32, strided<[128, 1], offset: ?>>
+          scf.yield %arg7 : memref<128x128xf32>
+        }
+        scf.yield %3 : memref<128x128xf32>
+      }
+      scf.yield %2 : memref<128x128xf32>
+    } {nanodsp.cache_loop}
+    return %1 : memref<128x128xf32>
+  }
+}
+
+
+// -----// IR Dump After ExpandReallocPass: expand-realloc{emit-deallocs=false} //----- //
+#map = affine_map<(d0) -> (d0, 0)>
+#map1 = affine_map<(d0) -> (0, d0)>
+module {
+  func.func @matmul_local(%arg0: memref<128x256xf32>, %arg1: memref<256x128xf32>) -> memref<128x128xf32> attributes {llvm.emit_c_interface} {
+    %0 = ub.poison : f32
+    %c1 = arith.constant 1 : index
+    %c4 = arith.constant 4 : index
+    %c128 = arith.constant 128 : index
+    %c256 = arith.constant 256 : index
+    %c0 = arith.constant 0 : index
+    %cst = arith.constant 0.000000e+00 : f32
+    %alloc = memref.alloc() {alignment = 64 : i64} : memref<128x128xf32>
+    linalg.fill ins(%cst : f32) outs(%alloc : memref<128x128xf32>)
+    %1 = scf.for %arg2 = %c0 to %c256 step %c128 iter_args(%arg3 = %alloc) -> (memref<128x128xf32>) {
+      %subview = memref.subview %arg0[0, %arg2] [128, 128] [1, 1] : memref<128x256xf32> to memref<128x128xf32, strided<[256, 1], offset: ?>>
+      %subview_0 = memref.subview %arg1[%arg2, 0] [128, 128] [1, 1] : memref<256x128xf32> to memref<128x128xf32, strided<[128, 1], offset: ?>>
+      %2 = scf.for %arg4 = %c0 to %c128 step %c4 iter_args(%arg5 = %arg3) -> (memref<128x128xf32>) {
+        %3 = scf.for %arg6 = %c0 to %c128 step %c1 iter_args(%arg7 = %arg5) -> (memref<128x128xf32>) {
+          %subview_1 = memref.subview %subview[%arg4, %arg6] [4, 1] [1, 1] : memref<128x128xf32, strided<[256, 1], offset: ?>> to memref<4x1xf32, strided<[256, 1], offset: ?>>
+          %subview_2 = memref.subview %subview_0[%arg6, 0] [1, 128] [1, 1] : memref<128x128xf32, strided<[128, 1], offset: ?>> to memref<1x128xf32, strided<[128, 1], offset: ?>>
+          %subview_3 = memref.subview %arg7[%arg4, 0] [4, 128] [1, 1] : memref<128x128xf32> to memref<4x128xf32, strided<[128, 1], offset: ?>>
+          %subview_4 = memref.subview %subview_1[0, 0] [4, 1] [1, 1] : memref<4x1xf32, strided<[256, 1], offset: ?>> to memref<4xf32, strided<[256], offset: ?>>
+          %subview_5 = memref.subview %subview_2[0, 0] [1, 128] [1, 1] : memref<1x128xf32, strided<[128, 1], offset: ?>> to memref<128xf32, strided<[1], offset: ?>>
+          %4 = vector.transfer_read %subview_4[%c0], %0 {in_bounds = [true, true], permutation_map = #map} : memref<4xf32, strided<[256], offset: ?>>, vector<4x128xf32>
+          %5 = vector.transfer_read %subview_5[%c0], %0 {in_bounds = [true, true], permutation_map = #map1} : memref<128xf32, strided<[1], offset: ?>>, vector<4x128xf32>
+          %6 = vector.transfer_read %subview_3[%c0, %c0], %0 {in_bounds = [true, true]} : memref<4x128xf32, strided<[128, 1], offset: ?>>, vector<4x128xf32>
+          %7 = arith.mulf %4, %5 : vector<4x128xf32>
+          %8 = arith.addf %6, %7 : vector<4x128xf32>
+          vector.transfer_write %8, %subview_3[%c0, %c0] {in_bounds = [true, true]} : vector<4x128xf32>, memref<4x128xf32, strided<[128, 1], offset: ?>>
+          %subview_6 = memref.subview %arg7[%arg4, 0] [4, 128] [1, 1] : memref<128x128xf32> to memref<4x128xf32, strided<[128, 1], offset: ?>>
+          memref.copy %subview_3, %subview_6 : memref<4x128xf32, strided<[128, 1], offset: ?>> to memref<4x128xf32, strided<[128, 1], offset: ?>>
+          scf.yield %arg7 : memref<128x128xf32>
+        }
+        scf.yield %3 : memref<128x128xf32>
+      }
+      scf.yield %2 : memref<128x128xf32>
+    } {nanodsp.cache_loop}
+    return %1 : memref<128x128xf32>
+  }
+}
+
+
+// -----// IR Dump After CanonicalizerPass: canonicalize{cse-between-iterations=false    max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true} //----- //
+#map = affine_map<(d0) -> (d0, 0)>
+#map1 = affine_map<(d0) -> (0, d0)>
+module {
+  func.func @matmul_local(%arg0: memref<128x256xf32>, %arg1: memref<256x128xf32>) -> memref<128x128xf32> attributes {llvm.emit_c_interface} {
+    %0 = ub.poison : f32
+    %c1 = arith.constant 1 : index
+    %c4 = arith.constant 4 : index
+    %c128 = arith.constant 128 : index
+    %c256 = arith.constant 256 : index
+    %c0 = arith.constant 0 : index
+    %cst = arith.constant 0.000000e+00 : f32
+    %alloc = memref.alloc() {alignment = 64 : i64} : memref<128x128xf32>
+    linalg.fill ins(%cst : f32) outs(%alloc : memref<128x128xf32>)
+    scf.for %arg2 = %c0 to %c256 step %c128 {
+      %subview = memref.subview %arg0[0, %arg2] [128, 128] [1, 1] : memref<128x256xf32> to memref<128x128xf32, strided<[256, 1], offset: ?>>
+      %subview_0 = memref.subview %arg1[%arg2, 0] [128, 128] [1, 1] : memref<256x128xf32> to memref<128x128xf32, strided<[128, 1], offset: ?>>
+      scf.for %arg3 = %c0 to %c128 step %c4 {
+        scf.for %arg4 = %c0 to %c128 step %c1 {
+          %subview_1 = memref.subview %subview[%arg3, %arg4] [4, 1] [1, 1] : memref<128x128xf32, strided<[256, 1], offset: ?>> to memref<4x1xf32, strided<[256, 1], offset: ?>>
+          %subview_2 = memref.subview %subview_0[%arg4, 0] [1, 128] [1, 1] : memref<128x128xf32, strided<[128, 1], offset: ?>> to memref<1x128xf32, strided<[128, 1], offset: ?>>
+          %subview_3 = memref.subview %alloc[%arg3, 0] [4, 128] [1, 1] : memref<128x128xf32> to memref<4x128xf32, strided<[128, 1], offset: ?>>
+          %subview_4 = memref.subview %subview_1[0, 0] [4, 1] [1, 1] : memref<4x1xf32, strided<[256, 1], offset: ?>> to memref<4xf32, strided<[256], offset: ?>>
+          %subview_5 = memref.subview %subview_2[0, 0] [1, 128] [1, 1] : memref<1x128xf32, strided<[128, 1], offset: ?>> to memref<128xf32, strided<[1], offset: ?>>
+          %1 = vector.transfer_read %subview_4[%c0], %0 {in_bounds = [true, true], permutation_map = #map} : memref<4xf32, strided<[256], offset: ?>>, vector<4x128xf32>
+          %2 = vector.transfer_read %subview_5[%c0], %0 {in_bounds = [true, true], permutation_map = #map1} : memref<128xf32, strided<[1], offset: ?>>, vector<4x128xf32>
+          %3 = vector.transfer_read %subview_3[%c0, %c0], %0 {in_bounds = [true, true]} : memref<4x128xf32, strided<[128, 1], offset: ?>>, vector<4x128xf32>
+          %4 = arith.mulf %1, %2 : vector<4x128xf32>
+          %5 = arith.addf %3, %4 : vector<4x128xf32>
+          vector.transfer_write %5, %subview_3[%c0, %c0] {in_bounds = [true, true]} : vector<4x128xf32>, memref<4x128xf32, strided<[128, 1], offset: ?>>
+          %subview_6 = memref.subview %alloc[%arg3, 0] [4, 128] [1, 1] : memref<128x128xf32> to memref<4x128xf32, strided<[128, 1], offset: ?>>
+          memref.copy %subview_3, %subview_6 : memref<4x128xf32, strided<[128, 1], offset: ?>> to memref<4x128xf32, strided<[128, 1], offset: ?>>
+        }
+      }
+    } {nanodsp.cache_loop}
+    return %alloc : memref<128x128xf32>
+  }
+}
+
+
+// -----// IR Dump After OwnershipBasedBufferDeallocationPass: ownership-based-buffer-deallocation{private-function-dynamic-ownership=false} //----- //
+#map = affine_map<(d0) -> (d0, 0)>
+#map1 = affine_map<(d0) -> (0, d0)>
+module {
+  func.func @matmul_local(%arg0: memref<128x256xf32>, %arg1: memref<256x128xf32>) -> memref<128x128xf32> attributes {llvm.emit_c_interface} {
+    %false = arith.constant false
+    %true = arith.constant true
+    %false_0 = arith.constant false
+    %false_1 = arith.constant false
+    %0 = ub.poison : f32
+    %c1 = arith.constant 1 : index
+    %c4 = arith.constant 4 : index
+    %c128 = arith.constant 128 : index
+    %c256 = arith.constant 256 : index
+    %c0 = arith.constant 0 : index
+    %cst = arith.constant 0.000000e+00 : f32
+    %alloc = memref.alloc() {alignment = 64 : i64} : memref<128x128xf32>
+    linalg.fill ins(%cst : f32) outs(%alloc : memref<128x128xf32>)
+    scf.for %arg2 = %c0 to %c256 step %c128 {
+      %false_10 = arith.constant false
+      %false_11 = arith.constant false
+      %false_12 = arith.constant false
+      %false_13 = arith.constant false
+      %false_14 = arith.constant false
+      %subview = memref.subview %arg0[0, %arg2] [128, 128] [1, 1] : memref<128x256xf32> to memref<128x128xf32, strided<[256, 1], offset: ?>>
+      %false_15 = arith.constant false
+      %subview_16 = memref.subview %arg1[%arg2, 0] [128, 128] [1, 1] : memref<256x128xf32> to memref<128x128xf32, strided<[128, 1], offset: ?>>
+      scf.for %arg3 = %c0 to %c128 step %c4 {
+        %false_17 = arith.constant false
+        %false_18 = arith.constant false
+        %false_19 = arith.constant false
+        %false_20 = arith.constant false
+        scf.for %arg4 = %c0 to %c128 step %c1 {
+          %false_21 = arith.constant false
+          %false_22 = arith.constant false
+          %false_23 = arith.constant false
+          %false_24 = arith.constant false
+          %subview_25 = memref.subview %subview[%arg3, %arg4] [4, 1] [1, 1] : memref<128x128xf32, strided<[256, 1], offset: ?>> to memref<4x1xf32, strided<[256, 1], offset: ?>>
+          %false_26 = arith.constant false
+          %subview_27 = memref.subview %subview_16[%arg4, 0] [1, 128] [1, 1] : memref<128x128xf32, strided<[128, 1], offset: ?>> to memref<1x128xf32, strided<[128, 1], offset: ?>>
+          %false_28 = arith.constant false
+          %subview_29 = memref.subview %alloc[%arg3, 0] [4, 128] [1, 1] : memref<128x128xf32> to memref<4x128xf32, strided<[128, 1], offset: ?>>
+          %subview_30 = memref.subview %subview_25[0, 0] [4, 1] [1, 1] : memref<4x1xf32, strided<[256, 1], offset: ?>> to memref<4xf32, strided<[256], offset: ?>>
+          %subview_31 = memref.subview %subview_27[0, 0] [1, 128] [1, 1] : memref<1x128xf32, strided<[128, 1], offset: ?>> to memref<128xf32, strided<[1], offset: ?>>
+          %2 = vector.transfer_read %subview_30[%c0], %0 {in_bounds = [true, true], permutation_map = #map} : memref<4xf32, strided<[256], offset: ?>>, vector<4x128xf32>
+          %3 = vector.transfer_read %subview_31[%c0], %0 {in_bounds = [true, true], permutation_map = #map1} : memref<128xf32, strided<[1], offset: ?>>, vector<4x128xf32>
+          %4 = vector.transfer_read %subview_29[%c0, %c0], %0 {in_bounds = [true, true]} : memref<4x128xf32, strided<[128, 1], offset: ?>>, vector<4x128xf32>
+          %5 = arith.mulf %2, %3 : vector<4x128xf32>
+          %6 = arith.addf %4, %5 : vector<4x128xf32>
+          vector.transfer_write %6, %subview_29[%c0, %c0] {in_bounds = [true, true]} : vector<4x128xf32>, memref<4x128xf32, strided<[128, 1], offset: ?>>
+          %false_32 = arith.constant false
+          %subview_33 = memref.subview %alloc[%arg3, 0] [4, 128] [1, 1] : memref<128x128xf32> to memref<4x128xf32, strided<[128, 1], offset: ?>>
+          memref.copy %subview_29, %subview_33 : memref<4x128xf32, strided<[128, 1], offset: ?>> to memref<4x128xf32, strided<[128, 1], offset: ?>>
+        }
+      }
+    } {nanodsp.cache_loop}
+    %base_buffer, %offset, %sizes:2, %strides:2 = memref.extract_strided_metadata %arg0 : memref<128x256xf32> -> memref<f32>, index, index, index, index, index
+    %base_buffer_2, %offset_3, %sizes_4:2, %strides_5:2 = memref.extract_strided_metadata %arg1 : memref<256x128xf32> -> memref<f32>, index, index, index, index, index
+    %base_buffer_6, %offset_7, %sizes_8:2, %strides_9:2 = memref.extract_strided_metadata %alloc : memref<128x128xf32> -> memref<f32>, index, index, index, index, index
+    %1 = bufferization.dealloc (%base_buffer, %base_buffer_2, %base_buffer_6 : memref<f32>, memref<f32>, memref<f32>) if (%false_0, %false_1, %true) retain (%alloc : memref<128x128xf32>)
+    return %alloc : memref<128x128xf32>
+  }
+}
+
+
+// -----// IR Dump After CanonicalizerPass: canonicalize{cse-between-iterations=false    max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true} //----- //
+#map = affine_map<(d0) -> (d0, 0)>
+#map1 = affine_map<(d0) -> (0, d0)>
+module {
+  func.func @matmul_local(%arg0: memref<128x256xf32>, %arg1: memref<256x128xf32>) -> memref<128x128xf32> attributes {llvm.emit_c_interface} {
+    %true = arith.constant true
+    %0 = ub.poison : f32
+    %c1 = arith.constant 1 : index
+    %c4 = arith.constant 4 : index
+    %c128 = arith.constant 128 : index
+    %c256 = arith.constant 256 : index
+    %c0 = arith.constant 0 : index
+    %cst = arith.constant 0.000000e+00 : f32
+    %alloc = memref.alloc() {alignment = 64 : i64} : memref<128x128xf32>
+    linalg.fill ins(%cst : f32) outs(%alloc : memref<128x128xf32>)
+    scf.for %arg2 = %c0 to %c256 step %c128 {
+      %subview = memref.subview %arg0[0, %arg2] [128, 128] [1, 1] : memref<128x256xf32> to memref<128x128xf32, strided<[256, 1], offset: ?>>
+      %subview_0 = memref.subview %arg1[%arg2, 0] [128, 128] [1, 1] : memref<256x128xf32> to memref<128x128xf32, strided<[128, 1], offset: ?>>
+      scf.for %arg3 = %c0 to %c128 step %c4 {
+        scf.for %arg4 = %c0 to %c128 step %c1 {
+          %subview_1 = memref.subview %subview[%arg3, %arg4] [4, 1] [1, 1] : memref<128x128xf32, strided<[256, 1], offset: ?>> to memref<4x1xf32, strided<[256, 1], offset: ?>>
+          %subview_2 = memref.subview %subview_0[%arg4, 0] [1, 128] [1, 1] : memref<128x128xf32, strided<[128, 1], offset: ?>> to memref<1x128xf32, strided<[128, 1], offset: ?>>
+          %subview_3 = memref.subview %alloc[%arg3, 0] [4, 128] [1, 1] : memref<128x128xf32> to memref<4x128xf32, strided<[128, 1], offset: ?>>
+          %subview_4 = memref.subview %subview_1[0, 0] [4, 1] [1, 1] : memref<4x1xf32, strided<[256, 1], offset: ?>> to memref<4xf32, strided<[256], offset: ?>>
+          %subview_5 = memref.subview %subview_2[0, 0] [1, 128] [1, 1] : memref<1x128xf32, strided<[128, 1], offset: ?>> to memref<128xf32, strided<[1], offset: ?>>
+          %2 = vector.transfer_read %subview_4[%c0], %0 {in_bounds = [true, true], permutation_map = #map} : memref<4xf32, strided<[256], offset: ?>>, vector<4x128xf32>
+          %3 = vector.transfer_read %subview_5[%c0], %0 {in_bounds = [true, true], permutation_map = #map1} : memref<128xf32, strided<[1], offset: ?>>, vector<4x128xf32>
+          %4 = vector.transfer_read %subview_3[%c0, %c0], %0 {in_bounds = [true, true]} : memref<4x128xf32, strided<[128, 1], offset: ?>>, vector<4x128xf32>
+          %5 = arith.mulf %2, %3 : vector<4x128xf32>
+          %6 = arith.addf %4, %5 : vector<4x128xf32>
+          vector.transfer_write %6, %subview_3[%c0, %c0] {in_bounds = [true, true]} : vector<4x128xf32>, memref<4x128xf32, strided<[128, 1], offset: ?>>
+          %subview_6 = memref.subview %alloc[%arg3, 0] [4, 128] [1, 1] : memref<128x128xf32> to memref<4x128xf32, strided<[128, 1], offset: ?>>
+          memref.copy %subview_3, %subview_6 : memref<4x128xf32, strided<[128, 1], offset: ?>> to memref<4x128xf32, strided<[128, 1], offset: ?>>
+        }
+      }
+    } {nanodsp.cache_loop}
+    %1 = bufferization.dealloc (%alloc : memref<128x128xf32>) if (%true) retain (%alloc : memref<128x128xf32>)
+    return %alloc : memref<128x128xf32>
+  }
+}
+
+
+// -----// IR Dump After BufferDeallocationSimplificationPass: buffer-deallocation-simplification //----- //
+#map = affine_map<(d0) -> (d0, 0)>
+#map1 = affine_map<(d0) -> (0, d0)>
+module {
+  func.func @matmul_local(%arg0: memref<128x256xf32>, %arg1: memref<256x128xf32>) -> memref<128x128xf32> attributes {llvm.emit_c_interface} {
+    %0 = ub.poison : f32
+    %c1 = arith.constant 1 : index
+    %c4 = arith.constant 4 : index
+    %c128 = arith.constant 128 : index
+    %c256 = arith.constant 256 : index
+    %c0 = arith.constant 0 : index
+    %cst = arith.constant 0.000000e+00 : f32
+    %alloc = memref.alloc() {alignment = 64 : i64} : memref<128x128xf32>
+    linalg.fill ins(%cst : f32) outs(%alloc : memref<128x128xf32>)
+    scf.for %arg2 = %c0 to %c256 step %c128 {
+      %subview = memref.subview %arg0[0, %arg2] [128, 128] [1, 1] : memref<128x256xf32> to memref<128x128xf32, strided<[256, 1], offset: ?>>
+      %subview_0 = memref.subview %arg1[%arg2, 0] [128, 128] [1, 1] : memref<256x128xf32> to memref<128x128xf32, strided<[128, 1], offset: ?>>
+      scf.for %arg3 = %c0 to %c128 step %c4 {
+        scf.for %arg4 = %c0 to %c128 step %c1 {
+          %subview_1 = memref.subview %subview[%arg3, %arg4] [4, 1] [1, 1] : memref<128x128xf32, strided<[256, 1], offset: ?>> to memref<4x1xf32, strided<[256, 1], offset: ?>>
+          %subview_2 = memref.subview %subview_0[%arg4, 0] [1, 128] [1, 1] : memref<128x128xf32, strided<[128, 1], offset: ?>> to memref<1x128xf32, strided<[128, 1], offset: ?>>
+          %subview_3 = memref.subview %alloc[%arg3, 0] [4, 128] [1, 1] : memref<128x128xf32> to memref<4x128xf32, strided<[128, 1], offset: ?>>
+          %subview_4 = memref.subview %subview_1[0, 0] [4, 1] [1, 1] : memref<4x1xf32, strided<[256, 1], offset: ?>> to memref<4xf32, strided<[256], offset: ?>>
+          %subview_5 = memref.subview %subview_2[0, 0] [1, 128] [1, 1] : memref<1x128xf32, strided<[128, 1], offset: ?>> to memref<128xf32, strided<[1], offset: ?>>
+          %1 = vector.transfer_read %subview_4[%c0], %0 {in_bounds = [true, true], permutation_map = #map} : memref<4xf32, strided<[256], offset: ?>>, vector<4x128xf32>
+          %2 = vector.transfer_read %subview_5[%c0], %0 {in_bounds = [true, true], permutation_map = #map1} : memref<128xf32, strided<[1], offset: ?>>, vector<4x128xf32>
+          %3 = vector.transfer_read %subview_3[%c0, %c0], %0 {in_bounds = [true, true]} : memref<4x128xf32, strided<[128, 1], offset: ?>>, vector<4x128xf32>
+          %4 = arith.mulf %1, %2 : vector<4x128xf32>
+          %5 = arith.addf %3, %4 : vector<4x128xf32>
+          vector.transfer_write %5, %subview_3[%c0, %c0] {in_bounds = [true, true]} : vector<4x128xf32>, memref<4x128xf32, strided<[128, 1], offset: ?>>
+          %subview_6 = memref.subview %alloc[%arg3, 0] [4, 128] [1, 1] : memref<128x128xf32> to memref<4x128xf32, strided<[128, 1], offset: ?>>
+          memref.copy %subview_3, %subview_6 : memref<4x128xf32, strided<[128, 1], offset: ?>> to memref<4x128xf32, strided<[128, 1], offset: ?>>
+        }
+      }
+    } {nanodsp.cache_loop}
+    return %alloc : memref<128x128xf32>
+  }
+}
+
+
+// -----// IR Dump After LowerDeallocationsPass: bufferization-lower-deallocations //----- //
+#map = affine_map<(d0) -> (d0, 0)>
+#map1 = affine_map<(d0) -> (0, d0)>
+module {
+  func.func @matmul_local(%arg0: memref<128x256xf32>, %arg1: memref<256x128xf32>) -> memref<128x128xf32> attributes {llvm.emit_c_interface} {
+    %0 = ub.poison : f32
+    %c1 = arith.constant 1 : index
+    %c4 = arith.constant 4 : index
+    %c128 = arith.constant 128 : index
+    %c256 = arith.constant 256 : index
+    %c0 = arith.constant 0 : index
+    %cst = arith.constant 0.000000e+00 : f32
+    %alloc = memref.alloc() {alignment = 64 : i64} : memref<128x128xf32>
+    linalg.fill ins(%cst : f32) outs(%alloc : memref<128x128xf32>)
+    scf.for %arg2 = %c0 to %c256 step %c128 {
+      %subview = memref.subview %arg0[0, %arg2] [128, 128] [1, 1] : memref<128x256xf32> to memref<128x128xf32, strided<[256, 1], offset: ?>>
+      %subview_0 = memref.subview %arg1[%arg2, 0] [128, 128] [1, 1] : memref<256x128xf32> to memref<128x128xf32, strided<[128, 1], offset: ?>>
+      scf.for %arg3 = %c0 to %c128 step %c4 {
+        scf.for %arg4 = %c0 to %c128 step %c1 {
+          %subview_1 = memref.subview %subview[%arg3, %arg4] [4, 1] [1, 1] : memref<128x128xf32, strided<[256, 1], offset: ?>> to memref<4x1xf32, strided<[256, 1], offset: ?>>
+          %subview_2 = memref.subview %subview_0[%arg4, 0] [1, 128] [1, 1] : memref<128x128xf32, strided<[128, 1], offset: ?>> to memref<1x128xf32, strided<[128, 1], offset: ?>>
+          %subview_3 = memref.subview %alloc[%arg3, 0] [4, 128] [1, 1] : memref<128x128xf32> to memref<4x128xf32, strided<[128, 1], offset: ?>>
+          %subview_4 = memref.subview %subview_1[0, 0] [4, 1] [1, 1] : memref<4x1xf32, strided<[256, 1], offset: ?>> to memref<4xf32, strided<[256], offset: ?>>
+          %subview_5 = memref.subview %subview_2[0, 0] [1, 128] [1, 1] : memref<1x128xf32, strided<[128, 1], offset: ?>> to memref<128xf32, strided<[1], offset: ?>>
+          %1 = vector.transfer_read %subview_4[%c0], %0 {in_bounds = [true, true], permutation_map = #map} : memref<4xf32, strided<[256], offset: ?>>, vector<4x128xf32>
+          %2 = vector.transfer_read %subview_5[%c0], %0 {in_bounds = [true, true], permutation_map = #map1} : memref<128xf32, strided<[1], offset: ?>>, vector<4x128xf32>
+          %3 = vector.transfer_read %subview_3[%c0, %c0], %0 {in_bounds = [true, true]} : memref<4x128xf32, strided<[128, 1], offset: ?>>, vector<4x128xf32>
+          %4 = arith.mulf %1, %2 : vector<4x128xf32>
+          %5 = arith.addf %3, %4 : vector<4x128xf32>
+          vector.transfer_write %5, %subview_3[%c0, %c0] {in_bounds = [true, true]} : vector<4x128xf32>, memref<4x128xf32, strided<[128, 1], offset: ?>>
+          %subview_6 = memref.subview %alloc[%arg3, 0] [4, 128] [1, 1] : memref<128x128xf32> to memref<4x128xf32, strided<[128, 1], offset: ?>>
+          memref.copy %subview_3, %subview_6 : memref<4x128xf32, strided<[128, 1], offset: ?>> to memref<4x128xf32, strided<[128, 1], offset: ?>>
+        }
+      }
+    } {nanodsp.cache_loop}
+    return %alloc : memref<128x128xf32>
+  }
+}
+
+
+// -----// IR Dump After CSEPass: cse //----- //
+#map = affine_map<(d0) -> (d0, 0)>
+#map1 = affine_map<(d0) -> (0, d0)>
+module {
+  func.func @matmul_local(%arg0: memref<128x256xf32>, %arg1: memref<256x128xf32>) -> memref<128x128xf32> attributes {llvm.emit_c_interface} {
+    %0 = ub.poison : f32
+    %c1 = arith.constant 1 : index
+    %c4 = arith.constant 4 : index
+    %c128 = arith.constant 128 : index
+    %c256 = arith.constant 256 : index
+    %c0 = arith.constant 0 : index
+    %cst = arith.constant 0.000000e+00 : f32
+    %alloc = memref.alloc() {alignment = 64 : i64} : memref<128x128xf32>
+    linalg.fill ins(%cst : f32) outs(%alloc : memref<128x128xf32>)
+    scf.for %arg2 = %c0 to %c256 step %c128 {
+      %subview = memref.subview %arg0[0, %arg2] [128, 128] [1, 1] : memref<128x256xf32> to memref<128x128xf32, strided<[256, 1], offset: ?>>
+      %subview_0 = memref.subview %arg1[%arg2, 0] [128, 128] [1, 1] : memref<256x128xf32> to memref<128x128xf32, strided<[128, 1], offset: ?>>
+      scf.for %arg3 = %c0 to %c128 step %c4 {
+        scf.for %arg4 = %c0 to %c128 step %c1 {
+          %subview_1 = memref.subview %subview[%arg3, %arg4] [4, 1] [1, 1] : memref<128x128xf32, strided<[256, 1], offset: ?>> to memref<4x1xf32, strided<[256, 1], offset: ?>>
+          %subview_2 = memref.subview %subview_0[%arg4, 0] [1, 128] [1, 1] : memref<128x128xf32, strided<[128, 1], offset: ?>> to memref<1x128xf32, strided<[128, 1], offset: ?>>
+          %subview_3 = memref.subview %alloc[%arg3, 0] [4, 128] [1, 1] : memref<128x128xf32> to memref<4x128xf32, strided<[128, 1], offset: ?>>
+          %subview_4 = memref.subview %subview_1[0, 0] [4, 1] [1, 1] : memref<4x1xf32, strided<[256, 1], offset: ?>> to memref<4xf32, strided<[256], offset: ?>>
+          %subview_5 = memref.subview %subview_2[0, 0] [1, 128] [1, 1] : memref<1x128xf32, strided<[128, 1], offset: ?>> to memref<128xf32, strided<[1], offset: ?>>
+          %1 = vector.transfer_read %subview_4[%c0], %0 {in_bounds = [true, true], permutation_map = #map} : memref<4xf32, strided<[256], offset: ?>>, vector<4x128xf32>
+          %2 = vector.transfer_read %subview_5[%c0], %0 {in_bounds = [true, true], permutation_map = #map1} : memref<128xf32, strided<[1], offset: ?>>, vector<4x128xf32>
+          %3 = vector.transfer_read %subview_3[%c0, %c0], %0 {in_bounds = [true, true]} : memref<4x128xf32, strided<[128, 1], offset: ?>>, vector<4x128xf32>
+          %4 = arith.mulf %1, %2 : vector<4x128xf32>
+          %5 = arith.addf %3, %4 : vector<4x128xf32>
+          vector.transfer_write %5, %subview_3[%c0, %c0] {in_bounds = [true, true]} : vector<4x128xf32>, memref<4x128xf32, strided<[128, 1], offset: ?>>
+          memref.copy %subview_3, %subview_3 : memref<4x128xf32, strided<[128, 1], offset: ?>> to memref<4x128xf32, strided<[128, 1], offset: ?>>
+        }
+      }
+    } {nanodsp.cache_loop}
+    return %alloc : memref<128x128xf32>
+  }
+}
+
+
+// -----// IR Dump After CanonicalizerPass: canonicalize{cse-between-iterations=false    max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true} //----- //
+#map = affine_map<(d0) -> (d0, 0)>
+#map1 = affine_map<(d0) -> (0, d0)>
+module {
+  func.func @matmul_local(%arg0: memref<128x256xf32>, %arg1: memref<256x128xf32>) -> memref<128x128xf32> attributes {llvm.emit_c_interface} {
+    %0 = ub.poison : f32
+    %c1 = arith.constant 1 : index
+    %c4 = arith.constant 4 : index
+    %c128 = arith.constant 128 : index
+    %c256 = arith.constant 256 : index
+    %c0 = arith.constant 0 : index
+    %cst = arith.constant 0.000000e+00 : f32
+    %alloc = memref.alloc() {alignment = 64 : i64} : memref<128x128xf32>
+    linalg.fill ins(%cst : f32) outs(%alloc : memref<128x128xf32>)
+    scf.for %arg2 = %c0 to %c256 step %c128 {
+      %subview = memref.subview %arg0[0, %arg2] [128, 128] [1, 1] : memref<128x256xf32> to memref<128x128xf32, strided<[256, 1], offset: ?>>
+      %subview_0 = memref.subview %arg1[%arg2, 0] [128, 128] [1, 1] : memref<256x128xf32> to memref<128x128xf32, strided<[128, 1], offset: ?>>
+      scf.for %arg3 = %c0 to %c128 step %c4 {
+        scf.for %arg4 = %c0 to %c128 step %c1 {
+          %subview_1 = memref.subview %subview[%arg3, %arg4] [4, 1] [1, 1] : memref<128x128xf32, strided<[256, 1], offset: ?>> to memref<4x1xf32, strided<[256, 1], offset: ?>>
+          %subview_2 = memref.subview %subview_0[%arg4, 0] [1, 128] [1, 1] : memref<128x128xf32, strided<[128, 1], offset: ?>> to memref<1x128xf32, strided<[128, 1], offset: ?>>
+          %subview_3 = memref.subview %alloc[%arg3, 0] [4, 128] [1, 1] : memref<128x128xf32> to memref<4x128xf32, strided<[128, 1], offset: ?>>
+          %subview_4 = memref.subview %subview_1[0, 0] [4, 1] [1, 1] : memref<4x1xf32, strided<[256, 1], offset: ?>> to memref<4xf32, strided<[256], offset: ?>>
+          %subview_5 = memref.subview %subview_2[0, 0] [1, 128] [1, 1] : memref<1x128xf32, strided<[128, 1], offset: ?>> to memref<128xf32, strided<[1], offset: ?>>
+          %1 = vector.transfer_read %subview_4[%c0], %0 {in_bounds = [true, true], permutation_map = #map} : memref<4xf32, strided<[256], offset: ?>>, vector<4x128xf32>
+          %2 = vector.transfer_read %subview_5[%c0], %0 {in_bounds = [true, true], permutation_map = #map1} : memref<128xf32, strided<[1], offset: ?>>, vector<4x128xf32>
+          %3 = vector.transfer_read %subview_3[%c0, %c0], %0 {in_bounds = [true, true]} : memref<4x128xf32, strided<[128, 1], offset: ?>>, vector<4x128xf32>
+          %4 = arith.mulf %1, %2 : vector<4x128xf32>
+          %5 = arith.addf %3, %4 : vector<4x128xf32>
+          vector.transfer_write %5, %subview_3[%c0, %c0] {in_bounds = [true, true]} : vector<4x128xf32>, memref<4x128xf32, strided<[128, 1], offset: ?>>
+        }
+      }
+    } {nanodsp.cache_loop}
+    return %alloc : memref<128x128xf32>
+  }
+}
+
+
+// -----// IR Dump After NanoDSPPromoteLocal: nanodsp-promote-local{double-buffer=true target=hexagon-hvx128} //----- //
+#map = affine_map<(d0) -> ((d0 floordiv 128) mod 2)>
+#map1 = affine_map<(d0) -> (d0, 0)>
+#map2 = affine_map<(d0) -> (0, d0)>
+module {
+  func.func @matmul_local(%arg0: memref<128x256xf32>, %arg1: memref<256x128xf32>) -> memref<128x128xf32> attributes {llvm.emit_c_interface} {
+    %0 = ub.poison : f32
+    %c1 = arith.constant 1 : index
+    %c4 = arith.constant 4 : index
+    %c128 = arith.constant 128 : index
+    %c256 = arith.constant 256 : index
+    %c0 = arith.constant 0 : index
+    %cst = arith.constant 0.000000e+00 : f32
+    %alloc = memref.alloc() {alignment = 64 : i64} : memref<128x128xf32>
+    linalg.fill ins(%cst : f32) outs(%alloc : memref<128x128xf32>)
+    %alloc_0 = memref.alloc() {alignment = 128 : i64} : memref<2x128x128xf32, #dsp.local>
+    %alloc_1 = memref.alloc() : memref<2x1xi32>
+    %alloc_2 = memref.alloc() {alignment = 128 : i64} : memref<2x128x128xf32, #dsp.local>
+    %alloc_3 = memref.alloc() : memref<2x1xi32>
+    %subview = memref.subview %alloc_1[%c0, 0] [1, 1] [1, 1] : memref<2x1xi32> to memref<1xi32, strided<[1], offset: ?>>
+    %subview_4 = memref.subview %alloc_0[%c0, 0, 0] [1, 128, 128] [1, 1, 1] : memref<2x128x128xf32, #dsp.local> to memref<128x128xf32, strided<[128, 1], offset: ?>, #dsp.local>
+    %c16384 = arith.constant 16384 : index
+    memref.dma_start %arg0[%c0, %c0], %subview_4[%c0, %c0], %c16384, %subview[%c0], %c256, %c128 : memref<128x256xf32>, memref<128x128xf32, strided<[128, 1], offset: ?>, #dsp.local>, memref<1xi32, strided<[1], offset: ?>>
+    %subview_5 = memref.subview %alloc_3[%c0, 0] [1, 1] [1, 1] : memref<2x1xi32> to memref<1xi32, strided<[1], offset: ?>>
+    %subview_6 = memref.subview %alloc_2[%c0, 0, 0] [1, 128, 128] [1, 1, 1] : memref<2x128x128xf32, #dsp.local> to memref<128x128xf32, strided<[128, 1], offset: ?>, #dsp.local>
+    memref.dma_start %arg1[%c0, %c0], %subview_6[%c0, %c0], %c16384, %subview_5[%c0] : memref<256x128xf32>, memref<128x128xf32, strided<[128, 1], offset: ?>, #dsp.local>, memref<1xi32, strided<[1], offset: ?>>
+    scf.for %arg2 = %c0 to %c256 step %c128 {
+      %1 = affine.apply #map(%arg2)
+      %subview_7 = memref.subview %alloc_3[%1, 0] [1, 1] [1, 1] : memref<2x1xi32> to memref<1xi32, strided<[1], offset: ?>>
+      %subview_8 = memref.subview %alloc_2[%1, 0, 0] [1, 128, 128] [1, 1, 1] : memref<2x128x128xf32, #dsp.local> to memref<128x128xf32, strided<[128, 1], offset: ?>, #dsp.local>
+      %subview_9 = memref.subview %alloc_1[%1, 0] [1, 1] [1, 1] : memref<2x1xi32> to memref<1xi32, strided<[1], offset: ?>>
+      %subview_10 = memref.subview %alloc_0[%1, 0, 0] [1, 128, 128] [1, 1, 1] : memref<2x128x128xf32, #dsp.local> to memref<128x128xf32, strided<[128, 1], offset: ?>, #dsp.local>
+      %2 = arith.addi %arg2, %c128 : index
+      %3 = arith.cmpi slt, %2, %c256 : index
+      scf.if %3 {
+        %4 = affine.apply #map(%2)
+        %subview_11 = memref.subview %alloc_1[%4, 0] [1, 1] [1, 1] : memref<2x1xi32> to memref<1xi32, strided<[1], offset: ?>>
+        %subview_12 = memref.subview %alloc_0[%4, 0, 0] [1, 128, 128] [1, 1, 1] : memref<2x128x128xf32, #dsp.local> to memref<128x128xf32, strided<[128, 1], offset: ?>, #dsp.local>
+        memref.dma_start %arg0[%c0, %2], %subview_12[%c0, %c0], %c16384, %subview_11[%c0], %c256, %c128 : memref<128x256xf32>, memref<128x128xf32, strided<[128, 1], offset: ?>, #dsp.local>, memref<1xi32, strided<[1], offset: ?>>
+        %subview_13 = memref.subview %alloc_3[%4, 0] [1, 1] [1, 1] : memref<2x1xi32> to memref<1xi32, strided<[1], offset: ?>>
+        %subview_14 = memref.subview %alloc_2[%4, 0, 0] [1, 128, 128] [1, 1, 1] : memref<2x128x128xf32, #dsp.local> to memref<128x128xf32, strided<[128, 1], offset: ?>, #dsp.local>
+        memref.dma_start %arg1[%2, %c0], %subview_14[%c0, %c0], %c16384, %subview_13[%c0] : memref<256x128xf32>, memref<128x128xf32, strided<[128, 1], offset: ?>, #dsp.local>, memref<1xi32, strided<[1], offset: ?>>
+      }
+      memref.dma_wait %subview_9[%c0], %c16384 : memref<1xi32, strided<[1], offset: ?>>
+      memref.dma_wait %subview_7[%c0], %c16384 : memref<1xi32, strided<[1], offset: ?>>
+      scf.for %arg3 = %c0 to %c128 step %c4 {
+        scf.for %arg4 = %c0 to %c128 step %c1 {
+          %subview_11 = memref.subview %subview_10[%arg3, %arg4] [4, 1] [1, 1] : memref<128x128xf32, strided<[128, 1], offset: ?>, #dsp.local> to memref<4x1xf32, strided<[128, 1], offset: ?>, #dsp.local>
+          %subview_12 = memref.subview %subview_8[%arg4, 0] [1, 128] [1, 1] : memref<128x128xf32, strided<[128, 1], offset: ?>, #dsp.local> to memref<1x128xf32, strided<[128, 1], offset: ?>, #dsp.local>
+          %subview_13 = memref.subview %alloc[%arg3, 0] [4, 128] [1, 1] : memref<128x128xf32> to memref<4x128xf32, strided<[128, 1], offset: ?>>
+          %subview_14 = memref.subview %subview_11[0, 0] [4, 1] [1, 1] : memref<4x1xf32, strided<[128, 1], offset: ?>, #dsp.local> to memref<4xf32, strided<[128], offset: ?>, #dsp.local>
+          %subview_15 = memref.subview %subview_12[0, 0] [1, 128] [1, 1] : memref<1x128xf32, strided<[128, 1], offset: ?>, #dsp.local> to memref<128xf32, strided<[1], offset: ?>, #dsp.local>
+          %4 = vector.transfer_read %subview_14[%c0], %0 {in_bounds = [true, true], permutation_map = #map1} : memref<4xf32, strided<[128], offset: ?>, #dsp.local>, vector<4x128xf32>
+          %5 = vector.transfer_read %subview_15[%c0], %0 {in_bounds = [true, true], permutation_map = #map2} : memref<128xf32, strided<[1], offset: ?>, #dsp.local>, vector<4x128xf32>
+          %6 = vector.transfer_read %subview_13[%c0, %c0], %0 {in_bounds = [true, true]} : memref<4x128xf32, strided<[128, 1], offset: ?>>, vector<4x128xf32>
+          %7 = arith.mulf %4, %5 : vector<4x128xf32>
+          %8 = arith.addf %6, %7 : vector<4x128xf32>
+          vector.transfer_write %8, %subview_13[%c0, %c0] {in_bounds = [true, true]} : vector<4x128xf32>, memref<4x128xf32, strided<[128, 1], offset: ?>>
+        }
+      }
+    } {nanodsp.cache_loop}
+    memref.dealloc %alloc_0 : memref<2x128x128xf32, #dsp.local>
+    memref.dealloc %alloc_1 : memref<2x1xi32>
+    memref.dealloc %alloc_2 : memref<2x128x128xf32, #dsp.local>
+    memref.dealloc %alloc_3 : memref<2x1xi32>
+    return %alloc : memref<128x128xf32>
+  }
+}
+
+
+// -----// IR Dump After NanoDSPLowerLocal: nanodsp-lower-local //----- //
+#map = affine_map<(d0) -> ((d0 floordiv 128) mod 2)>
+#map1 = affine_map<(d0) -> (d0, 0)>
+#map2 = affine_map<(d0) -> (0, d0)>
+module {
+  func.func @matmul_local(%arg0: memref<128x256xf32>, %arg1: memref<256x128xf32>) -> memref<128x128xf32> attributes {llvm.emit_c_interface} {
+    %0 = ub.poison : f32
+    %c1 = arith.constant 1 : index
+    %c4 = arith.constant 4 : index
+    %c128 = arith.constant 128 : index
+    %c256 = arith.constant 256 : index
+    %c0 = arith.constant 0 : index
+    %cst = arith.constant 0.000000e+00 : f32
+    %alloc = memref.alloc() {alignment = 64 : i64} : memref<128x128xf32>
+    linalg.fill ins(%cst : f32) outs(%alloc : memref<128x128xf32>)
+    %alloc_0 = memref.alloc() {alignment = 128 : i64} : memref<2x128x128xf32>
+    %alloc_1 = memref.alloc() {alignment = 128 : i64} : memref<2x128x128xf32>
+    %subview = memref.subview %alloc_0[%c0, 0, 0] [1, 128, 128] [1, 1, 1] : memref<2x128x128xf32> to memref<128x128xf32, strided<[128, 1], offset: ?>>
+    %subview_2 = memref.subview %arg0[0, 0] [128, 128] [1, 1] : memref<128x256xf32> to memref<128x128xf32, strided<[256, 1]>>
+    linalg.copy ins(%subview_2 : memref<128x128xf32, strided<[256, 1]>>) outs(%subview : memref<128x128xf32, strided<[128, 1], offset: ?>>)
+    %subview_3 = memref.subview %alloc_1[%c0, 0, 0] [1, 128, 128] [1, 1, 1] : memref<2x128x128xf32> to memref<128x128xf32, strided<[128, 1], offset: ?>>
+    %subview_4 = memref.subview %arg1[0, 0] [128, 128] [1, 1] : memref<256x128xf32> to memref<128x128xf32, strided<[128, 1]>>
+    linalg.copy ins(%subview_4 : memref<128x128xf32, strided<[128, 1]>>) outs(%subview_3 : memref<128x128xf32, strided<[128, 1], offset: ?>>)
+    scf.for %arg2 = %c0 to %c256 step %c128 {
+      %1 = affine.apply #map(%arg2)
+      %subview_5 = memref.subview %alloc_1[%1, 0, 0] [1, 128, 128] [1, 1, 1] : memref<2x128x128xf32> to memref<128x128xf32, strided<[128, 1], offset: ?>>
+      %subview_6 = memref.subview %alloc_0[%1, 0, 0] [1, 128, 128] [1, 1, 1] : memref<2x128x128xf32> to memref<128x128xf32, strided<[128, 1], offset: ?>>
+      %2 = arith.addi %arg2, %c128 : index
+      %3 = arith.cmpi slt, %2, %c256 : index
+      scf.if %3 {
+        %4 = affine.apply #map(%2)
+        %subview_7 = memref.subview %alloc_0[%4, 0, 0] [1, 128, 128] [1, 1, 1] : memref<2x128x128xf32> to memref<128x128xf32, strided<[128, 1], offset: ?>>
+        %subview_8 = memref.subview %arg0[0, %2] [128, 128] [1, 1] : memref<128x256xf32> to memref<128x128xf32, strided<[256, 1], offset: ?>>
+        linalg.copy ins(%subview_8 : memref<128x128xf32, strided<[256, 1], offset: ?>>) outs(%subview_7 : memref<128x128xf32, strided<[128, 1], offset: ?>>)
+        %subview_9 = memref.subview %alloc_1[%4, 0, 0] [1, 128, 128] [1, 1, 1] : memref<2x128x128xf32> to memref<128x128xf32, strided<[128, 1], offset: ?>>
+        %subview_10 = memref.subview %arg1[%2, 0] [128, 128] [1, 1] : memref<256x128xf32> to memref<128x128xf32, strided<[128, 1], offset: ?>>
+        linalg.copy ins(%subview_10 : memref<128x128xf32, strided<[128, 1], offset: ?>>) outs(%subview_9 : memref<128x128xf32, strided<[128, 1], offset: ?>>)
+      }
+      scf.for %arg3 = %c0 to %c128 step %c4 {
+        scf.for %arg4 = %c0 to %c128 step %c1 {
+          %subview_7 = memref.subview %subview_6[%arg3, %arg4] [4, 1] [1, 1] : memref<128x128xf32, strided<[128, 1], offset: ?>> to memref<4x1xf32, strided<[128, 1], offset: ?>>
+          %subview_8 = memref.subview %subview_5[%arg4, 0] [1, 128] [1, 1] : memref<128x128xf32, strided<[128, 1], offset: ?>> to memref<1x128xf32, strided<[128, 1], offset: ?>>
+          %subview_9 = memref.subview %alloc[%arg3, 0] [4, 128] [1, 1] : memref<128x128xf32> to memref<4x128xf32, strided<[128, 1], offset: ?>>
+          %subview_10 = memref.subview %subview_7[0, 0] [4, 1] [1, 1] : memref<4x1xf32, strided<[128, 1], offset: ?>> to memref<4xf32, strided<[128], offset: ?>>
+          %subview_11 = memref.subview %subview_8[0, 0] [1, 128] [1, 1] : memref<1x128xf32, strided<[128, 1], offset: ?>> to memref<128xf32, strided<[1], offset: ?>>
+          %4 = vector.transfer_read %subview_10[%c0], %0 {in_bounds = [true, true], permutation_map = #map1} : memref<4xf32, strided<[128], offset: ?>>, vector<4x128xf32>
+          %5 = vector.transfer_read %subview_11[%c0], %0 {in_bounds = [true, true], permutation_map = #map2} : memref<128xf32, strided<[1], offset: ?>>, vector<4x128xf32>
+          %6 = vector.transfer_read %subview_9[%c0, %c0], %0 {in_bounds = [true, true]} : memref<4x128xf32, strided<[128, 1], offset: ?>>, vector<4x128xf32>
+          %7 = arith.mulf %4, %5 : vector<4x128xf32>
+          %8 = arith.addf %6, %7 : vector<4x128xf32>
+          vector.transfer_write %8, %subview_9[%c0, %c0] {in_bounds = [true, true]} : vector<4x128xf32>, memref<4x128xf32, strided<[128, 1], offset: ?>>
+        }
+      }
+    } {nanodsp.cache_loop}
+    memref.dealloc %alloc_0 : memref<2x128x128xf32>
+    memref.dealloc %alloc_1 : memref<2x128x128xf32>
+    return %alloc : memref<128x128xf32>
+  }
+}
+
+
+#map = affine_map<(d0) -> ((d0 floordiv 128) mod 2)>
+#map1 = affine_map<(d0) -> (d0, 0)>
+#map2 = affine_map<(d0) -> (0, d0)>
+module {
+  func.func @matmul_local(%arg0: memref<128x256xf32>, %arg1: memref<256x128xf32>) -> memref<128x128xf32> attributes {llvm.emit_c_interface} {
+    %0 = ub.poison : f32
+    %c1 = arith.constant 1 : index
+    %c4 = arith.constant 4 : index
+    %c128 = arith.constant 128 : index
+    %c256 = arith.constant 256 : index
+    %c0 = arith.constant 0 : index
+    %cst = arith.constant 0.000000e+00 : f32
+    %alloc = memref.alloc() {alignment = 64 : i64} : memref<128x128xf32>
+    linalg.fill ins(%cst : f32) outs(%alloc : memref<128x128xf32>)
+    %alloc_0 = memref.alloc() {alignment = 128 : i64} : memref<2x128x128xf32>
+    %alloc_1 = memref.alloc() {alignment = 128 : i64} : memref<2x128x128xf32>
+    %subview = memref.subview %alloc_0[%c0, 0, 0] [1, 128, 128] [1, 1, 1] : memref<2x128x128xf32> to memref<128x128xf32, strided<[128, 1], offset: ?>>
+    %subview_2 = memref.subview %arg0[0, 0] [128, 128] [1, 1] : memref<128x256xf32> to memref<128x128xf32, strided<[256, 1]>>
+    linalg.copy ins(%subview_2 : memref<128x128xf32, strided<[256, 1]>>) outs(%subview : memref<128x128xf32, strided<[128, 1], offset: ?>>)
+    %subview_3 = memref.subview %alloc_1[%c0, 0, 0] [1, 128, 128] [1, 1, 1] : memref<2x128x128xf32> to memref<128x128xf32, strided<[128, 1], offset: ?>>
+    %subview_4 = memref.subview %arg1[0, 0] [128, 128] [1, 1] : memref<256x128xf32> to memref<128x128xf32, strided<[128, 1]>>
+    linalg.copy ins(%subview_4 : memref<128x128xf32, strided<[128, 1]>>) outs(%subview_3 : memref<128x128xf32, strided<[128, 1], offset: ?>>)
+    scf.for %arg2 = %c0 to %c256 step %c128 {
+      %1 = affine.apply #map(%arg2)
+      %subview_5 = memref.subview %alloc_1[%1, 0, 0] [1, 128, 128] [1, 1, 1] : memref<2x128x128xf32> to memref<128x128xf32, strided<[128, 1], offset: ?>>
+      %subview_6 = memref.subview %alloc_0[%1, 0, 0] [1, 128, 128] [1, 1, 1] : memref<2x128x128xf32> to memref<128x128xf32, strided<[128, 1], offset: ?>>
+      %2 = arith.addi %arg2, %c128 : index
+      %3 = arith.cmpi slt, %2, %c256 : index
+      scf.if %3 {
+        %4 = affine.apply #map(%2)
+        %subview_7 = memref.subview %alloc_0[%4, 0, 0] [1, 128, 128] [1, 1, 1] : memref<2x128x128xf32> to memref<128x128xf32, strided<[128, 1], offset: ?>>
+        %subview_8 = memref.subview %arg0[0, %2] [128, 128] [1, 1] : memref<128x256xf32> to memref<128x128xf32, strided<[256, 1], offset: ?>>
+        linalg.copy ins(%subview_8 : memref<128x128xf32, strided<[256, 1], offset: ?>>) outs(%subview_7 : memref<128x128xf32, strided<[128, 1], offset: ?>>)
+        %subview_9 = memref.subview %alloc_1[%4, 0, 0] [1, 128, 128] [1, 1, 1] : memref<2x128x128xf32> to memref<128x128xf32, strided<[128, 1], offset: ?>>
+        %subview_10 = memref.subview %arg1[%2, 0] [128, 128] [1, 1] : memref<256x128xf32> to memref<128x128xf32, strided<[128, 1], offset: ?>>
+        linalg.copy ins(%subview_10 : memref<128x128xf32, strided<[128, 1], offset: ?>>) outs(%subview_9 : memref<128x128xf32, strided<[128, 1], offset: ?>>)
+      }
+      scf.for %arg3 = %c0 to %c128 step %c4 {
+        scf.for %arg4 = %c0 to %c128 step %c1 {
+          %subview_7 = memref.subview %subview_6[%arg3, %arg4] [4, 1] [1, 1] : memref<128x128xf32, strided<[128, 1], offset: ?>> to memref<4x1xf32, strided<[128, 1], offset: ?>>
+          %subview_8 = memref.subview %subview_5[%arg4, 0] [1, 128] [1, 1] : memref<128x128xf32, strided<[128, 1], offset: ?>> to memref<1x128xf32, strided<[128, 1], offset: ?>>
+          %subview_9 = memref.subview %alloc[%arg3, 0] [4, 128] [1, 1] : memref<128x128xf32> to memref<4x128xf32, strided<[128, 1], offset: ?>>
+          %subview_10 = memref.subview %subview_7[0, 0] [4, 1] [1, 1] : memref<4x1xf32, strided<[128, 1], offset: ?>> to memref<4xf32, strided<[128], offset: ?>>
+          %subview_11 = memref.subview %subview_8[0, 0] [1, 128] [1, 1] : memref<1x128xf32, strided<[128, 1], offset: ?>> to memref<128xf32, strided<[1], offset: ?>>
+          %4 = vector.transfer_read %subview_10[%c0], %0 {in_bounds = [true, true], permutation_map = #map1} : memref<4xf32, strided<[128], offset: ?>>, vector<4x128xf32>
+          %5 = vector.transfer_read %subview_11[%c0], %0 {in_bounds = [true, true], permutation_map = #map2} : memref<128xf32, strided<[1], offset: ?>>, vector<4x128xf32>
+          %6 = vector.transfer_read %subview_9[%c0, %c0], %0 {in_bounds = [true, true]} : memref<4x128xf32, strided<[128, 1], offset: ?>>, vector<4x128xf32>
+          %7 = arith.mulf %4, %5 : vector<4x128xf32>
+          %8 = arith.addf %6, %7 : vector<4x128xf32>
+          vector.transfer_write %8, %subview_9[%c0, %c0] {in_bounds = [true, true]} : vector<4x128xf32>, memref<4x128xf32, strided<[128, 1], offset: ?>>
+        }
+      }
+    } {nanodsp.cache_loop}
+    memref.dealloc %alloc_0 : memref<2x128x128xf32>
+    memref.dealloc %alloc_1 : memref<2x128x128xf32>
+    return %alloc : memref<128x128xf32>
+  }
+}
+

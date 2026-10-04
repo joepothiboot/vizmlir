@@ -2216,7 +2216,8 @@
       }
       /* The graph stays laid out under the GPU view so the canvas keeps its
          size; hidden, it also leaves the accessibility tree. */
-      #stage.gpu-mode #graph-view {
+      #stage.gpu-mode #graph-view,
+      #stage.local-mode #graph-view {
         visibility: hidden;
       }
       #canvas:focus-visible {
@@ -2236,7 +2237,203 @@
       }
       .gpu-intro {
         max-width: 720px;
+      }      /* The Local memory view: a budget bar of buffer slots and the loop's
+         schedule in lanes. Buffers take the warp hues, which follow the
+         theme. */
+      #local-view {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        padding: 12px 20px 24px;
+        overflow: auto;
+        background: var(--bg);
+        font-family: var(--ui);
+        font-size: 12px;
+        line-height: 1.5;
       }
+      .lm-intro {
+        max-width: 720px;
+      }
+      .lm-pass {
+        margin: 0 0 4px;
+        font-weight: 600;
+      }
+      .lm-note,
+      .lm-dim {
+        color: var(--dim);
+      }
+      .lm-note {
+        margin: 0 0 10px;
+        font-size: 11px;
+      }
+      .lm-warn {
+        margin: 0 0 8px;
+        color: var(--err);
+      }
+      .lm-fn {
+        margin: 0 0 18px;
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+      }
+      .lm-fn h3 {
+        margin: 0 0 8px;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .lm-fn h4 {
+        margin: 14px 0 4px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .lm-fn code {
+        font-family: var(--code);
+      }
+      .lm-facts {
+        margin: 0 0 4px;
+      }
+      .lm-bar {
+        display: flex;
+        width: 100%;
+        height: 40px;
+        margin: 6px 0 8px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--bg);
+      }
+      .lm-block {
+        position: relative;
+        min-width: 0;
+        padding: 0 4px;
+        overflow: hidden;
+        border: 0;
+        border-right: 1px solid var(--bg);
+        border-radius: 0;
+        background: color-mix(in srgb, var(--lm-color) 30%, var(--panel));
+        box-shadow: inset 0 3px 0 var(--lm-color);
+        color: var(--fg);
+        font-family: var(--ui);
+        font-size: 11px;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+      .lm-block:hover,
+      .lm-event:hover {
+        background: color-mix(in srgb, var(--lm-color, var(--dim)) 45%, var(--panel));
+      }
+      .lm-block.picked,
+      .lm-event.picked {
+        outline: 2px solid var(--accent);
+        outline-offset: -2px;
+      }
+      .lm-block:focus-visible,
+      .lm-event:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: -2px;
+      }
+      .lm-free {
+        display: flex;
+        flex: 1 1 auto;
+        align-items: center;
+        justify-content: center;
+        min-width: 0;
+        overflow: hidden;
+        color: var(--faint);
+        font-size: 11px;
+        white-space: nowrap;
+      }
+      .lm-legend,
+      .lm-transfers {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .lm-legend li,
+      .lm-transfers li {
+        margin: 2px 0;
+        overflow-wrap: anywhere;
+      }
+      .lm-swatch {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        margin-right: 6px;
+        border-radius: 2px;
+        vertical-align: -1px;
+      }
+      .lm-scroll {
+        max-width: 100%;
+        margin: 6px 0;
+        overflow-x: auto;
+      }
+      .lm-grid {
+        display: grid;
+        gap: 4px;
+        min-width: calc(64px + var(--lm-cols) * 128px);
+      }
+      .lm-row {
+        display: grid;
+        grid-template-columns: 64px repeat(var(--lm-cols), minmax(128px, 1fr));
+        gap: 4px;
+      }
+      .lm-cell {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        min-width: 0;
+      }
+      .lm-col {
+        color: var(--dim);
+        font-size: 11px;
+      }
+      .lm-lane {
+        justify-content: center;
+        color: var(--dim);
+        font-size: 11px;
+      }
+      .lm-event {
+        padding: 3px 6px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: color-mix(in srgb, var(--lm-color, var(--dim)) 22%, var(--panel));
+        box-shadow: inset 3px 0 0 var(--lm-color, var(--dim));
+        color: var(--fg);
+        font-family: var(--ui);
+        font-size: 11px;
+        text-align: left;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+      .lm-event.lm-wait {
+        border-style: dashed;
+        border-color: var(--warn);
+        box-shadow: inset 3px 0 0 var(--warn);
+        background: transparent;
+      }
+      .lm-event.lm-compute {
+        --lm-color: var(--accent);
+        background: var(--raised);
+      }
+      .le-local {
+        margin-top: 10px;
+        padding-top: 8px;
+        border-top: 1px solid var(--line);
+      }
+      .le-local p {
+        margin: 0 0 4px;
+      }
+      @media (max-width: 600px) {
+        #local-view {
+          padding: 8px 12px 20px;
+        }
+        .lm-fn {
+          padding: 10px;
+        }
+      }
+
       .gpu-note,
       .gpu-dim {
         color: var(--dim);
@@ -3496,9 +3693,9 @@
           ></div>
           <section id="stage" aria-label="Visualization">
             <div class="viz-bar">
-              <!-- One tab per view of the current IR. A new view (for example
-                   "Local memory") adds a [data-view] tab here and registers
-                   its show / hide in VIEWS in src/main.js. -->
+              <!-- One tab per view of the current IR. A new view adds a
+                   [data-view] tab here and registers its show / hide in
+                   VIEWS in src/main.js. -->
               <div
                 id="viz-tabs"
                 class="viz-tabs"
@@ -3525,6 +3722,17 @@
                   hidden
                 >
                   GPU
+                </button>
+                <button
+                  id="view-local"
+                  role="tab"
+                  data-view="local"
+                  aria-selected="false"
+                  aria-controls="local-view"
+                  title="Scratchpad buffers, their slots, and the DMA schedule"
+                  hidden
+                >
+                  Local memory
                 </button>
               </div>
               <button
@@ -3590,6 +3798,12 @@
                 id="gpu-view"
                 role="tabpanel"
                 aria-labelledby="view-gpu"
+                hidden
+              ></div>
+              <div
+                id="local-view"
+                role="tabpanel"
+                aria-labelledby="view-local"
                 hidden
               ></div>
             </div>
@@ -4747,6 +4961,98 @@
                   kernels + benchmarks (mock)" sample shows this with made-up
                   numbers.
                 </p>
+              </article>
+
+              <article
+                class="lesson"
+                id="lesson-scratchpad"
+                data-group="Lessons"
+                data-title="Scratchpads and DMA (beyond GPUs)"
+              >
+                <div class="docs-kicker">Lesson 5 · Beyond GPUs</div>
+                <h2>Scratchpads and DMA (beyond GPUs)</h2>
+                <div class="lesson-goals">
+                  <strong>You'll learn</strong>
+                  <ul>
+                    <li>
+                      why DSPs and NPUs use a local memory the software
+                      manages, instead of a cache;
+                    </li>
+                    <li>what double buffering is and why it needs two slots;</li>
+                    <li>how to read it in the DSP scratchpad sample.</li>
+                  </ul>
+                </div>
+                <p>
+                  A cache decides on its own what to keep close to the
+                  processor. That works well for general code, but its
+                  choices are hard to predict, and the hardware that makes
+                  them costs area and power. Many DSPs and NPUs (Hexagon's
+                  VTCM is one example) offer a <em>scratchpad</em> instead: a
+                  small, fast local memory that holds exactly what the program
+                  puts there. The compiler decides which tile of data lives in
+                  it, and moves the data in with <em>DMA</em>, a copy engine
+                  that runs beside the vector unit. Shared memory on a GPU is
+                  the same idea, managed by the threads of a block.
+                </p>
+
+                <h3>Double buffering</h3>
+                <p>
+                  A DMA takes time. If the loop copied a tile and then computed
+                  on it, the vector unit would sit idle during every copy.
+                  Double buffering gives each tile two <em>slots</em>: while
+                  the loop computes on tile <em>i</em> in one slot, the DMA
+                  fills the other slot with tile <em>i</em>&nbsp;+&nbsp;1. The
+                  first tile is loaded before the loop (the
+                  <em>prologue</em>), and each trip ends by swapping the roles
+                  of the slots. The price is twice the local memory per tile.
+                </p>
+                <p>
+                  In MLIR, <code>memref.dma_start</code> starts a copy and
+                  marks a <em>tag</em>; <code>memref.dma_wait</code> on the
+                  same tag blocks until it has finished. Slots appear as a
+                  leading dimension of 2 on the buffer, and the slot of a trip
+                  is computed as <code>(i floordiv step) mod 2</code>.
+                </p>
+
+                <div class="try">
+                  <strong>Try it.</strong>
+                  <span
+                    >Open the "DSP scratchpad" sample and step to
+                    <code>nanodsp-promote-local</code>. The
+                    <strong>Local memory</strong> tab shows the A and B tiles
+                    as two 64&nbsp;KB slots each, filling the assumed
+                    256&nbsp;KB budget, and a schedule with the prologue
+                    loads, the prefetch of the next tile, and the waits. Click
+                    a prefetch to see its <code>dma_start</code> explained in
+                    the inspector, then step to
+                    <code>nanodsp-lower-local</code>, where each DMA has become
+                    a plain <code>linalg.copy</code>.</span
+                  >
+                </div>
+
+                <p>
+                  Limits: the view shows the order the IR expresses, not
+                  timing. Whether the copy of the next tile really hides
+                  behind the compute depends on the DMA engine, the memory
+                  bandwidth and the size of the compute, none of which are in
+                  the IR. The budget comes from nano-dsp's model of its
+                  target, not from the IR, and is labelled as assumed. After
+                  <code>nanodsp-lower-local</code> the copies are synchronous,
+                  so nothing overlaps at all; that form exists to run the
+                  kernel on a machine without a DMA engine.
+                </p>
+
+                <details class="check">
+                  <summary>
+                    Check yourself: why does the prefetch in the sample sit
+                    inside an <code>scf.if</code>?
+                  </summary>
+                  <p>
+                    On the last trip there is no next tile to fetch. The guard
+                    (<code>i + step &lt; upper bound</code>) skips the DMA there,
+                    so it never reads past the end of the input.
+                  </p>
+                </details>
               </article>
 
               <article
