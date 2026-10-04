@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { copySnapshot, diffSnapshots, normalizeLabel } from "../../src/diff.js";
-import { KIND } from "../../src/wasm/abi.js";
+import { copySnapshot, diffSnapshots, normalizeLabel } from "../../src/ir/diff.js";
+import { KIND } from "../../src/ir/abi.js";
 
 // Builds an object shaped like MlirEngine#snapshot() from [kind, label, parent].
 function liveSnapshot(nodes) {

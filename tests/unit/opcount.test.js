@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { copySnapshot } from "../../src/diff.js";
+import { copySnapshot } from "../../src/ir/diff.js";
 import {
   countOps,
   opCountsToCSV,
@@ -7,7 +7,7 @@ import {
   opName,
   totalOps,
 } from "../../src/opcount.js";
-import { KIND } from "../../src/wasm/abi.js";
+import { KIND } from "../../src/ir/abi.js";
 
 // Builds an object shaped like MlirEngine#snapshot() from [kind, label, parent].
 function liveSnapshot(nodes) {

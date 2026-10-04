@@ -3,7 +3,7 @@
 
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import * as abi from "../../src/wasm/abi.js";
+import * as abi from "../../src/ir/abi.js";
 
 const rustSource = readFileSync(
   new URL("../../wasm/src/abi.rs", import.meta.url),

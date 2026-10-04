@@ -1,7 +1,7 @@
-import { MlirEngine } from "./wasm/bridge.js";
+import { MlirEngine } from "./ir/index.js";
 import { CanvasRenderer } from "./render/canvas-renderer.js";
-import { ABI_VERSION, STATUS } from "./wasm/abi.js";
-import { copySnapshot, diffSnapshots } from "./diff.js";
+import { ABI_VERSION, STATUS } from "./ir/index.js";
+import { copySnapshot, diffSnapshots } from "./ir/index.js";
 import {
   countOps,
   opCountsToCSV,
