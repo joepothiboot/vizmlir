@@ -14,7 +14,7 @@
 // (src/gpu-affine.js), proveAccess() checks the verdict for every warp of the
 // launch and every iteration, not just the one shown.
 
-import { elementBytes as elementSize } from "./trace/index.js";
+import { elementBytes as elementSize } from "../trace/index.js";
 import {
   add,
   constant,
@@ -24,7 +24,7 @@ import {
   parseAffine,
   parseAffineMap,
   scale,
-} from "./gpu-affine.js";
+} from "./affine.js";
 
 export const WARP = 32;
 // Global memory moves 32-byte sectors; shared memory has 32 banks of 4 bytes.

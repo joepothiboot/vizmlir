@@ -27,14 +27,14 @@ import {
   symbolTimeline,
 } from "./trace/index.js";
 import { diffStats, lineDiff } from "./trace/index.js";
-import { analyzeGpu, memorySpace } from "./gpu.js";
+import { analyzeGpu, memorySpace } from "./gpu/index.js";
 import {
   focusGpuLine,
   renderGpuPath,
   renderGpuView,
   verdictSummary,
 } from "./gpu-view.js";
-import { warpAccess } from "./gpu-access.js";
+import { warpAccess } from "./gpu/index.js";
 import { parseMemref } from "./trace/index.js";
 import { explainLine } from "./anatomy.js";
 import { bindGuide } from "./guide.js";

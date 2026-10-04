@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { buildDefs } from "../../src/gpu-access.js";
-import { analyzeGpu } from "../../src/gpu.js";
+import { buildDefs } from "../../src/gpu/access.js";
+import { analyzeGpu } from "../../src/gpu/model.js";
 import { acrossPasses } from "../../src/gpu-view.js";
 import { parsePassTrace } from "../../src/trace/trace.js";
 import {
@@ -12,7 +12,7 @@ import {
   parseTensor,
   pointerOffset,
   tritonAccess,
-} from "../../src/triton.js";
+} from "../../src/gpu/triton.js";
 
 const trace = parsePassTrace(
   readFileSync(new URL("../../public/samples/triton-coalesce.trace.txt", import.meta.url), "utf8"),

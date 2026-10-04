@@ -15,9 +15,9 @@
 // every repetition of the layout and every program, like src/gpu-access.js
 // does for memref code.
 
-import { add, constant, formatAffine, isConstant, scale } from "./gpu-affine.js";
-import { buildDefs, judgeWarp, WARP } from "./gpu-access.js";
-import { elementBytes as elementSize } from "./trace/index.js";
+import { add, constant, formatAffine, isConstant, scale } from "./affine.js";
+import { buildDefs, judgeWarp, WARP } from "./access.js";
+import { elementBytes as elementSize } from "../trace/index.js";
 
 const SECTOR = 32;
 const LAYOUT = /^\s*(#[\w$.-]+)\s*=\s*#(?:ttg|triton_gpu)\.blocked<\{(.*)\}>\s*$/;

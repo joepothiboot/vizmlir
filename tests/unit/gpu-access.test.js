@@ -7,8 +7,8 @@ import {
   findAccesses,
   warpAccess,
   warpLanes,
-} from "../../src/gpu-access.js";
-import { analyzeGpu, loweredArgs, memorySpace } from "../../src/gpu.js";
+} from "../../src/gpu/access.js";
+import { analyzeGpu, loweredArgs, memorySpace } from "../../src/gpu/model.js";
 import { parsePassTrace } from "../../src/trace/trace.js";
 
 const events = (name) =>

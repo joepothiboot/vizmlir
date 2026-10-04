@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { URL as FileURL } from "node:url";
 import { describe, expect, it, vi } from "vitest";
-import { analyzeGpu } from "../../src/gpu.js";
+import { analyzeGpu } from "../../src/gpu/model.js";
 import {
   acrossPasses,
   passSummary,

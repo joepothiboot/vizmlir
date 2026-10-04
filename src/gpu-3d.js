@@ -5,7 +5,7 @@
 // hover for ids, click a block to open it. Plain canvas 2D with a small
 // perspective projection: no WebGL and no library.
 
-import { flowSlice, kernelFlow } from "./gpu-flow.js";
+import { flowSlice, kernelFlow } from "./gpu/index.js";
 import { formatBytes } from "./trace/index.js";
 
 const WARP = 32;
