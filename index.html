@@ -2428,12 +2428,73 @@
       /* The graph stays laid out under the GPU view so the canvas keeps its
          size; hidden, it also leaves the accessibility tree. */
       #stage.gpu-mode #graph-view,
+      #stage.descent-mode #graph-view,
       #stage.local-mode #graph-view {
         visibility: hidden;
       }
       #canvas:focus-visible {
         outline: 1px solid var(--accent);
         outline-offset: -2px;
+      }
+      /* The Descent view: the passes as layers in a 3D stack. */
+      #descent-view {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        background: var(--bg);
+        font-family: var(--ui);
+        font-size: 12px;
+      }
+      #descent-view[hidden] {
+        display: none;
+      }
+      .descent-bar {
+        display: flex;
+        flex: 0 0 auto;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--line);
+      }
+      .descent-bar[hidden] {
+        display: none;
+      }
+      .descent-bar button {
+        flex: 0 0 auto;
+        white-space: nowrap;
+      }
+      .descent-status {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        color: var(--dim);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .descent-canvas {
+        display: block;
+        flex: 1 1 0;
+        width: 100%;
+        min-height: 0;
+        cursor: grab;
+        touch-action: none;
+      }
+      .descent-canvas[hidden] {
+        display: none;
+      }
+      .descent-canvas:focus-visible {
+        outline: 1px solid var(--accent);
+        outline-offset: -2px;
+      }
+      .descent-canvas:active {
+        cursor: grabbing;
+      }
+      .descent-empty {
+        margin: 0;
+        padding: 20px;
+        color: var(--dim);
       }
       #gpu-view {
         position: absolute;
@@ -3713,6 +3774,17 @@
                 >
                   Local memory
                 </button>
+                <button
+                  id="view-descent"
+                  role="tab"
+                  data-view="descent"
+                  aria-selected="false"
+                  aria-controls="descent-view"
+                  title="Descent: the passes as layers, and an op's path down through them"
+                  hidden
+                >
+                  Descent
+                </button>
               </div>
               <button
                 id="viz-verdict"
@@ -3777,6 +3849,12 @@
                 id="gpu-view"
                 role="tabpanel"
                 aria-labelledby="view-gpu"
+                hidden
+              ></div>
+              <div
+                id="descent-view"
+                role="tabpanel"
+                aria-labelledby="view-descent"
                 hidden
               ></div>
               <div

@@ -1,5 +1,5 @@
 import { MlirEngine } from "./ir/index.js";
-import { CanvasRenderer } from "./render/index.js";
+import { CanvasRenderer, createDescentView } from "./render/index.js";
 import { ABI_VERSION, STATUS } from "./ir/index.js";
 import { copySnapshot, diffSnapshots } from "./ir/index.js";
 import {
@@ -47,7 +47,7 @@ import {
   renderLocalView,
 } from "./render/index.js";
 import { parseMemref } from "./trace/index.js";
-import { buildOpModel, opHistory, opRecords } from "./trace/index.js";
+import { buildOpModel, nodesOnLine, opHistory, opRecords, snapshotShape } from "./trace/index.js";
 import { conditionHits, mergeHits, nextHit, parseCondition } from "./trace/index.js";
 import { buildLocIndex, findSource, linesOf, nodesAt, opCounts } from "./trace/index.js";
 import { explainLine } from "./anatomy.js";
@@ -144,6 +144,8 @@ const symbolsOpen = document.getElementById("symbols-open");
 const stage = document.getElementById("stage");
 const gpuViewEl = document.getElementById("gpu-view");
 const viewGpu = document.getElementById("view-gpu");
+const viewDescent = document.getElementById("view-descent");
+const descentEl = document.getElementById("descent-view");
 const localViewEl = document.getElementById("local-view");
 const viewLocal = document.getElementById("view-local");
 const leTitle = document.getElementById("le-title");
@@ -203,6 +205,8 @@ let localWanted = true;
 let traceSymbols = null;
 // How each op of a trace was made and changed, computed when first shown.
 let opModel = null;
+// Each pass's IR as a tree, for the Descent view (filled with opModel).
+let opShapes = null;
 // The history on show after jumping to the pass that removed its op, where
 // nothing is selected; cleared by the next pick.
 let opPinned = null;
@@ -494,6 +498,7 @@ function loadTrace(text, { keepIndex = false } = {}) {
   traceBuffers = null;
   traceSymbols = null;
   opModel = null;
+  opShapes = null;
   opPinned = null;
   bpHits = new Map();
   scrubber.setMarks([]);
@@ -532,6 +537,7 @@ function loadTrace(text, { keepIndex = false } = {}) {
         : 0,
   );
   updateSymbolsOpen();
+  updateDescentTab();
   refreshBreakpoints({ defer: true });
 }
 
@@ -580,6 +586,7 @@ function selectEvent(index) {
   );
   run();
   updateDebugBar();
+  refreshDescent();
 }
 
 // Every pass as one compact row, in the Changes tab: number, name, wall
@@ -711,6 +718,7 @@ function clearTrace() {
   traceBuffers = null;
   traceSymbols = null;
   opModel = null;
+  opShapes = null;
   opPinned = null;
   benchmarks = { baseline: null, current: null };
   traceText = "";
@@ -718,6 +726,7 @@ function clearTrace() {
   traceIndex = -1;
   traceDiffTitle = "";
   updateDebugBar();
+  updateDescentTab();
   passScrubber.hidden = true;
   bpHits = new Map();
   scrubber.setMarks([]);
@@ -2888,6 +2897,14 @@ const VIEWS = {
       if (on) drawGpuView();
     },
   },
+  descent: {
+    available: () => !!trace && trace.events.length > 1,
+    show(on) {
+      stage.classList.toggle("descent-mode", on);
+      descentEl.hidden = !on;
+      if (on) drawDescent();
+    },
+  },
   local: {
     available: () => !!localModel,
     show(on) {
@@ -2902,7 +2919,7 @@ const vizTabs = [...document.querySelectorAll("#viz-tabs [data-view]")];
 // `remember` records the choice as the preference, for the person's own
 // toggles; automatic switches pass false.
 function setCanvasView(view, { remember = true } = {}) {
-  if (remember && gpuModel && view !== "local") {
+  if (remember && gpuModel && view !== "local" && view !== "descent") {
     canvasPreference = view === "gpu" ? "gpu" : "graph";
     try {
       localStorage.setItem(CANVAS_KEY, canvasPreference);
@@ -3127,15 +3144,12 @@ function renderLinePanel() {
 
 // A click on a line of the current source explains it in the inspector.
 input.addEventListener("click", () => {
-  renderExplain(caretLine());
-  focusGpu(caretLine());
-  if (canvasView === "local") focusLocalLine(localViewEl, caretLine());
+  selection.select({ line: caretLine() });
   inspect("line", input);
 });
 input.addEventListener("keyup", (e) => {
   if (!/^(Arrow|Page|Home|End)/.test(e.key)) return;
-  renderExplain(caretLine());
-  focusGpu(caretLine());
+  selection.select({ line: caretLine() });
 });
 // New text (another pass, a paste) invalidates the explained line.
 input.addEventListener("input", () => renderExplain(-1));
@@ -3152,10 +3166,14 @@ const ophSteps = document.getElementById("oph-steps");
 // the graph's snapshot is re-parsed afterwards). Uses the text each pass shows,
 // so node numbers agree with the graph.
 function computeOpModel() {
+  const shapes = [];
   const records = trace.events.map((event) => {
     const result = parse(event.ir);
-    return result.status === STATUS.OK ? opRecords(result.snapshot) : null;
+    const ok = result.status === STATUS.OK;
+    shapes.push(ok ? snapshotShape(result.snapshot) : null);
+    return ok ? opRecords(result.snapshot) : null;
   });
+  opShapes = shapes;
   if (renderedText) {
     const restored = parse(renderedText).snapshot;
     renderer.snapshot = restored;
@@ -3255,6 +3273,68 @@ function renderOpHistoryPanel() {
 selection.subscribe((state, picked) => {
   if (picked.includes("node") && inspector.isOpen && inspector.active === "ophistory")
     renderOpHistoryPanel();
+});
+
+// ---- Descent view ------------------------------------------------------------
+
+// The passes as layers in a 3D stack (src/render/descent.js). It reads the
+// same op model as the History tab: the layers come from each pass's parse,
+// the path of the selected op from its history, and the lit line from the
+// selection.
+const descent = createDescentView(descentEl, {
+  onPickNode: goToOp,
+  onPickPass: (pass) => pass !== traceIndex && selectEvent(pass),
+  onStep(delta) {
+    if (!trace) return;
+    const last = trace.events.length - 1;
+    const target = Math.max(0, Math.min(last, Number.isFinite(delta) ? traceIndex + delta : delta > 0 ? last : 0));
+    if (target !== traceIndex) selectEvent(target);
+  },
+  onGpu: () => setCanvasView("gpu", { remember: false }),
+});
+let descentFor = null;
+
+// The Descent tab is there whenever a trace has more than one pass.
+function updateDescentTab() {
+  const has = !!trace && trace.events.length > 1;
+  viewDescent.hidden = !has;
+  if (!has) {
+    descent.setData(null);
+    descentFor = null;
+    if (canvasView === "descent") setCanvasView("graph", { remember: false });
+  }
+}
+
+function drawDescent() {
+  if (!trace) return;
+  opModel ??= computeOpModel();
+  if (descentFor !== opModel) {
+    descent.setData({
+      shapes: opShapes,
+      titles: trace.events.map((event) => `#${event.index + 1} ${describeEvent(event)}`),
+      names: trace.events.map((event) => describeEvent(event).replace(/ · .*/, "")),
+      labelOf: (pass, node) => opModel.records[pass]?.[node]?.label ?? "",
+    });
+    descentFor = opModel;
+  }
+  refreshDescent();
+}
+
+function refreshDescent() {
+  if (canvasView !== "descent" || !trace || !opModel || descentFor !== opModel) return;
+  const node = renderer.selected;
+  const line = selection.state.line;
+  descent.setState({
+    pass: traceIndex,
+    node,
+    lineage: node >= 0 ? opHistory(opModel, traceIndex, node) : (opPinned ?? []),
+    lineNodes: line >= 0 ? nodesOnLine(opShapes[traceIndex], line + 1) : [],
+    gpu: !!gpuModel,
+  });
+}
+
+selection.subscribe((_, picked) => {
+  if (picked.includes("node") || picked.includes("line")) refreshDescent();
 });
 
 // ---- Symbol view -----------------------------------------------------------
