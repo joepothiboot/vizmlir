@@ -32,6 +32,7 @@ export function createScrubber(root, { onSelect, preview, label, schedule } = {}
 
   let count = 0;
   let previewed = -1;
+  let marks = new Set();
   let pending = false;
   const value = () => Number(range.value) - 1;
 
@@ -133,7 +134,9 @@ export function createScrubber(root, { onSelect, preview, label, schedule } = {}
       ticks?.replaceChildren(
         ...passes.map((pass, i) => {
           const tick = document.createElement("span");
-          tick.className = pass.failed ? "failed" : "";
+          tick.className = [pass.failed ? "failed" : "", marks.has(i) ? "bp" : ""]
+            .filter(Boolean)
+            .join(" ");
           tick.style.left = at(i);
           if (pass.share !== null && pass.share !== undefined)
             tick.style.setProperty("--share", String(pass.share));
@@ -141,6 +144,15 @@ export function createScrubber(root, { onSelect, preview, label, schedule } = {}
         }),
       );
       hidePreview();
+    },
+    // Marks the passes where a breakpoint hits (indices), replacing the last
+    // marks. They survive `setValue` and are cleared by `setPasses`.
+    setMarks(indices) {
+      const hit = new Set(indices);
+      marks = hit;
+      [...(ticks?.children ?? [])].forEach((tick, i) =>
+        tick.classList.toggle("bp", hit.has(i)),
+      );
     },
     // Shows pass `index` as selected without calling onSelect.
     setValue(index) {

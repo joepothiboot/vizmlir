@@ -330,6 +330,67 @@
         gap: 8px;
         padding: 0 20px 8px;
       }
+      .debug-bar {
+        flex-wrap: wrap;
+      }
+      .bp-pop {
+        flex: 1 0 100%;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--panel);
+      }
+      .bp-pop[hidden] {
+        display: none;
+      }
+      .bp-form {
+        display: flex;
+        gap: 6px;
+      }
+      .bp-form input {
+        flex: 1 1 auto;
+        font: 12px var(--code);
+      }
+      .bp-error {
+        margin: 6px 0 0;
+        color: var(--err);
+        font-size: 12px;
+      }
+      .bp-list {
+        margin: 8px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+      .bp-list li {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 4px;
+        font-size: 12px;
+      }
+      .bp-list code {
+        font: 12px var(--code);
+      }
+      .bp-list .hits {
+        color: var(--dim);
+      }
+      .bp-list .hits button {
+        padding: 0 4px;
+        border: 0;
+        background: none;
+        color: var(--accent);
+        font: inherit;
+        text-decoration: underline;
+        cursor: pointer;
+      }
+      .bp-list .remove {
+        margin-left: auto;
+        padding: 0 6px;
+      }
+      #bp-open[aria-expanded="true"] {
+        color: var(--fg);
+        border-color: var(--accent);
+      }
       .debug-bar[hidden] {
         display: none;
       }
@@ -431,6 +492,17 @@
         width: 3px;
         height: 9px;
         background: var(--err);
+      }
+      .scrub-ticks span.bp::after {
+        content: "";
+        position: absolute;
+        bottom: calc(100% + 1px);
+        left: 50%;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--err);
+        transform: translateX(-50%);
       }
       .scrub-ticks span.current {
         background: var(--accent);
@@ -3484,7 +3556,26 @@
         <button id="debug-prev-change" type="button" title="Previous pass that changed the IR (shift [)">◀ change</button>
         <button id="debug-next-change" type="button" title="Next pass that changed the IR (shift ])">change ▶</button>
         <button id="debug-last" type="button" title="Last pass">⏭</button>
+        <button id="debug-op-prev" type="button" title="Previous pass that changed the selected op (shift ,)" disabled>◀ op</button>
+        <button id="debug-op-next" type="button" title="Next pass that changed the selected op (shift .)" disabled>op ▶</button>
+        <button id="bp-back" type="button" title="Run back to the previous breakpoint (,)" disabled>⏴ back</button>
+        <button id="bp-continue" type="button" title="Continue to the next breakpoint (.)" disabled>⏵ continue</button>
+        <button id="bp-open" type="button" aria-expanded="false" aria-controls="bp-pop" title="Stop when a condition becomes true">Break when…<span id="bp-count"></span></button>
         <span id="debug-status" class="debug-status" aria-live="polite"></span>
+        <div id="bp-pop" class="bp-pop" hidden>
+          <form id="bp-form" class="bp-form">
+            <input id="bp-input" type="text" autocomplete="off" spellcheck="false" aria-label="Break when" placeholder="linalg.matmul == 0" />
+            <button type="submit">Add</button>
+          </form>
+          <p id="bp-error" class="bp-error" role="alert" hidden></p>
+          <ul id="bp-list" class="bp-list"></ul>
+          <p class="dialog-note">
+            Stops when a condition <em>becomes</em> true. Try
+            <code>linalg.matmul == 0</code>, <code>ops &lt; 20</code>,
+            <code>live &gt; 1MB</code>, <code>appears gpu.launch</code>,
+            <code>gone func.call</code>, <code>fails</code> or <code>diag</code>.
+          </p>
+        </div>
       </div>
 
       <div id="workspace">
@@ -4209,6 +4300,10 @@
           <dd>Op history: follow the selected op through the passes</dd>
           <dt><kbd>d</kbd></dt>
           <dd>Debug mode: split sources and step by change</dd>
+          <dt><kbd>,</kbd> <kbd>.</kbd></dt>
+          <dd>Run back / forward to the previous / next breakpoint (Debug mode)</dd>
+          <dt><kbd>shift</kbd> <kbd>,</kbd> <kbd>.</kbd></dt>
+          <dd>Previous / next pass that changed the selected op (Debug mode)</dd>
           <dt><kbd>shift</kbd> <kbd>[</kbd> <kbd>]</kbd></dt>
           <dd>Previous / next pass that changed the IR (Debug mode)</dd>
           <dt><kbd>\</kbd></dt>

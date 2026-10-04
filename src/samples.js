@@ -45,6 +45,9 @@ export const SAMPLES = [
       "Every op carries a loc(...) into saxpy.mojo. Watch one source line follow its ops through inlining (a call site), canonicalization (two ops fused into one fma) and lowering to NVVM. Open the Source tab and click a line, or an op. Hand-written in the format of mlir-opt -mlir-print-debuginfo output.",
     trace: "saxpy.trace.txt",
     sources: ["saxpy.mojo"],
+    // Breakpoints to try in Debug mode: the pass that inlines the call away,
+    // and the one that fuses the mul and add.
+    breakpoints: ["gone func.call", "appears math.fma"],
     handwritten: true,
   },
   {
@@ -153,6 +156,8 @@ export async function loadSampleState(sample, fetchText) {
       trace: await fetchText(sample.trace),
       traceIndex: -1,
     };
+    if (sample.breakpoints)
+      state.breakpoints = sample.breakpoints.map((text) => ({ text, on: true }));
     if (sample.sources) {
       state.sources = {};
       for (const path of sample.sources)

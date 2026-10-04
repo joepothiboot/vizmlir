@@ -48,6 +48,7 @@ import {
 } from "./render/index.js";
 import { parseMemref } from "./trace/index.js";
 import { buildOpModel, opHistory, opRecords } from "./trace/index.js";
+import { conditionHits, mergeHits, nextHit, parseCondition } from "./trace/index.js";
 import { buildLocIndex, findSource, linesOf, nodesAt, opCounts } from "./trace/index.js";
 import { explainLine } from "./anatomy.js";
 import {
@@ -494,6 +495,8 @@ function loadTrace(text, { keepIndex = false } = {}) {
   traceSymbols = null;
   opModel = null;
   opPinned = null;
+  bpHits = new Map();
+  scrubber.setMarks([]);
   if (!trace.events.length) {
     clearTrace();
     setStatus("no IR dumps found in trace", { error: true });
@@ -529,6 +532,7 @@ function loadTrace(text, { keepIndex = false } = {}) {
         : 0,
   );
   updateSymbolsOpen();
+  refreshBreakpoints({ defer: true });
 }
 
 function selectEvent(index) {
@@ -715,6 +719,8 @@ function clearTrace() {
   traceDiffTitle = "";
   updateDebugBar();
   passScrubber.hidden = true;
+  bpHits = new Map();
+  scrubber.setMarks([]);
   scrubber.setPasses([]);
   passList.replaceChildren();
   passListWrap.hidden = true;
@@ -866,6 +872,8 @@ function updateDebugBar() {
   debugStatus.textContent = counts
     ? `pass ${traceIndex + 1}: +${counts.added} −${counts.removed} ~${counts.changed} ops`
     : `pass ${traceIndex + 1}: IR did not parse`;
+  updateOpStepButtons();
+  updateBreakpointButtons();
 }
 
 function setDebug(on, { save = true } = {}) {
@@ -907,6 +915,193 @@ debugButtons.last.addEventListener("click", () =>
 );
 debugButtons.prev.addEventListener("click", () => stepToChange(-1));
 debugButtons.next.addEventListener("click", () => stepToChange(1));
+
+// Steps to the previous / next pass that changed the selected op: it was made,
+// renamed, inlined, fused or removed there. The op stays selected.
+const opStepButtons = {
+  prev: document.getElementById("debug-op-prev"),
+  next: document.getElementById("debug-op-next"),
+};
+
+function updateOpStepButtons() {
+  const off = !(debugOn && trace) || renderer.selected < 0;
+  opStepButtons.prev.disabled = off;
+  opStepButtons.next.disabled = off;
+}
+
+function stepOpChange(delta) {
+  if (!debugOn || !trace) return;
+  if (renderer.selected < 0) {
+    setStatus("pick an op first, then step to the passes that changed it");
+    return;
+  }
+  opModel ??= computeOpModel();
+  const entries = opHistory(opModel, traceIndex, renderer.selected);
+  const changes = entries.filter((entry) => entry.change !== "kept");
+  const target =
+    delta > 0
+      ? changes.find((entry) => entry.pass > traceIndex)
+      : changes.findLast((entry) => entry.pass < traceIndex);
+  if (!target) {
+    setStatus(`no ${delta > 0 ? "later" : "earlier"} pass changes this op`);
+    return;
+  }
+  lastOpEntries = entries;
+  goToOp(target.pass, target.node);
+  debugStatus.textContent = `${OP_CHANGE[target.change]} · pass ${target.pass + 1}`;
+}
+
+opStepButtons.prev.addEventListener("click", () => stepOpChange(-1));
+opStepButtons.next.addEventListener("click", () => stepOpChange(1));
+selection.subscribe((_, picked) => {
+  if (picked.includes("node")) updateOpStepButtons();
+});
+
+// ---- Breakpoints -----------------------------------------------------------
+
+// Conditions that stop a run between passes (src/trace/breakpoints.js). The
+// passes each one hits are worked out when a trace loads or the list changes,
+// and drawn as dots on the pass slider.
+const bp = {
+  open: document.getElementById("bp-open"),
+  pop: document.getElementById("bp-pop"),
+  form: document.getElementById("bp-form"),
+  input: document.getElementById("bp-input"),
+  error: document.getElementById("bp-error"),
+  list: document.getElementById("bp-list"),
+  count: document.getElementById("bp-count"),
+  back: document.getElementById("bp-back"),
+  cont: document.getElementById("bp-continue"),
+};
+let breakpoints = []; // { text, on }
+let bpHits = new Map(); // text -> passes it hits
+let bpTimer = 0;
+
+function breakpointContext() {
+  return {
+    events: trace.events,
+    counts: () => (traceCounts ??= computeTraceCounts()),
+    peaks: () => (traceBuffers ??= computeTraceBuffers()),
+  };
+}
+
+const activeHits = () =>
+  mergeHits(breakpoints.filter((b) => b.on).map((b) => bpHits.get(b.text) ?? []));
+
+// Works the hits out again. After a load this waits a tick so the pass shows
+// first; the whole trace is parsed to count ops.
+function refreshBreakpoints({ defer = false } = {}) {
+  clearTimeout(bpTimer);
+  const compute = () => {
+    bpHits = new Map();
+    if (trace)
+      for (const b of breakpoints) {
+        const parsed = parseCondition(b.text);
+        bpHits.set(b.text, parsed.ok ? conditionHits(parsed.cond, breakpointContext()) : []);
+      }
+    scrubber.setMarks(activeHits());
+    renderBreakpoints();
+  };
+  if (defer) bpTimer = setTimeout(compute, 0);
+  else compute();
+}
+
+function updateBreakpointButtons() {
+  const hits = activeHits();
+  bp.back.disabled = nextHit(hits, traceIndex, -1) < 0;
+  bp.cont.disabled = nextHit(hits, traceIndex, 1) < 0;
+}
+
+function renderBreakpoints() {
+  bp.count.textContent = breakpoints.length ? ` (${breakpoints.length})` : "";
+  bp.list.replaceChildren(
+    ...breakpoints.map((b, i) => {
+      const item = document.createElement("li");
+      const on = document.createElement("input");
+      on.type = "checkbox";
+      on.checked = b.on;
+      on.setAttribute("aria-label", `Enable ${b.text}`);
+      on.addEventListener("change", () => {
+        b.on = on.checked;
+        scrubber.setMarks(activeHits());
+        updateBreakpointButtons();
+        scheduleAutosave();
+      });
+      const text = document.createElement("code");
+      text.textContent = b.text;
+      const hits = document.createElement("span");
+      hits.className = "hits";
+      const passes = bpHits.get(b.text) ?? [];
+      if (!trace) hits.textContent = "open a pass trace";
+      else if (!passes.length) hits.textContent = "never hit";
+      else {
+        hits.append("hits at ");
+        passes.forEach((pass, k) => {
+          const go = document.createElement("button");
+          go.type = "button";
+          go.textContent = `#${pass + 1}`;
+          go.addEventListener("click", () => selectEvent(pass));
+          hits.append(go, k < passes.length - 1 ? " " : "");
+        });
+      }
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "remove";
+      remove.textContent = "✕";
+      remove.setAttribute("aria-label", `Remove ${b.text}`);
+      remove.addEventListener("click", () => {
+        breakpoints.splice(i, 1);
+        refreshBreakpoints();
+        scheduleAutosave();
+      });
+      item.append(on, text, hits, remove);
+      return item;
+    }),
+  );
+  updateBreakpointButtons();
+}
+
+// Runs to the next (or previous) pass any enabled breakpoint hits.
+function runToBreakpoint(delta) {
+  if (!trace) return;
+  const hits = activeHits();
+  const target = nextHit(hits, traceIndex, delta);
+  if (target < 0) {
+    setStatus(
+      breakpoints.some((b) => b.on)
+        ? `no breakpoint ${delta > 0 ? "after" : "before"} pass ${traceIndex + 1}`
+        : "no breakpoints set: use Break when…",
+    );
+    return;
+  }
+  selectEvent(target);
+  const why = breakpoints
+    .filter((b) => b.on && (bpHits.get(b.text) ?? []).includes(target))
+    .map((b) => b.text);
+  debugStatus.textContent = `break: ${why.join(" · ")} · pass ${target + 1}`;
+}
+
+bp.open.addEventListener("click", () => {
+  bp.pop.hidden = !bp.pop.hidden;
+  bp.open.setAttribute("aria-expanded", String(!bp.pop.hidden));
+  if (!bp.pop.hidden) bp.input.focus();
+});
+bp.form.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const parsed = parseCondition(bp.input.value);
+  bp.error.hidden = parsed.ok;
+  if (!parsed.ok) {
+    bp.error.textContent = parsed.error;
+    return;
+  }
+  if (!breakpoints.some((b) => b.text === parsed.cond.text))
+    breakpoints.push({ text: parsed.cond.text, on: true });
+  bp.input.value = "";
+  refreshBreakpoints();
+  scheduleAutosave();
+});
+bp.back.addEventListener("click", () => runToBreakpoint(-1));
+bp.cont.addEventListener("click", () => runToBreakpoint(1));
 
 // ---- Source line marker ----------------------------------------------------
 
@@ -1266,6 +1461,8 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
     ["Switch baseline / current", "t", toggleTab],
     ["Toggle split sources", "s", toggleSplit],
     ["Toggle debug mode", "d", () => setDebug(!debugOn)],
+    ["Continue to the next breakpoint", ".", () => runToBreakpoint(1)],
+    ["Run back to the previous breakpoint", ",", () => runToBreakpoint(-1)],
     ["Op history: follow the selected op", "y", () => showPanel("ophistory")],
     ["Browse samples…", "", openSamples],
     ["Sessions: save, open, import", "", openSessions],
@@ -1413,6 +1610,10 @@ const WORKSPACE_KEYS = {
   d: () => setDebug(!debugOn),
   "{": () => stepToChange(-1),
   "}": () => stepToChange(1),
+  ",": () => debugOn && runToBreakpoint(-1),
+  ".": () => debugOn && runToBreakpoint(1),
+  "<": () => stepOpChange(-1),
+  ">": () => stepOpChange(1),
   p: () => inspector.toggleTab("timing"),
   o: () => inspector.toggleTab("opcount"),
   b: () => inspector.toggleTab("buffers"),
@@ -1557,6 +1758,7 @@ function getState() {
     split: sourcePane.classList.contains("split"),
     sourceSplit: sourcePane.classList.contains("split-source"),
     sources: Object.keys(sources).length ? sources : null,
+    breakpoints: breakpoints.length ? breakpoints : null,
     benchmarks: traceText
       ? Object.fromEntries(
           Object.entries(benchmarks).map(([slot, bench]) => [
@@ -1571,6 +1773,9 @@ function getState() {
 function applyState(state) {
   clearTrace();
   sources = state.sources ? { ...state.sources } : {};
+  breakpoints = (Array.isArray(state.breakpoints) ? state.breakpoints : [])
+    .filter((b) => typeof b?.text === "string")
+    .map((b) => ({ text: b.text, on: b.on !== false }));
   sourceName.textContent = state.sourceName || "untitled";
   sourceName.title = sourceName.textContent;
   sourcePane.classList.toggle("split", !!state.split);

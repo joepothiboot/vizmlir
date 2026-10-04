@@ -11,6 +11,7 @@ Run `mlir-opt` with `-mlir-print-ir-after-all` and you get a long log. These mod
 - **`opcount.js`**: how many of each op the module has at every pass.
 - **`buffers.js`**: memref lifetimes, the peak of live bytes, and baseline-versus-current comparison. Also parses memref types (`parseMemref`, `elementBytes`) for the GPU code.
 - **`provenance.js`**: symbol history, meaning which pass created, changed, lowered or removed each function and kernel, down to the PTX.
+- **`breakpoints.js`**: conditional breakpoints over a trace. A line of text such as `linalg.matmul == 0`, `live > 1MB`, `appears gpu.launch` or `fails` becomes the passes where it first becomes true.
 - **`ophistory.js`**: follows one op through the passes of a trace. Ops in neighbouring passes are matched by source location and name, so a lowered op, an inlined body or a fused op stay connected; IR without locations falls back to name and order.
 - **`sources.js`**: source locations. Which source lines an op came from (read from its `loc(...)`) and the ops each line produced, and matching loaded source files to the file names in the IR.
 - **`linediff.js`**: a line-by-line diff of one symbol between two passes.
