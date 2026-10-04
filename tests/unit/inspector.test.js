@@ -2,8 +2,8 @@
 import { readFileSync } from "node:fs";
 import { URL as FileURL } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createInspector } from "../../src/inspector.js";
-import { createScrubber } from "../../src/scrubber.js";
+import { createInspector } from "../../src/app/inspector.js";
+import { createScrubber } from "../../src/app/scrubber.js";
 
 // The real markup from index.html, so the ids and roles under test are the
 // ones the app ships.

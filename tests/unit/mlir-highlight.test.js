@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it } from "vitest";
-import { bindHighlighting, highlightMlir } from "../../src/mlir-highlight.js";
+import { bindHighlighting, highlightMlir } from "../../src/app/mlir-highlight.js";
 
 function tokens(source) {
   const layer = document.createElement("code");

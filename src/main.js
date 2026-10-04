@@ -19,7 +19,7 @@ import {
   renderPasses,
   renderSummary,
   signedBytes,
-} from "./buffers-view.js";
+} from "./app/index.js";
 import {
   findSymbolNode,
   historyToJSON,
@@ -37,7 +37,7 @@ import {
 import { warpAccess } from "./gpu/index.js";
 import { parseMemref } from "./trace/index.js";
 import { explainLine } from "./anatomy.js";
-import { bindGuide } from "./guide.js";
+import { bindGuide } from "./app/index.js";
 import {
   changedBeyond,
   compareBenchmarks,
@@ -48,12 +48,12 @@ import {
   parseBenchmarks,
   symbolTimes,
 } from "./bench.js";
-import { bindHighlighting, highlightMlir } from "./mlir-highlight.js";
-import { CommandPalette } from "./palette.js";
-import { createInspector } from "./inspector.js";
-import { createScrubber } from "./scrubber.js";
+import { bindHighlighting, highlightMlir } from "./app/index.js";
+import { CommandPalette } from "./app/index.js";
+import { createInspector } from "./app/index.js";
+import { createScrubber } from "./app/index.js";
 import { loadSampleState, RENAME_SAMPLE, SAMPLES } from "./samples.js";
-import { bindSplitters } from "./splitters.js";
+import { bindSplitters } from "./app/index.js";
 import { kv, sessionFromFile, sessions, sessionToFile } from "./session/index.js";
 import { canWatchFiles, FileWatcher } from "./session/index.js";
 import {
