@@ -54,8 +54,8 @@ import { createInspector } from "./inspector.js";
 import { createScrubber } from "./scrubber.js";
 import { loadSampleState, RENAME_SAMPLE, SAMPLES } from "./samples.js";
 import { bindSplitters } from "./splitters.js";
-import { kv, sessionFromFile, sessions, sessionToFile } from "./storage.js";
-import { canWatchFiles, FileWatcher } from "./watch.js";
+import { kv, sessionFromFile, sessions, sessionToFile } from "./session/index.js";
+import { canWatchFiles, FileWatcher } from "./session/index.js";
 import {
   diffRecords,
   diffToJSON,
@@ -63,7 +63,7 @@ import {
   diffToPatch,
   download,
   slug,
-} from "./export.js";
+} from "./session/index.js";
 import {
   baselineFor,
   describeEvent,
