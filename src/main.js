@@ -1,5 +1,5 @@
 import { MlirEngine } from "./ir/index.js";
-import { CanvasRenderer } from "./render/canvas-renderer.js";
+import { CanvasRenderer } from "./render/index.js";
 import { ABI_VERSION, STATUS } from "./ir/index.js";
 import { copySnapshot, diffSnapshots } from "./ir/index.js";
 import {
