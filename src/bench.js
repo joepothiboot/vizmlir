@@ -190,6 +190,55 @@ function fromNcu(headers, records) {
   return { format: "ncu", timeColumn: "gpu__time_duration.sum", ...aggregate(samples), skipped: 0 };
 }
 
+// The ncu metrics that measure what the GPU view's verdicts predict: sectors
+// per global request, and shared-memory wavefronts per instruction (1 when
+// conflict-free, n for an n-way bank conflict). Collect them with
+//   ncu --csv --metrics <NCU_COUNTER_METRICS joined by ","> ./app
+export const NCU_COUNTERS = {
+  globalLoad: ["l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum", "l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum"],
+  globalStore: ["l1tex__t_sectors_pipe_lsu_mem_global_op_st.sum", "l1tex__t_requests_pipe_lsu_mem_global_op_st.sum"],
+  sharedLoad: ["l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum", "smsp__inst_executed_op_shared_ld.sum"],
+  sharedStore: ["l1tex__data_pipe_lsu_wavefronts_mem_shared_op_st.sum", "smsp__inst_executed_op_shared_st.sum"],
+};
+export const NCU_COUNTER_METRICS = Object.values(NCU_COUNTERS).flat();
+
+// Reads `ncu --csv --metrics ...` output into Map(kernel → { globalLoad,
+// globalStore, sharedLoad, sharedStore }), each the ratio of its two
+// counters summed over every launch of the kernel, or null when the kernel
+// made no such request.
+export function parseNcuCounters(text) {
+  const rows = parseCSV(text).filter((row) => row.some((cell) => cell.trim()));
+  const start = rows.findIndex((row) => {
+    const lower = row.map((cell) => cell.trim().toLowerCase());
+    return lower.includes("kernel name") && lower.includes("metric name");
+  });
+  if (start < 0) throw new Error("not ncu --csv output: no Kernel Name / Metric Name header");
+  const col = (name) => rows[start].findIndex((header) => header.trim().toLowerCase() === name);
+  const [name, metric, value] = [col("kernel name"), col("metric name"), col("metric value")];
+  const sums = new Map();
+  for (const record of rows.slice(start + 1)) {
+    const n = toNumber(record[value]);
+    const key = record[metric]?.trim();
+    if (n === null || !NCU_COUNTER_METRICS.includes(key)) continue;
+    const kernel = record[name].trim();
+    if (!sums.has(kernel)) sums.set(kernel, new Map());
+    sums.get(kernel).set(key, (sums.get(kernel).get(key) ?? 0) + n);
+  }
+  if (!sums.size)
+    throw new Error(`ncu CSV has none of the counter metrics: ${NCU_COUNTER_METRICS.join(", ")}`);
+  return new Map(
+    [...sums].map(([kernel, metrics]) => [
+      kernel,
+      Object.fromEntries(
+        Object.entries(NCU_COUNTERS).map(([kind, [num, den]]) => [
+          kind,
+          metrics.get(den) ? metrics.get(num) / metrics.get(den) : null,
+        ]),
+      ),
+    ]),
+  );
+}
+
 // Rows for the same kernel (launches, repetitions) become one entry with the
 // mean time per call.
 function aggregate(samples) {

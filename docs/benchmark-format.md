@@ -63,6 +63,10 @@ Rows whose `Metric Name` is `gpu__time_duration.sum` are kept, with the unit
 from `Metric Unit` (`nsecond`, `usecond`, `msecond`, `second`). Launches of the
 same kernel are averaged.
 
+Memory counters (sectors per request, shared-memory wavefronts) are read by
+`parseNcuCounters` in `src/bench.js` for the [hardware check](hardware-check.md),
+not by this importer.
+
 ### Google Benchmark
 
 `--benchmark_format=json` (or `--benchmark_out=results.json`). Each run's

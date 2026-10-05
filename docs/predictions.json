@@ -1,0 +1,503 @@
+{
+  "note": "Predicted from the IR by scripts/predict.mjs before any GPU run.",
+  "metrics": [
+    "l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum",
+    "l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum",
+    "l1tex__t_sectors_pipe_lsu_mem_global_op_st.sum",
+    "l1tex__t_requests_pipe_lsu_mem_global_op_st.sum",
+    "l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum",
+    "smsp__inst_executed_op_shared_ld.sum",
+    "l1tex__data_pipe_lsu_wavefronts_mem_shared_op_st.sum",
+    "smsp__inst_executed_op_shared_st.sum"
+  ],
+  "tolerance": 0.05,
+  "kernels": [
+    {
+      "kernel": "aos_x_kernel",
+      "grid": [
+        16,
+        1,
+        1
+      ],
+      "block": [
+        256,
+        1,
+        1
+      ],
+      "counters": {
+        "globalLoad": 8,
+        "globalStore": 4
+      },
+      "accesses": [
+        {
+          "file": "samples/input/gpu-patterns.mlir",
+          "line": 20,
+          "kind": "load",
+          "buffer": "%points",
+          "space": "global",
+          "inLoop": false,
+          "status": "proven",
+          "verdict": "strided",
+          "min": 8,
+          "max": 8,
+          "mean": 8
+        },
+        {
+          "file": "samples/input/gpu-patterns.mlir",
+          "line": 21,
+          "kind": "store",
+          "buffer": "%out",
+          "space": "global",
+          "inLoop": false,
+          "status": "proven",
+          "verdict": "coalesced",
+          "min": 4,
+          "max": 4,
+          "mean": 4
+        }
+      ]
+    },
+    {
+      "kernel": "soa_x_kernel",
+      "grid": [
+        16,
+        1,
+        1
+      ],
+      "block": [
+        256,
+        1,
+        1
+      ],
+      "counters": {
+        "globalLoad": 4,
+        "globalStore": 4
+      },
+      "accesses": [
+        {
+          "file": "samples/input/gpu-patterns.mlir",
+          "line": 35,
+          "kind": "load",
+          "buffer": "%xs",
+          "space": "global",
+          "inLoop": false,
+          "status": "proven",
+          "verdict": "coalesced",
+          "min": 4,
+          "max": 4,
+          "mean": 4
+        },
+        {
+          "file": "samples/input/gpu-patterns.mlir",
+          "line": 36,
+          "kind": "store",
+          "buffer": "%out",
+          "space": "global",
+          "inLoop": false,
+          "status": "proven",
+          "verdict": "coalesced",
+          "min": 4,
+          "max": 4,
+          "mean": 4
+        }
+      ]
+    },
+    {
+      "kernel": "diff_kernel",
+      "grid": [
+        16,
+        1,
+        1
+      ],
+      "block": [
+        256,
+        1,
+        1
+      ],
+      "counters": {
+        "globalLoad": 4.5,
+        "globalStore": 4
+      },
+      "accesses": [
+        {
+          "file": "samples/input/gpu-patterns.mlir",
+          "line": 51,
+          "kind": "load",
+          "buffer": "%in",
+          "space": "global",
+          "inLoop": false,
+          "status": "proven",
+          "verdict": "coalesced",
+          "min": 4,
+          "max": 4,
+          "mean": 4
+        },
+        {
+          "file": "samples/input/gpu-patterns.mlir",
+          "line": 52,
+          "kind": "load",
+          "buffer": "%in",
+          "space": "global",
+          "inLoop": false,
+          "status": "proven",
+          "verdict": "misaligned",
+          "min": 5,
+          "max": 5,
+          "mean": 5
+        },
+        {
+          "file": "samples/input/gpu-patterns.mlir",
+          "line": 54,
+          "kind": "store",
+          "buffer": "%out",
+          "space": "global",
+          "inLoop": false,
+          "status": "proven",
+          "verdict": "coalesced",
+          "min": 4,
+          "max": 4,
+          "mean": 4
+        }
+      ]
+    },
+    {
+      "kernel": "window_sum_kernel",
+      "grid": [
+        16,
+        1,
+        1
+      ],
+      "block": [
+        256,
+        1,
+        1
+      ],
+      "counters": {
+        "globalLoad": 4.875,
+        "globalStore": 4
+      },
+      "accesses": [
+        {
+          "file": "samples/input/gpu-patterns.mlir",
+          "line": 73,
+          "kind": "load",
+          "buffer": "%in",
+          "space": "global",
+          "inLoop": true,
+          "status": "varies",
+          "verdict": "misaligned/coalesced",
+          "min": 4,
+          "max": 5,
+          "mean": 4.875
+        },
+        {
+          "file": "samples/input/gpu-patterns.mlir",
+          "line": 77,
+          "kind": "store",
+          "buffer": "%out",
+          "space": "global",
+          "inLoop": false,
+          "status": "proven",
+          "verdict": "coalesced",
+          "min": 4,
+          "max": 4,
+          "mean": 4
+        }
+      ]
+    },
+    {
+      "kernel": "add_bias_kernel",
+      "grid": [
+        16,
+        1,
+        1
+      ],
+      "block": [
+        256,
+        1,
+        1
+      ],
+      "counters": {
+        "globalLoad": 2.5,
+        "globalStore": 4
+      },
+      "accesses": [
+        {
+          "file": "samples/input/gpu-patterns.mlir",
+          "line": 92,
+          "kind": "load",
+          "buffer": "%in",
+          "space": "global",
+          "inLoop": false,
+          "status": "proven",
+          "verdict": "coalesced",
+          "min": 4,
+          "max": 4,
+          "mean": 4
+        },
+        {
+          "file": "samples/input/gpu-patterns.mlir",
+          "line": 93,
+          "kind": "load",
+          "buffer": "%bias",
+          "space": "global",
+          "inLoop": false,
+          "status": "proven",
+          "verdict": "broadcast",
+          "min": 1,
+          "max": 1,
+          "mean": 1
+        },
+        {
+          "file": "samples/input/gpu-patterns.mlir",
+          "line": 95,
+          "kind": "store",
+          "buffer": "%out",
+          "space": "global",
+          "inLoop": false,
+          "status": "proven",
+          "verdict": "coalesced",
+          "min": 4,
+          "max": 4,
+          "mean": 4
+        }
+      ]
+    },
+    {
+      "kernel": "tile_copy_16x16_kernel",
+      "grid": [
+        64,
+        64,
+        1
+      ],
+      "block": [
+        16,
+        16,
+        1
+      ],
+      "counters": {
+        "globalLoad": 4,
+        "globalStore": 4
+      },
+      "accesses": [
+        {
+          "file": "samples/input/gpu-patterns.mlir",
+          "line": 111,
+          "kind": "load",
+          "buffer": "%in",
+          "space": "global",
+          "inLoop": false,
+          "status": "proven",
+          "verdict": "coalesced",
+          "min": 4,
+          "max": 4,
+          "mean": 4
+        },
+        {
+          "file": "samples/input/gpu-patterns.mlir",
+          "line": 112,
+          "kind": "store",
+          "buffer": "%out",
+          "space": "global",
+          "inLoop": false,
+          "status": "proven",
+          "verdict": "coalesced",
+          "min": 4,
+          "max": 4,
+          "mean": 4
+        }
+      ]
+    },
+    {
+      "kernel": "transpose_naive_kernel",
+      "grid": [
+        32,
+        32,
+        1
+      ],
+      "block": [
+        32,
+        32,
+        1
+      ],
+      "counters": {
+        "globalLoad": 4,
+        "globalStore": 32
+      },
+      "accesses": [
+        {
+          "file": "samples/input/gpu-transpose.mlir",
+          "line": 15,
+          "kind": "load",
+          "buffer": "%in",
+          "space": "global",
+          "inLoop": false,
+          "status": "proven",
+          "verdict": "coalesced",
+          "min": 4,
+          "max": 4,
+          "mean": 4
+        },
+        {
+          "file": "samples/input/gpu-transpose.mlir",
+          "line": 16,
+          "kind": "store",
+          "buffer": "%out",
+          "space": "global",
+          "inLoop": false,
+          "status": "proven",
+          "verdict": "strided",
+          "min": 32,
+          "max": 32,
+          "mean": 32
+        }
+      ]
+    },
+    {
+      "kernel": "transpose_tiled_kernel",
+      "grid": [
+        32,
+        32,
+        1
+      ],
+      "block": [
+        32,
+        32,
+        1
+      ],
+      "counters": {
+        "globalLoad": 4,
+        "globalStore": 4,
+        "sharedLoad": 32,
+        "sharedStore": 1
+      },
+      "accesses": [
+        {
+          "file": "samples/input/gpu-transpose.mlir",
+          "line": 32,
+          "kind": "load",
+          "buffer": "%in",
+          "space": "global",
+          "inLoop": false,
+          "status": "proven",
+          "verdict": "coalesced",
+          "min": 4,
+          "max": 4,
+          "mean": 4
+        },
+        {
+          "file": "samples/input/gpu-transpose.mlir",
+          "line": 33,
+          "kind": "store",
+          "buffer": "%tile",
+          "space": "shared",
+          "inLoop": false,
+          "status": "proven",
+          "verdict": "conflict-free",
+          "min": 1,
+          "max": 1,
+          "mean": 1
+        },
+        {
+          "file": "samples/input/gpu-transpose.mlir",
+          "line": 37,
+          "kind": "load",
+          "buffer": "%tile",
+          "space": "shared",
+          "inLoop": false,
+          "status": "proven",
+          "verdict": "bank-conflict",
+          "min": 32,
+          "max": 32,
+          "mean": 32
+        },
+        {
+          "file": "samples/input/gpu-transpose.mlir",
+          "line": 38,
+          "kind": "store",
+          "buffer": "%out",
+          "space": "global",
+          "inLoop": false,
+          "status": "proven",
+          "verdict": "coalesced",
+          "min": 4,
+          "max": 4,
+          "mean": 4
+        }
+      ]
+    },
+    {
+      "kernel": "transpose_padded_kernel",
+      "grid": [
+        32,
+        32,
+        1
+      ],
+      "block": [
+        32,
+        32,
+        1
+      ],
+      "counters": {
+        "globalLoad": 4,
+        "globalStore": 4,
+        "sharedLoad": 1,
+        "sharedStore": 1
+      },
+      "accesses": [
+        {
+          "file": "samples/input/gpu-transpose.mlir",
+          "line": 54,
+          "kind": "load",
+          "buffer": "%in",
+          "space": "global",
+          "inLoop": false,
+          "status": "proven",
+          "verdict": "coalesced",
+          "min": 4,
+          "max": 4,
+          "mean": 4
+        },
+        {
+          "file": "samples/input/gpu-transpose.mlir",
+          "line": 55,
+          "kind": "store",
+          "buffer": "%tile",
+          "space": "shared",
+          "inLoop": false,
+          "status": "proven",
+          "verdict": "conflict-free",
+          "min": 1,
+          "max": 1,
+          "mean": 1
+        },
+        {
+          "file": "samples/input/gpu-transpose.mlir",
+          "line": 59,
+          "kind": "load",
+          "buffer": "%tile",
+          "space": "shared",
+          "inLoop": false,
+          "status": "proven",
+          "verdict": "conflict-free",
+          "min": 1,
+          "max": 1,
+          "mean": 1
+        },
+        {
+          "file": "samples/input/gpu-transpose.mlir",
+          "line": 60,
+          "kind": "store",
+          "buffer": "%out",
+          "space": "global",
+          "inLoop": false,
+          "status": "proven",
+          "verdict": "coalesced",
+          "min": 4,
+          "max": 4,
+          "mean": 4
+        }
+      ]
+    }
+  ]
+}
