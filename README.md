@@ -10,9 +10,11 @@ It also works as a **debugger for the compiler's own passes**: follow one op fro
 
 🚀 **[Try VizMLIR live](https://joepothiboot.github.io/vizmlir/)**: it opens on a small source-tracing example, with a dialog that lets you pick another scenario (GPU memory mistakes, Triton, DSP scratchpads, generic passes) or just close it and play.
 
-![VizMLIR showing a transpose kernel: the code, the GPU view, and the inspector, whose answer card proves the write is strided for all 32,768 warps and follows it across compiler passes, with "What's this line?" explaining the store in plain words](public/demo/vizmlir-workspace.png)
+![VizMLIR tracing a Mojo saxpy through the compiler: the source line, the inlined op's history, and the pass slider with breakpoints](public/demo/vizmlir-tour.gif)
 
-_A transpose whose write is strided. The GPU view shows the 32 threads of a warp landing 1024 items apart; beside it, the inspector's Line tab gives the verdict and takes the store apart in plain words._
+_The source-tracing scenario: continue to the breakpoint where `func.call @scale` is inlined, click a source line to select the ops it made, then open History to follow one op until a pass removes it._
+
+![VizMLIR workspace: the IR beside the saxpy.mojo source, the op graph, and the History tab for one op](public/demo/vizmlir-workspace.png)
 
 ## 💡 Why VizMLIR?
 
