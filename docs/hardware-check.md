@@ -49,20 +49,58 @@ The counters, as ratios:
 Wavefronts are used rather than `l1tex__data_bank_conflicts_*`, which counts
 more than bank conflicts on some architectures.
 
-```bash
-ncu --csv --metrics <the eight metrics above, comma-separated> ./run_kernels > run.csv
-node scripts/predict.mjs --check run.csv
-```
+## Running it on Colab
 
-`--check` prints each counter with ✓ or ✗ and exits non-zero unless all of
-them agree within 5%. Every disagreement will be listed here with its
-explanation, not dropped.
+The kernels are already built: `samples/ptx/` holds their PTX for `sm_75` and
+`kernels.json` their launch sizes, made by
+`MLIR_OPT=… node scripts/build-ptx.mjs` from the same IR the predictions read.
+The GPU side needs only Python, CuPy and `ncu`; no LLVM. About 10 minutes on a
+free T4.
+
+1. In Colab, **Runtime → Change runtime type → T4 GPU**, then run in a cell:
+
+   ```
+   !nvidia-smi --query-gpu=name,driver_version --format=csv
+   !git clone --depth 1 https://github.com/joepothiboot/vizmlir
+   %cd vizmlir
+   !python scripts/run_kernels.py
+   ```
+
+   `run_kernels.py` launches each kernel once and checks its output against
+   NumPy. It must print `9 / 9 kernels correct` before the counters mean
+   anything.
+
+2. Find `ncu` with `!which ncu || ls /usr/local/cuda/bin/ncu`. If neither
+   exists, `!apt-cache search nsight-compute` and `apt-get install` the
+   package it lists. Then measure:
+
+   ```
+   !ncu --csv --log-file t4.ncu.csv -k regex:'_kernel$' --metrics l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum,l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum,l1tex__t_sectors_pipe_lsu_mem_global_op_st.sum,l1tex__t_requests_pipe_lsu_mem_global_op_st.sum,l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum,smsp__inst_executed_op_shared_ld.sum,l1tex__data_pipe_lsu_wavefronts_mem_shared_op_st.sum,smsp__inst_executed_op_shared_st.sum python scripts/run_kernels.py
+   !head -5 t4.ncu.csv
+   from google.colab import files; files.download("t4.ncu.csv")
+   ```
+
+   If the log says `ERR_NVGPUCTRPERM`, this host doesn't allow counter
+   access. Try a Kaggle notebook (T4) with the same commands.
+
+3. Back on the Mac:
+
+   ```bash
+   cp ~/Downloads/t4.ncu.csv public/samples/gpu-patterns.t4.ncu.csv
+   node scripts/predict.mjs --check public/samples/gpu-patterns.t4.ncu.csv
+   ```
+
+   `--check` prints each counter with ✓ or ✗ and exits non-zero unless all
+   of them agree within 5%. Copy the measured values into the table above,
+   with the GPU and driver from step 1, and list every disagreement here with
+   its explanation rather than dropping it.
 
 ## Known gaps before the run
 
-- The sample traces target `sm_80`. A free T4 is `sm_75`, so the kernels need
-  a `sm_75` build of the same IR, and a small host program to launch them.
 - `ptxas` may still rewrite accesses (merge, vectorize, or hoist loads) in
   ways the IR doesn't show. Any such case would show up as a disagreement here.
 - Some hosted GPUs refuse counter access (`ERR_NVGPUCTRPERM`). Without
   counters there is no check, only timings.
+- The PTX is built with bare-pointer parameters and constants sunk into the
+  kernel, unlike the `sm_80` sample traces. The memory accesses are the same
+  IR; only how arguments are passed differs.
