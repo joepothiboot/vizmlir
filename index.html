@@ -4,10 +4,12 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>VizMLIR · MLIR on the GPU</title>
+
     <meta
       name="description"
       content="See how your MLIR kernels run on the GPU: launches as blocks and warps, buffers by memory space, coalescing and bank conflicts per warp, and the passes that produced them. Runs in your browser."
     />
+
     <script>
       try {
         document.documentElement.dataset.theme =
@@ -19,14 +21,18 @@
         document.documentElement.dataset.theme = "dark";
       }
     </script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&display=swap"
     />
+
     <link rel="stylesheet" href="./src/styles/main.css" />
   </head>
+
   <body>
     <div id="app">
       <header id="topbar" aria-label="Menu">
@@ -34,6 +40,7 @@
         <span id="source-name" title="Loaded source">sample.mlir</span>
         <label class="btn" for="file">Open…</label>
         <input id="file" type="file" accept=".mlir,.txt,.log,.json" />
+
         <button
           id="watch"
           hidden
@@ -41,17 +48,22 @@
         >
           Watch…
         </button>
+
         <button id="watch-resume" hidden></button>
+
         <button id="watch-live" class="live" hidden title="Stop watching">
           <span class="dot" aria-hidden="true"></span> live
         </button>
+
         <button
           id="samples-open"
           title="Choose a scenario: a sample and the views that suit it"
         >
           Scenario ▾
         </button>
+
         <button id="sessions-open">Sessions</button>
+
         <button
           id="debug-toggle"
           aria-pressed="false"
@@ -59,12 +71,15 @@
         >
           Debug
         </button>
+
         <button id="palette-open" class="palette-trigger">
           <kbd class="mod-k">⌘K</kbd><span>Jump to pass, op, or @symbol…</span>
         </button>
+
         <span class="hints" aria-hidden="true">
           <kbd>[</kbd><kbd>]</kbd><span>pass</span> <kbd>f</kbd><span>fit</span>
         </span>
+
         <button id="theme-toggle" class="icon-btn" aria-label="Switch theme">
           <svg
             class="icon-sun"
@@ -74,10 +89,12 @@
             aria-hidden="true"
           >
             <circle cx="12" cy="12" r="4.5" />
+
             <path
               d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"
             />
           </svg>
+
           <svg
             class="icon-moon"
             viewBox="0 0 24 24"
@@ -88,11 +105,14 @@
             <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z" />
           </svg>
         </button>
+
         <button id="help-open" class="icon-btn" aria-label="Keyboard shortcuts">
           ?
         </button>
+
         <span class="love-note">built with care for compiler explorers</span>
       </header>
+
       <button
         id="menu-handle"
         aria-controls="topbar"
@@ -100,8 +120,10 @@
         aria-label="Hide menu"
         title="Hide menu (m)"
       ></button>
+
       <nav id="pass-scrubber" class="pass-scrubber" hidden aria-label="Passes">
         <span class="scrub-kicker" aria-hidden="true">Pass</span>
+
         <button
           class="scrub-prev icon-btn"
           type="button"
@@ -110,6 +132,7 @@
         >
           ‹
         </button>
+
         <div class="scrub-track">
           <input
             id="pass-range"
@@ -121,7 +144,9 @@
             step="1"
             aria-label="Pass"
           />
+
           <div class="scrub-ticks" aria-hidden="true"></div>
+
           <div
             id="pass-preview"
             class="scrub-preview"
@@ -129,6 +154,7 @@
             hidden
           ></div>
         </div>
+
         <button
           class="scrub-next icon-btn"
           type="button"
@@ -137,6 +163,7 @@
         >
           ›
         </button>
+
         <span id="pass-label" class="scrub-label" aria-hidden="true"></span>
       </nav>
 
@@ -149,6 +176,7 @@
       >
         <span class="scrub-kicker" aria-hidden="true">Step</span>
         <button id="debug-first" type="button" title="First pass">⏮</button>
+
         <button
           id="debug-prev-change"
           type="button"
@@ -156,6 +184,7 @@
         >
           ◀ change
         </button>
+
         <button
           id="debug-next-change"
           type="button"
@@ -163,7 +192,9 @@
         >
           change ▶
         </button>
+
         <button id="debug-last" type="button" title="Last pass">⏭</button>
+
         <button
           id="debug-op-prev"
           type="button"
@@ -172,6 +203,7 @@
         >
           ◀ op
         </button>
+
         <button
           id="debug-op-next"
           type="button"
@@ -180,6 +212,7 @@
         >
           op ▶
         </button>
+
         <button
           id="bp-back"
           type="button"
@@ -188,6 +221,7 @@
         >
           ⏴ back
         </button>
+
         <button
           id="bp-continue"
           type="button"
@@ -196,6 +230,7 @@
         >
           ⏵ continue
         </button>
+
         <button
           id="bp-open"
           type="button"
@@ -205,7 +240,9 @@
         >
           Break when…<span id="bp-count"></span>
         </button>
+
         <span id="debug-status" class="debug-status" aria-live="polite"></span>
+
         <div id="bp-pop" class="bp-pop" hidden>
           <form id="bp-form" class="bp-form">
             <input
@@ -216,10 +253,13 @@
               aria-label="Break when"
               placeholder="linalg.matmul == 0"
             />
+
             <button type="submit">Add</button>
           </form>
+
           <p id="bp-error" class="bp-error" role="alert" hidden></p>
           <ul id="bp-list" class="bp-list"></ul>
+
           <p class="dialog-note">
             Stops when a condition <em>becomes</em> true. Try
             <code>linalg.matmul == 0</code>, <code>ops &lt; 20</code>,
@@ -242,6 +282,7 @@
               >
                 Baseline
               </button>
+
               <button
                 id="current-title"
                 role="tab"
@@ -250,6 +291,7 @@
               >
                 Current
               </button>
+
               <button
                 id="source-title"
                 role="tab"
@@ -260,7 +302,9 @@
               >
                 Source
               </button>
+
               <span class="sp"></span>
+
               <button
                 id="split-toggle"
                 class="tab-action"
@@ -270,6 +314,7 @@
                 split
               </button>
             </div>
+
             <div
               id="baseline-panel"
               class="code-editor"
@@ -279,13 +324,16 @@
               <pre
                 aria-hidden="true"
               ><code id="baseline-highlight"></code></pre>
+
               <div class="line-mark" hidden></div>
+
               <textarea
                 id="baseline"
                 spellcheck="false"
                 placeholder="Paste baseline MLIR here…"
               ></textarea>
             </div>
+
             <div
               id="current-panel"
               class="code-editor"
@@ -294,12 +342,14 @@
             >
               <pre aria-hidden="true"><code id="editor-highlight"></code></pre>
               <div class="line-mark" hidden></div>
+
               <textarea
                 id="editor"
                 spellcheck="false"
                 placeholder="Paste current MLIR here…"
               ></textarea>
             </div>
+
             <div
               id="source-panel"
               class="source-view"
@@ -313,21 +363,26 @@
                   aria-label="Source file"
                   hidden
                 ></select>
+
                 <button class="src-add tab-action" type="button">
                   Add file…
                 </button>
+
                 <input class="src-input" type="file" multiple hidden />
               </div>
+
               <p class="src-empty" hidden></p>
               <div class="src-lines" tabindex="0"></div>
             </div>
           </section>
+
           <div
             id="source-splitter"
             class="splitter"
             aria-label="Resize source pane"
             title="Drag to resize · double-click to reset"
           ></div>
+
           <section id="stage" aria-label="Visualization">
             <div class="viz-bar">
               <div
@@ -346,6 +401,7 @@
                 >
                   Graph
                 </button>
+
                 <button
                   id="view-gpu"
                   role="tab"
@@ -357,6 +413,7 @@
                 >
                   GPU
                 </button>
+
                 <button
                   id="view-local"
                   role="tab"
@@ -368,6 +425,7 @@
                 >
                   Local memory
                 </button>
+
                 <button
                   id="view-descent"
                   role="tab"
@@ -380,13 +438,16 @@
                   Descent
                 </button>
               </div>
+
               <button
                 id="viz-verdict"
                 class="viz-verdict"
                 title="The picked load or store · open its details in the inspector"
                 hidden
               ></button>
+
               <span class="sp"></span>
+
               <button
                 id="inspector-toggle"
                 class="inspector-toggle"
@@ -398,6 +459,7 @@
                 <span id="inspector-badge" class="inspector-badge"></span>
               </button>
             </div>
+
             <div class="viz-body">
               <div id="graph-view" role="tabpanel" aria-labelledby="view-graph">
                 <canvas
@@ -405,7 +467,9 @@
                   tabindex="0"
                   aria-label="Op graph: click a box to select it"
                 ></canvas>
+
                 <div id="diags"></div>
+
                 <div class="graph-tools" role="toolbar" aria-label="Graph">
                   <button
                     id="zoom-out"
@@ -414,18 +478,23 @@
                   >
                     −
                   </button>
+
                   <span id="zoom-level" aria-live="polite">100%</span>
+
                   <button id="zoom-in" aria-label="Zoom in" title="Zoom in (+)">
                     +
                   </button>
+
                   <button id="zoom-fit" title="Fit graph (f)">fit</button>
                   <span class="tools-sep" aria-hidden="true"></span>
+
                   <button
                     id="export-png"
                     title="Download the whole graph as PNG"
                   >
                     PNG
                   </button>
+
                   <button
                     id="export-svg"
                     title="Download the whole graph as SVG"
@@ -433,24 +502,28 @@
                     SVG
                   </button>
                 </div>
+
                 <div class="graph-legend" aria-hidden="true">
                   <span><b class="added">+</b> added</span>
                   <span><b class="changed">~</b> modified</span>
                   <span><b class="removed">−</b> removed</span>
                 </div>
               </div>
+
               <div
                 id="gpu-view"
                 role="tabpanel"
                 aria-labelledby="view-gpu"
                 hidden
               ></div>
+
               <div
                 id="descent-view"
                 role="tabpanel"
                 aria-labelledby="view-descent"
                 hidden
               ></div>
+
               <div
                 id="local-view"
                 role="tabpanel"
@@ -459,6 +532,7 @@
               ></div>
             </div>
           </section>
+
           <div
             id="inspector-splitter"
             class="splitter"
@@ -466,6 +540,7 @@
             title="Drag to resize · double-click to reset"
             hidden
           ></div>
+
           <aside id="inspector" class="pane" aria-label="Inspector" hidden>
             <div class="inspector-head">
               <div class="inspector-tabs" role="tablist" aria-label="Inspector">
@@ -477,6 +552,7 @@
                 >
                   Changes
                 </button>
+
                 <button
                   id="tab-line"
                   role="tab"
@@ -486,6 +562,7 @@
                 >
                   Line
                 </button>
+
                 <button
                   id="tab-timing"
                   role="tab"
@@ -495,6 +572,7 @@
                 >
                   Timing
                 </button>
+
                 <button
                   id="tab-buffers"
                   role="tab"
@@ -504,6 +582,7 @@
                 >
                   Buffers
                 </button>
+
                 <button
                   id="tab-opcount"
                   role="tab"
@@ -513,6 +592,7 @@
                 >
                   Op count
                 </button>
+
                 <button
                   id="tab-symbols"
                   role="tab"
@@ -522,6 +602,7 @@
                 >
                   Symbols
                 </button>
+
                 <button
                   id="tab-ophistory"
                   role="tab"
@@ -532,6 +613,7 @@
                   History
                 </button>
               </div>
+
               <button
                 id="inspector-close"
                 class="icon-btn"
@@ -553,15 +635,18 @@
                 <span id="diff-title">diff</span>
                 <span id="diff-summary">no comparison yet</span>
               </h2>
+
               <ul
                 id="diff-list"
                 role="listbox"
                 aria-label="Changes"
                 aria-multiselectable="true"
               ></ul>
+
               <div class="diff-hint">
                 <span><kbd>j</kbd> <kbd>k</kbd> step · <kbd>x</kbd> pick</span>
                 <span class="sp"></span>
+
                 <button
                   id="diff-copy"
                   class="link-btn"
@@ -570,6 +655,7 @@
                 >
                   copy
                 </button>
+
                 <button
                   id="export-md"
                   class="link-btn"
@@ -577,6 +663,7 @@
                 >
                   .md
                 </button>
+
                 <button
                   id="export-json"
                   class="link-btn"
@@ -585,6 +672,7 @@
                   .json
                 </button>
               </div>
+
               <details id="pass-list-wrap" class="pass-list-wrap" hidden>
                 <summary>All passes <span id="pass-list-count"></span></summary>
                 <ol id="pass-list" aria-label="Passes"></ol>
@@ -602,15 +690,19 @@
               <div class="le-head">
                 <strong id="le-title">What's this line?</strong>
                 <span class="sp"></span>
+
                 <a id="le-docs" target="_blank" rel="noreferrer" hidden
                   >MLIR docs ↗</a
                 >
               </div>
+
               <div id="le-body" aria-live="polite"></div>
+
               <div id="gpu-answer-section" class="panel-section" hidden>
                 <h3>On the GPU</h3>
                 <div id="gpu-answer-host"></div>
               </div>
+
               <div id="gpu-path" class="panel-section" hidden></div>
             </section>
 
@@ -624,6 +716,7 @@
             >
               <details class="panel-about">
                 <summary>About pass timing</summary>
+
                 <p class="dialog-note">
                   From the log's <code>-mlir-timing</code> report. Nested passes
                   show one total across every op they ran on. mlir-opt does not
@@ -632,16 +725,20 @@
                   includes it.
                 </p>
               </details>
+
               <p id="timing-empty" class="dialog-note" hidden>
                 No timing report in this log. Add <code>-mlir-timing</code> to
                 the mlir-opt command, and wrap it in
                 <code>/usr/bin/time -l</code> (macOS) or
                 <code>/usr/bin/time -v</code> (Linux) for peak memory.
               </p>
+
               <dl id="timing-summary" class="panel-facts"></dl>
+
               <div class="timing-scroll">
                 <table id="timing-table"></table>
               </div>
+
               <div class="dialog-actions">
                 <button id="timing-export">Download .json</button>
               </div>
@@ -657,6 +754,7 @@
             >
               <details class="panel-about">
                 <summary>About buffers</summary>
+
                 <p class="dialog-note">
                   Buffers the IR allocates (<code>memref.alloc</code>,
                   <code>memref.alloca</code>, <code>gpu.alloc</code>), baseline
@@ -669,20 +767,26 @@
                   function's. Click a current buffer to show its line.
                 </p>
               </details>
+
               <p id="buffers-none" class="dialog-note" hidden>
                 No parsed IR to analyze.
               </p>
+
               <div id="buffers-body">
                 <dl id="buffers-summary" class="panel-facts"></dl>
+
                 <p id="buffers-empty" class="dialog-note" hidden>
                   No memref allocations. Buffers appear after bufferization, for
                   example <code>-one-shot-bufferize</code>.
                 </p>
+
                 <div class="buf-scroll">
                   <div id="buffers-functions"></div>
                 </div>
+
                 <div id="buffers-passes">
                   <h3>Across the trace</h3>
+
                   <div class="opcount-controls">
                     <label
                       ><input
@@ -692,12 +796,15 @@
                       />
                       Only passes that change buffers</label
                     >
+
                     <span id="buffers-pass-shown" class="dialog-note"></span>
                   </div>
+
                   <div class="buf-scroll">
                     <table id="buffers-pass-table"></table>
                   </div>
                 </div>
+
                 <div class="dialog-actions">
                   <button id="buffers-export">Download .json</button>
                 </div>
@@ -713,8 +820,10 @@
               hidden
             >
               <p id="opcount-note" class="dialog-note"></p>
+
               <div id="opcount-body">
                 <dl id="opcount-summary" class="panel-facts"></dl>
+
                 <div class="opcount-controls">
                   <input
                     id="opcount-filter"
@@ -723,10 +832,12 @@
                     aria-label="Filter ops by name"
                     autocomplete="off"
                   />
+
                   <label
                     ><input id="opcount-changed-ops" type="checkbox" checked />
                     Only ops that change</label
                   >
+
                   <label id="opcount-changed-passes-label"
                     ><input
                       id="opcount-changed-passes"
@@ -735,11 +846,14 @@
                     />
                     Only passes that change counts</label
                   >
+
                   <span id="opcount-shown" class="dialog-note"></span>
                 </div>
+
                 <div class="opcount-scroll">
                   <table id="opcount-table"></table>
                 </div>
+
                 <div class="dialog-actions">
                   <button id="opcount-export">Download .csv</button>
                 </div>
@@ -755,16 +869,19 @@
               hidden
             >
               <p id="oph-none" class="dialog-note"></p>
+
               <p id="oph-slider-note" class="dialog-note" hidden>
                 The passes where this op changed are marked on the pass slider,
                 with fainter marks where it is unchanged.
               </p>
+
               <div id="oph-body" hidden>
                 <h3 id="oph-title" class="oph-title"></h3>
                 <p id="oph-summary" class="dialog-note"></p>
                 <ol id="oph-steps" class="oph-steps"></ol>
               </div>
             </section>
+
             <section
               id="panel-symbols"
               class="inspector-panel"
@@ -775,6 +892,7 @@
             >
               <details class="panel-about">
                 <summary>About symbol history</summary>
+
                 <p class="dialog-note">
                   Every function, kernel, GPU module and global in the trace,
                   with the passes that created it, changed its body, lowered it
@@ -786,10 +904,12 @@
                   to it, or a symbol to follow it step by step.
                 </p>
               </details>
+
               <p id="symbols-none" class="dialog-note" hidden>
                 Open a pass trace to see which pass made each function or
                 kernel.
               </p>
+
               <div id="symbols-body">
                 <p id="symbols-mock" class="mock-note" role="note" hidden>
                   <strong>Mock data.</strong> These kernel timings are invented
@@ -799,7 +919,9 @@
                   <strong>Import current…</strong> and
                   <strong>Import baseline…</strong> to load your own results.
                 </p>
+
                 <dl id="symbols-summary" class="panel-facts"></dl>
+
                 <div class="opcount-controls">
                   <input
                     id="symbols-filter"
@@ -808,14 +930,17 @@
                     aria-label="Filter symbols by name or op"
                     autocomplete="off"
                   />
+
                   <label
                     ><input id="symbols-changed" type="checkbox" checked /> Only
                     symbols that change</label
                   >
+
                   <label
                     ><input id="symbols-at-pass" type="checkbox" /> Only the
                     current pass</label
                   >
+
                   <label hidden
                     ><input id="symbols-min-change-on" type="checkbox" /> Only
                     kernels that changed by more than
@@ -828,30 +953,37 @@
                       aria-label="Minimum change in percent"
                     />%</label
                   >
+
                   <span id="symbols-shown" class="dialog-note"></span>
                 </div>
+
                 <p
                   id="symbols-bench-error"
                   class="dialog-note"
                   role="alert"
                   hidden
                 ></p>
+
                 <div class="opcount-scroll">
                   <table id="symbols-table"></table>
                 </div>
+
                 <div id="symbols-bench" hidden>
                   <h3>Benchmark kernels not matched to a symbol</h3>
                   <ul id="symbols-unmatched"></ul>
                 </div>
+
                 <div class="dialog-actions">
                   <button id="symbols-export">Download .json</button>
                   <button id="symbols-bench-current">Import current…</button>
                   <button id="symbols-bench-baseline">Import baseline…</button>
+
                   <button id="symbols-bench-clear" hidden>
                     Clear benchmarks
                   </button>
                 </div>
               </div>
+
               <input
                 id="symbols-bench-file"
                 type="file"
@@ -866,6 +998,7 @@
           <span id="mode">IR</span>
           <span id="status-text">—</span>
           <span class="sp"></span>
+
           <button
             id="timing-open"
             class="link-btn"
@@ -874,24 +1007,28 @@
           >
             ⏱
           </button>
+
           <button
             id="opcount-open"
             class="link-btn"
             title="Op counts per pass (o)"
             hidden
           ></button>
+
           <button
             id="buffers-open"
             class="link-btn"
             title="Buffers and peak memory (b)"
             hidden
           ></button>
+
           <button
             id="symbols-open"
             class="link-btn"
             title="Symbol history: which pass made each kernel (h)"
             hidden
           ></button>
+
           <span id="detail">—</span>
           <span id="abi"></span>
         </div>
@@ -908,7 +1045,9 @@
           spellcheck="false"
           placeholder="Jump to pass, op, or @symbol…"
         />
+
         <ul id="palette-list" role="listbox" aria-label="Results"></ul>
+
         <div class="palette-foot">
           <kbd>↑</kbd><kbd>↓</kbd> move <kbd>↵</kbd> open <kbd>esc</kbd> close
         </div>
@@ -917,6 +1056,7 @@
       <dialog id="samples" aria-labelledby="samples-title">
         <h2 id="samples-title">Choose a scenario</h2>
         <p id="samples-welcome" class="samples-welcome" hidden></p>
+
         <p class="dialog-note">
           Each scenario is a kind of work, with a sample to start from and the
           views that suit it. Nothing is locked: every view stays one click
@@ -925,7 +1065,9 @@
           keep it. Samples are real <code>mlir-opt</code> output unless marked
           hand-written.
         </p>
+
         <ul id="sample-list" aria-label="Samples"></ul>
+
         <div class="dialog-actions">
           <span class="sp"></span>
           <form method="dialog"><button id="samples-close">Close</button></form>
@@ -934,16 +1076,20 @@
 
       <dialog id="sessions" aria-labelledby="sessions-title">
         <h2 id="sessions-title">Sessions</h2>
+
         <p class="dialog-note">
           Saved in this browser only (IndexedDB). Nothing is uploaded. Your
           workspace also autosaves and comes back after a reload.
         </p>
+
         <form id="session-save" class="session-save">
           <label for="session-name">Name</label>
           <input id="session-name" required maxlength="80" autocomplete="off" />
           <button type="submit">Save current</button>
         </form>
+
         <ul id="session-list" aria-label="Saved sessions"></ul>
+
         <div class="dialog-actions">
           <button id="session-import">Import .json…</button>
           <button id="session-download">Download current .json</button>
@@ -954,14 +1100,17 @@
 
       <dialog id="help" aria-labelledby="help-title">
         <h2 id="help-title">Keyboard shortcuts</h2>
+
         <dl>
           <dt><kbd class="mod-k">⌘K</kbd> <kbd>/</kbd></dt>
           <dd>Jump to a pass, op, symbol, or action</dd>
           <dt><kbd>[</kbd> <kbd>]</kbd></dt>
+
           <dd>
             Previous / next pass in a trace (or focus the pass slider and use
             <kbd>←</kbd> <kbd>→</kbd>)
           </dd>
+
           <dt><kbd>j</kbd> <kbd>k</kbd></dt>
           <dd>Next / previous change (Changes tab)</dd>
           <dt><kbd>x</kbd> · <kbd>shift</kbd>/<kbd>⌘</kbd> click</dt>
@@ -981,13 +1130,17 @@
           <dt><kbd>d</kbd></dt>
           <dd>Debug mode: split sources and step by change</dd>
           <dt><kbd>,</kbd> <kbd>.</kbd></dt>
+
           <dd>
             Run back / forward to the previous / next breakpoint (Debug mode)
           </dd>
+
           <dt><kbd>shift</kbd> <kbd>,</kbd> <kbd>.</kbd></dt>
+
           <dd>
             Previous / next pass that changed the selected op (Debug mode)
           </dd>
+
           <dt><kbd>shift</kbd> <kbd>[</kbd> <kbd>]</kbd></dt>
           <dd>Previous / next pass that changed the IR (Debug mode)</dd>
           <dt><kbd>\</kbd></dt>
@@ -1003,9 +1156,11 @@
           <dt><kbd>o</kbd></dt>
           <dd>Inspector: Op count tab, op counts per pass</dd>
           <dt><kbd>h</kbd></dt>
+
           <dd>
             Inspector: Symbols tab, which pass made each function or kernel
           </dd>
+
           <dt><kbd>g</kbd></dt>
           <dd>Switch the picture between the op graph and the GPU view</dd>
           <dt><kbd>m</kbd></dt>
@@ -1017,33 +1172,41 @@
           <dt><kbd>?</kbd></dt>
           <dd>This list</dd>
         </dl>
+
         <form method="dialog"><button>Close</button></form>
       </dialog>
 
       <dialog id="symbol-view" aria-labelledby="symbol-view-title">
         <h2 id="symbol-view-title"></h2>
         <p id="symbol-view-meta" class="dialog-note"></p>
+
         <div class="sv-body">
           <ol id="symbol-view-steps" aria-label="Passes that changed it"></ol>
+
           <div class="sv-main">
             <div class="sv-toolbar">
               <span id="symbol-view-step" class="sv-step-title"></span>
               <span class="sp"></span>
+
               <div class="sv-tabs" role="tablist" aria-label="Show">
                 <button id="sv-tab-diff" role="tab">Diff</button>
                 <button id="sv-tab-ir" role="tab">IR</button>
                 <button id="sv-tab-asm" role="tab" hidden>Assembly</button>
               </div>
+
               <button id="symbol-view-go">Show in graph</button>
             </div>
+
             <div id="symbol-view-code" class="sv-code" tabindex="0"></div>
           </div>
         </div>
+
         <div class="dialog-actions">
           <span class="dialog-note"
             ><kbd>j</kbd> <kbd>k</kbd> or <kbd>↑</kbd> <kbd>↓</kbd> step ·
             <kbd>d</kbd> diff · <kbd>i</kbd> IR · <kbd>a</kbd> assembly</span
           >
+
           <span class="sp"></span>
           <button id="symbol-view-back">Symbol history</button>
           <form method="dialog"><button>Close</button></form>
