@@ -3258,6 +3258,19 @@
         color: var(--dim);
         font-size: 12px;
       }
+      /* A counter measured on a real GPU, beside the prediction. The mark
+         carries the agreement; the sentence keeps the text color. */
+      .gpu-measured {
+        max-width: 720px;
+        margin: 0;
+        font-size: 12px;
+      }
+      .gpu-measured.good .gpu-measured-mark {
+        color: var(--good);
+      }
+      .gpu-measured.bad .gpu-measured-mark {
+        color: var(--warn);
+      }
       @container (max-width: 460px) {
         .gpu-answer {
           padding: 10px 12px;

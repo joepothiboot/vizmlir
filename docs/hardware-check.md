@@ -11,7 +11,9 @@ elsewhere and compared here.
 7.5, driver 580.82.07, free Colab), every one exactly**, including the fractional ones (4.5, 4.875, 2.5). The
 raw ncu output is [`public/samples/gpu-patterns.t4.ncu.csv`](../public/samples/gpu-patterns.t4.ncu.csv);
 `node scripts/predict.mjs --check public/samples/gpu-patterns.t4.ncu.csv`
-reproduces the comparison.
+reproduces the comparison. In the app, the **Transpose** and **Memory
+patterns** samples show the measured counter in each access's answer card,
+next to the prediction.
 
 ## What is predicted
 

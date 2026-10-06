@@ -23,12 +23,18 @@ export const RENAME_SAMPLE = `module {
   }
 }`;
 
+// Nsight Compute counters for the gpu-patterns and gpu-transpose kernels,
+// measured on a real GPU (docs/hardware-check.md). The answer card shows them
+// next to the prediction.
+const T4_COUNTERS = { file: "gpu-patterns.t4.ncu.csv", device: "Tesla T4" };
+
 /**
  * In the order the Samples dialog lists them; the first opens on a first
  * visit. `baseline`/`current` name a before/after pair; `trace` names a pass
  * trace, and `benchmarks` optional baseline/current kernel results for it,
- * which are invented when `mock` is set. Paths are relative to the samples
- * directory.
+ * which are invented when `mock` is set. `measured` names an ncu counter CSV
+ * for the trace's kernels and the GPU it came from. Paths are relative to the
+ * samples directory.
  */
 export const SAMPLES = [
   {
@@ -38,6 +44,7 @@ export const SAMPLES = [
     blurb:
       "The same transpose three ways: a naive strided write, a shared tile with a 32-way bank conflict, and the tile padded to 32×33.",
     trace: "gpu-transpose.trace.txt",
+    measured: T4_COUNTERS,
   },
   {
     id: "mojo-saxpy",
@@ -59,6 +66,7 @@ export const SAMPLES = [
     blurb:
       "One small kernel per pattern: {x, y} pairs vs. separate arrays, a read shifted by one, a sliding window, a shared bias, and 16×16 blocks. Each looks different in the 3D view.",
     trace: "gpu-patterns.trace.txt",
+    measured: T4_COUNTERS,
   },
   {
     id: "gpu-tiled-matmul",
@@ -217,6 +225,7 @@ export function sampleFiles(sample) {
     ...(sample.sources ?? []),
     sample.benchmarks?.baseline,
     sample.benchmarks?.current,
+    sample.measured?.file,
   ].filter(Boolean);
 }
 
@@ -239,6 +248,11 @@ export async function loadSampleState(sample, fetchText) {
       for (const path of sample.sources)
         state.sources[path.slice(path.lastIndexOf("/") + 1)] = await fetchText(path);
     }
+    if (sample.measured)
+      state.measured = {
+        device: sample.measured.device,
+        text: await fetchText(sample.measured.file),
+      };
     if (sample.benchmarks) {
       state.benchmarks = {};
       for (const [slot, path] of Object.entries(sample.benchmarks))

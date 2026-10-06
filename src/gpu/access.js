@@ -578,3 +578,24 @@ export function proveAccess(access, memref, space, sample, { defs, args, block, 
     ...math,
   };
 }
+
+// What one warp request is expected to cost, in the unit Nsight Compute
+// counts: sectors for global memory, wavefronts (bank conflict ways; 1 for a
+// broadcast) for shared memory. A proven access has one value; one that varies
+// across warps or loop trips gives its range and the mean over the cases the
+// proof checked. Shared by scripts/predict.mjs and the answer card.
+export function expectedCost(result, space) {
+  const unit = space === "shared" ? "ways" : "sectors";
+  const proof = result.proof;
+  if (proof?.status === "proven") {
+    const n = proof[unit];
+    return { status: "proven", verdict: proof.verdict, min: n, max: n, mean: n };
+  }
+  if (proof?.status === "varies") {
+    const values = proof.outcomes.map((o) => o[unit]);
+    const mean = proof.outcomes.reduce((s, o) => s + o[unit] * o.cases, 0) / proof.cases;
+    return { status: "varies", verdict: proof.outcomes.map((o) => o.verdict).join("/"), min: Math.min(...values), max: Math.max(...values), mean };
+  }
+  // ponytail: first warp only when the proof can't run; such a prediction is marked "sampled".
+  return { status: "sampled", verdict: result.verdict, min: result[unit], max: result[unit], mean: result[unit] };
+}

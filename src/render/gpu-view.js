@@ -3,7 +3,7 @@
 // space. Built from analyzeGpu() (src/gpu/model.js); plain DOM and SVG, no canvas.
 
 import { parseMemref } from "../trace/index.js";
-import { warpAccess } from "../gpu/index.js";
+import { expectedCost, warpAccess } from "../gpu/index.js";
 import { analyzeGpu, memorySpace } from "../gpu/index.js";
 import { formatBytes } from "../trace/index.js";
 import { gpuScene, matrixWidth } from "./gpu-3d.js";
@@ -92,7 +92,7 @@ function launchSection(launch, kernel, options) {
   // The answer for the picked access goes to `options.onAnswer` (the page's
   // inspector), or sits above the scene when there is none; picking also
   // colors warp 0 in the scene and sets its elements-from-above layer.
-  const answer = kernel?.accesses?.length ? answerCard(kernel, options) : null;
+  const answer = kernel?.accesses?.length ? answerCard(kernel, { ...options, launch }) : null;
   if (answer && !options.onAnswer) section.append(answer);
   // Triton: which warp and lane hold each element of the picked tensor.
   const layout = kernel?.triton && answer ? el("figure", "gpu-layout") : null;
@@ -345,7 +345,7 @@ function answerCard(kernel, options) {
     const history = passes
       ? passStrip(passes, acrossPasses(passes, options.launchIndex, kernel, judged))
       : [];
-    card.replaceChildren(head, ...body, ...history);
+    card.replaceChildren(head, ...body, ...measuredLine(kernel, options, judged), ...history);
   };
   card.render = render;
   card.show = (next) => {
@@ -354,6 +354,47 @@ function answerCard(kernel, options) {
   };
   cards.add(card);
   return card;
+}
+
+// Within this of the prediction, a measured counter agrees (as in
+// scripts/predict.mjs).
+const MEASURED_TOLERANCE = 0.05;
+const COUNTER = {
+  global: { load: "globalLoad", store: "globalStore", unit: ["chunk of 32 bytes", "chunks of 32 bytes", "per warp request"] },
+  shared: { load: "sharedLoad", store: "sharedStore", unit: ["pass", "passes", "per warp"] },
+};
+
+// What a real GPU measured for this kind of access, when the open sample
+// carries Nsight Compute counters (`options.measured()`). ncu counts per
+// kernel, so the counter is the average over the kernel's accesses of this
+// kind and space, and it is compared with the average of their predictions.
+function measuredLine(kernel, options, { access, result, space }) {
+  const measured = options.measured?.();
+  const counter = COUNTER[space];
+  if (!measured || !counter || !result.analyzed || kernel.triton) return [];
+  const name = kernel.inline ? `${options.launch.host.slice(1)}_kernel` : kernel.name;
+  const value = measured.counters.get(name)?.[counter[access.kind]];
+  if (value === null || value === undefined) return [];
+  const peers = kernel.accesses
+    .filter((a) => a.kind === access.kind)
+    .map((a) => judge(a, kernel, options.launch))
+    .filter((j) => j.space === space);
+  if (peers.some((j) => !j.result.analyzed)) return [];
+  const predicted = peers.reduce((sum, j) => sum + expectedCost(j.result, space).mean, 0) / peers.length;
+  const agrees = Math.abs(value - predicted) <= MEASURED_TOLERANCE * predicted;
+  const n = (x) => String(+x.toFixed(3));
+  const scope =
+    peers.length > 1
+      ? `, averaged over this kernel's ${peers.length} ${access.kind}s; predicted ${n(predicted)}`
+      : agrees && n(value) === n(predicted)
+        ? ", as predicted"
+        : `; predicted ${n(predicted)}`;
+  const line = el("p", `gpu-measured ${agrees ? "good" : "bad"}`);
+  line.append(
+    el("span", "gpu-measured-mark", agrees ? "✓ " : "✗ "),
+    `Measured on a ${measured.device}: ${n(value)} ${counter.unit[value === 1 ? 0 : 1]} ${counter.unit[2]}${scope}.`,
+  );
+  return [line];
 }
 
 // The picked access in one line, for the bar above the GPU view: where it
