@@ -27,9 +27,13 @@ describe("parseCSV", () => {
 
 describe("parseBenchmarks", () => {
   it("reads a generic CSV with the unit in the header", () => {
-    const result = parseBenchmarks("kernel,time_us\nmain_kernel,12.5\nother,3\n");
+    const result = parseBenchmarks(
+      "kernel,time_us\nmain_kernel,12.5\nother,3\n",
+    );
+
     expect(result.format).toBe("csv");
     expect(result.timeColumn).toBe("time_us");
+
     expect(summarize(result)).toEqual([
       ["main_kernel", 1, 12500],
       ["other", 1, 3000],
@@ -50,8 +54,10 @@ describe("parseBenchmarks", () => {
       '"91.2","182400","4","45600.0","45500.0","45000","46400","600.0","main_kernel"',
       '"8.8","17600","4","4400.0","4400.0","4300","4500","80.0","void reduce<float>(float*, int)"',
     ].join("\n");
+
     const result = parseBenchmarks(text);
     expect(result.timeColumn).toBe("Avg (ns)");
+
     expect(summarize(result)).toEqual([
       ["main_kernel", 4, 45600],
       ["void reduce<float>(float*, int)", 4, 4400],
@@ -67,8 +73,10 @@ describe("parseBenchmarks", () => {
       '"1","1234","main_kernel","GPU Speed Of Light Throughput","gpu__time_duration.sum","usecond","14.00"',
       '"2","1234","big","GPU Speed Of Light Throughput","gpu__time_duration.sum","msecond","1,200"',
     ].join("\n");
+
     const result = parseBenchmarks(text);
     expect(result.format).toBe("ncu");
+
     expect(summarize(result)).toEqual([
       ["main_kernel", 2, 12000],
       ["big", 1, 1.2e9],
@@ -81,7 +89,9 @@ describe("parseBenchmarks", () => {
         kernels: [{ kernel: "k", symbol: "@m::@k", time_ms: 0.5, calls: 10 }],
       }),
     );
+
     expect(result.format).toBe("json");
+
     expect(result.entries[0]).toMatchObject({
       kernel: "k",
       symbol: "@m::@k",
@@ -95,12 +105,35 @@ describe("parseBenchmarks", () => {
       JSON.stringify({
         context: {},
         benchmarks: [
-          { name: "BM_matmul", run_type: "iteration", iterations: 100, real_time: 20, cpu_time: 19, time_unit: "us" },
-          { name: "BM_matmul", run_type: "iteration", iterations: 300, real_time: 40, cpu_time: 39, time_unit: "us" },
-          { name: "BM_matmul_stddev", run_type: "aggregate", aggregate_name: "stddev", iterations: 2, real_time: 1, cpu_time: 1, time_unit: "us" },
+          {
+            name: "BM_matmul",
+            run_type: "iteration",
+            iterations: 100,
+            real_time: 20,
+            cpu_time: 19,
+            time_unit: "us",
+          },
+          {
+            name: "BM_matmul",
+            run_type: "iteration",
+            iterations: 300,
+            real_time: 40,
+            cpu_time: 39,
+            time_unit: "us",
+          },
+          {
+            name: "BM_matmul_stddev",
+            run_type: "aggregate",
+            aggregate_name: "stddev",
+            iterations: 2,
+            real_time: 1,
+            cpu_time: 1,
+            time_unit: "us",
+          },
         ],
       }),
     );
+
     expect(result.format).toBe("google-benchmark");
     expect(summarize(result)).toEqual([["BM_matmul", 400, 35000]]);
   });
@@ -132,6 +165,7 @@ describe("matchBenchmarks", () => {
     symbol: path.split("::").at(-1).slice(1),
     ops,
   });
+
   const history = [
     record("@main", ["func.func"]),
     record("@main_kernel", ["gpu.module", "gpu.binary"]),
@@ -140,9 +174,17 @@ describe("matchBenchmarks", () => {
     record("@b::@dup", ["gpu.func"]),
     record("@reduce", ["func.func"]),
   ];
-  const entry = (kernel, symbol = null) => ({ kernel, symbol, calls: 1, timeNs: 1 });
+
+  const entry = (kernel, symbol = null) => ({
+    kernel,
+    symbol,
+    calls: 1,
+    timeNs: 1,
+  });
+
   const match = (e) => {
     const [m] = matchBenchmarks([e], history);
+
     return [m.path, m.how, m.candidates];
   };
 
@@ -156,11 +198,20 @@ describe("matchBenchmarks", () => {
 
   it("matches C++ names and Itanium-mangled names", () => {
     expect(match(entry("void reduce<float>(float*, int)"))[0]).toBe("@reduce");
-    expect(match(entry("_Z6reducePfi"))).toEqual(["@reduce", "mangled", ["@reduce"]]);
+
+    expect(match(entry("_Z6reducePfi"))).toEqual([
+      "@reduce",
+      "mangled",
+      ["@reduce"],
+    ]);
   });
 
   it("reports ambiguous names with their candidates", () => {
-    expect(match(entry("dup"))).toEqual([null, "exact", ["@a::@dup", "@b::@dup"]]);
+    expect(match(entry("dup"))).toEqual([
+      null,
+      "exact",
+      ["@a::@dup", "@b::@dup"],
+    ]);
   });
 
   it("uses an explicit symbol and accepts it without @", () => {
@@ -169,6 +220,7 @@ describe("matchBenchmarks", () => {
       "symbol",
       ["@b::@dup"],
     ]);
+
     expect(match(entry("whatever", "@nope"))[0]).toBe(null);
   });
 
@@ -204,6 +256,7 @@ describe("symbolTimes", () => {
       ],
       history,
     );
+
     expect(times.get("@k")).toMatchObject({
       calls: 4,
       totalNs: 100,
@@ -211,29 +264,46 @@ describe("symbolTimes", () => {
       kernels: ["k", "_Z1kv"],
       how: ["exact", "mangled"],
     });
+
     expect(unmatched.map((m) => m.entry.kernel)).toEqual(["cublas"]);
   });
 });
 
 describe("compareBenchmarks", () => {
-  const time = (timeNs) => ({ timeNs, totalNs: timeNs, calls: 1, kernels: ["x"] });
+  const time = (timeNs) => ({
+    timeNs,
+    totalNs: timeNs,
+    calls: 1,
+    kernels: ["x"],
+  });
+
   const baseline = new Map([
     ["@a", time(100)],
     ["@b", time(200)],
     ["@gone", time(50)],
   ]);
+
   const current = new Map([
     ["@a", time(150)],
     ["@b", time(190)],
     ["@new", time(70)],
   ]);
+
   const comparison = compareBenchmarks(baseline, current);
 
   it("joins both runs by symbol with the relative change", () => {
     expect(comparison.get("@a")).toMatchObject({ deltaNs: 50, change: 0.5 });
     expect(comparison.get("@b").change).toBeCloseTo(-0.05);
-    expect(comparison.get("@gone")).toMatchObject({ current: null, change: null });
-    expect(comparison.get("@new")).toMatchObject({ baseline: null, change: null });
+
+    expect(comparison.get("@gone")).toMatchObject({
+      current: null,
+      change: null,
+    });
+
+    expect(comparison.get("@new")).toMatchObject({
+      baseline: null,
+      change: null,
+    });
   });
 
   it("works with one run", () => {
@@ -247,6 +317,7 @@ describe("compareBenchmarks", () => {
     const kept = [...comparison]
       .filter(([, row]) => changedBeyond(row, 5))
       .map(([path]) => path);
+
     expect(kept).toEqual(["@a", "@gone", "@new"]);
     expect(changedBeyond(comparison.get("@b"), 4)).toBe(true);
     expect(changedBeyond(undefined, 0)).toBe(false);
@@ -254,20 +325,24 @@ describe("compareBenchmarks", () => {
 
   it("orders by largest slowdown, then one-sided by time, then unmeasured", () => {
     const paths = ["@b", undefined, "@new", "@a", "@gone"];
+
     const sorted = paths.sort((x, y) =>
       comparisonOrder(comparison.get(x), comparison.get(y)),
     );
+
     expect(sorted).toEqual(["@a", "@b", "@new", "@gone", undefined]);
   });
 
   it("exports per-side times and the change", () => {
     const json = comparisonToJSON(comparison);
+
     expect(json.get("@a")).toEqual({
       baseline: { time_ns: 100, calls: 1, kernels: ["x"] },
       current: { time_ns: 150, calls: 1, kernels: ["x"] },
       delta_ns: 50,
       change: 0.5,
     });
+
     expect(json.get("@new")).toEqual({
       current: { time_ns: 70, calls: 1, kernels: ["x"] },
     });

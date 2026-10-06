@@ -10,7 +10,6 @@ import {
   parsePassTrace,
 } from "../../src/trace/trace.js";
 
-// Traces in tests/fixtures/traces are real mlir-opt output; see generate.sh.
 function fixture(name) {
   return readFileSync(
     new URL(`../fixtures/traces/${name}.txt`, import.meta.url),
@@ -165,6 +164,7 @@ describe("isPassTrace", () => {
       "module {",
       "}",
     ].join("\r\n");
+
     expect(isPassTrace(text)).toBe(true);
   });
 
@@ -175,6 +175,7 @@ describe("isPassTrace", () => {
 
   it("only probes the first 2000 lines", () => {
     const filler = "// filler\n".repeat(2000);
+
     expect(isPassTrace(`${filler}${header("After CSEPass: cse")}\n`)).toBe(
       false,
     );
@@ -184,19 +185,24 @@ describe("isPassTrace", () => {
 describe("parsePassTrace on real traces", () => {
   it("nested after-all: one event per function dump, final module as output", () => {
     const trace = parsePassTrace(fixture("nested-after-all"));
+
     expect(trace.events.map(describeEvent)).toEqual([
       "After cse · func.func @f",
       "After canonicalize · func.func @f",
       "After cse · func.func @g",
       "After canonicalize · func.func @g",
     ]);
+
     expect(trace.events.map((event) => event.headerLine)).toEqual([
       1, 9, 15, 22,
     ]);
+
     expect(trace.events[0].irLine).toBe(2);
+
     expect(trace.events[0].ir.split("\n")[0]).toBe(
       "func.func @f(%arg0: i32) -> i32 {",
     );
+
     expect(trace.events[0].ir.split("\n").at(-1)).toBe("}");
     expect(trace.events[1].options).toBe(CANON_OPTS);
     expect(trace.events.every((event) => event.trailing === "")).toBe(true);
@@ -208,10 +214,12 @@ describe("parsePassTrace on real traces", () => {
   it("module scope: roots are modules while anchors name the function", () => {
     const trace = parsePassTrace(fixture("module-scope-after-all"));
     expect(trace.events).toHaveLength(4);
+
     for (const event of trace.events) {
       expect(event.root).toEqual({ op: "builtin.module", symbol: null });
       expect(event.anchor.op).toBe("func.func");
     }
+
     expect(trace.events.map((event) => event.anchor.symbol)).toEqual([
       "f",
       "f",
@@ -222,6 +230,7 @@ describe("parsePassTrace on real traces", () => {
 
   it("before-all dumps have phase before", () => {
     const trace = parsePassTrace(fixture("nested-before-all"));
+
     expect(trace.events.map((event) => event.phase)).toEqual(
       Array(4).fill("before"),
     );
@@ -230,16 +239,20 @@ describe("parsePassTrace on real traces", () => {
   it("failed pass: diagnostics attach to the failed dump with their snippets", () => {
     const trace = parsePassTrace(fixture("failed-pass"));
     expect(trace.events.map((event) => event.failed)).toEqual([false, true]);
+
     const [first, failed] = trace.events;
     expect(first.diagnostics).toEqual([]);
     expect(first.trailing).toBe("");
+
     expect(failed.diagnostics.map((d) => [d.severity, d.location])).toEqual([
       ["error", { file: "input/tile-non-tileable.mlir", line: 10, column: 14 }],
       ["note", { file: "input/tile-non-tileable.mlir", line: 4, column: 10 }],
     ]);
+
     expect(failed.diagnostics[0].message).toBe(
       "only ops implementing TilingInterface are supported",
     );
+
     expect(failed.diagnostics[0].detail.split("\n")).toHaveLength(2);
     expect(failed.diagnostics[0].detail.split("\n")[1].trim()).toBe("^");
     expect(trace.diagnostics.every((d) => d.eventIndex === 1)).toBe(true);
@@ -270,10 +283,13 @@ describe("parsePassTrace edge cases", () => {
         "}",
       ].join("\n"),
     );
+
     expect(trace.preamble).toBe("starting pipeline");
+
     expect(trace.events[0].ir).toBe(
       "#map = affine_map<(d0) -> (d0)>\nmodule {\n}\n\n#loc = loc(unknown)",
     );
+
     expect(trace.events[0].root).toEqual({
       op: "builtin.module",
       symbol: null,
@@ -287,9 +303,11 @@ describe("parsePassTrace edge cases", () => {
       '  "test.op"() {s = "\\"}"} : () -> () // }',
       "}",
     ];
+
     const trace = parsePassTrace(
       [header("After CSEPass: cse"), ...ir, "after the dump"].join("\n"),
     );
+
     expect(trace.events[0].ir).toBe(ir.join("\n"));
     expect(trace.output).toBe("after the dump");
   });
@@ -298,6 +316,7 @@ describe("parsePassTrace edge cases", () => {
     const trace = parsePassTrace(
       [header("After CSEPass: cse"), "module {", "}", ""].join("\r\n"),
     );
+
     expect(trace.events[0].ir).toBe("module {\n}");
   });
 
@@ -316,9 +335,11 @@ describe("parsePassTrace edge cases", () => {
         "}",
       ].join("\n"),
     );
+
     expect(trace.events.map((event) => event.diagnostics.length)).toEqual([
       0, 0, 1,
     ]);
+
     expect(trace.events[2].diagnostics[0]).toMatchObject({
       severity: "warning",
       message: "no column",
@@ -340,13 +361,16 @@ describe("parsePassTrace edge cases", () => {
         "a.mlir:1:2: remark: another",
       ].join("\n"),
     );
+
     expect(trace.events[0].diagnostics).toEqual([]);
+
     expect(
       trace.diagnostics.map((d) => [d.severity, d.eventIndex, d.detail]),
     ).toEqual([
       ["error", -1, "  snippet"],
       ["remark", -1, ""],
     ]);
+
     expect(trace.output).toBe("");
   });
 
@@ -356,6 +380,7 @@ describe("parsePassTrace edge cases", () => {
       output: "",
       preamble: "",
     });
+
     const trace = parsePassTrace(
       [
         header("After CSEPass: cse"),
@@ -364,6 +389,7 @@ describe("parsePassTrace edge cases", () => {
         "  func.func @f() {",
       ].join("\n"),
     );
+
     expect(trace.events).toHaveLength(2);
     expect(trace.events[0].ir).toBe("");
     expect(trace.events[0].root).toBeNull();
@@ -375,11 +401,13 @@ describe("baselineFor", () => {
   it("nested dumps compare against the previous dump of the same function", () => {
     const { events } = parsePassTrace(fixture("nested-after-all"));
     expect(baselineFor(events, 0)).toBeNull();
+
     expect(baselineFor(events, 1)).toMatchObject({
       event: events[0],
       ir: events[0].ir,
       reconstructed: false,
     });
+
     expect(baselineFor(events, 2)).toBeNull();
     expect(baselineFor(events, 3).event).toBe(events[2]);
   });
@@ -387,6 +415,7 @@ describe("baselineFor", () => {
   it("module-scope dumps compare against the previous module dump", () => {
     const { events } = parsePassTrace(fixture("module-scope-after-all"));
     expect(baselineFor(events, 0)).toBeNull();
+
     for (const index of [1, 2, 3]) {
       expect(baselineFor(events, index)).toMatchObject({
         event: events[index - 1],
@@ -411,7 +440,6 @@ describe("baselineFor", () => {
     const base = baselineFor(events, 3);
     expect(base.reconstructed).toBe(true);
     expect(base.event).toBe(events[2]);
-    // symbol-dce changed nothing, so the rebuilt input equals its output.
     expect(base.ir).toBe(events[3].ir);
   });
 
@@ -427,6 +455,7 @@ describe("baselineFor", () => {
         "}",
       ].join("\n"),
     ).events;
+
     expect(baselineFor(events, 1)).toEqual({
       event: events[0],
       ir: "module {\n  func.func @f() {\n    return\n  }\n}",
@@ -450,6 +479,7 @@ describe("baselineFor", () => {
         "}",
       ].join("\n"),
     ).events;
+
     expect(baselineFor(events, 2).ir).toBe(
       "module {\n  func.func @old() {\n  }\n  func.func @new() {\n  }\n}",
     );
@@ -459,6 +489,7 @@ describe("baselineFor", () => {
     const events = parsePassTrace(
       [header("After CSEPass: cse"), ""].join("\n"),
     ).events;
+
     expect(baselineFor(events, 0)).toBeNull();
     expect(baselineFor(events, 5)).toBeNull();
   });
@@ -501,6 +532,7 @@ describe("describeEvent", () => {
         root: { op: "builtin.module", symbol: null },
       }),
     ).toBe("After cse · func.func @f");
+
     expect(
       describeEvent({
         phase: "before",
@@ -513,8 +545,6 @@ describe("describeEvent", () => {
   });
 });
 
-// schema-opt (json-schema-mlir) is an out-of-tree MlirOptMain driver with its
-// own dialect; see generate.sh.
 describe("out-of-tree driver trace", () => {
   const trace = parsePassTrace(fixture("schema-opt-pipeline"));
 
@@ -528,6 +558,7 @@ describe("out-of-tree driver trace", () => {
       "cse",
       "symbol-dce",
     ]);
+
     expect(trace.diagnostics).toEqual([]);
   });
 
@@ -535,6 +566,7 @@ describe("out-of-tree driver trace", () => {
     expect(trace.events[1].pass).toBe(
       "(anonymous namespace)::SchemaCanonicalizerPass",
     );
+
     expect(trace.events[1].argument).toBe("schema-canonicalize");
   });
 
@@ -543,8 +575,9 @@ describe("out-of-tree driver trace", () => {
       op: "func.func",
       symbol: "validate_person",
     });
+
     expect(trace.events[1].ir).toContain("schema.validate_number");
-    // The baseline is the function cut out of the module dump before it.
+
     const baseline = baselineFor(trace.events, 1);
     expect(baseline.event.index).toBe(0);
     expect(baseline.ir).toMatch(/^func\.func @validate_person/);
@@ -564,14 +597,15 @@ describe("moduleStateAt", () => {
     const { events } = parsePassTrace(fixture("mixed-nesting"));
     const state = moduleStateAt(events, 1);
     expect(state.split("\n")[0]).toBe("module {");
+
     expect(extractSymbolOp(state, "func.func", "f")).toBe(
       extractSymbolOp(events[1].ir, "func.func", "f"),
     );
-    // @g has not been rewritten yet, so it still matches the module dump.
+
     expect(extractSymbolOp(state, "func.func", "g")).toBe(
       extractSymbolOp(events[0].ir, "func.func", "g"),
     );
-    // After both function dumps the module matches the next module dump.
+
     expect(moduleStateAt(events, 2)).toBe(events[3].ir);
   });
 

@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { diffStats, lineDiff } from "../../src/trace/linediff.js";
 
 const render = (lines) =>
-  lines.map(({ type, text }) => `${{ same: " ", add: "+", del: "-" }[type]}${text}`);
+  lines.map(
+    ({ type, text }) => `${{ same: " ", add: "+", del: "-" }[type]}${text}`,
+  );
 
 describe("lineDiff", () => {
   it("marks added, removed and kept lines in order", () => {

@@ -9,7 +9,6 @@ import {
   sourcePositions,
 } from "../../src/trace/sources.js";
 
-// An object shaped like MlirEngine#snapshot(): [label, loc text | null].
 function snapshotOf(nodes) {
   return {
     nodeCount: nodes.length,
@@ -19,15 +18,22 @@ function snapshotOf(nodes) {
 
 describe("sourcePositions", () => {
   it("reads a plain location", () => {
-    expect(sourcePositions('"k.mojo":12:5')).toEqual([{ file: "k.mojo", line: 12, col: 5 }]);
+    expect(sourcePositions('"k.mojo":12:5')).toEqual([
+      { file: "k.mojo", line: 12, col: 5 },
+    ]);
   });
 
   it("reads every position of a call site and of a fused op, in order", () => {
-    expect(sourcePositions('callsite("k.mojo":4:14 at "main.mojo":10:16)')).toEqual([
+    expect(
+      sourcePositions('callsite("k.mojo":4:14 at "main.mojo":10:16)'),
+    ).toEqual([
       { file: "k.mojo", line: 4, col: 14 },
       { file: "main.mojo", line: 10, col: 16 },
     ]);
-    expect(sourcePositions('fused["a.mojo":1:1, "a.mojo":2:2]').map((p) => p.line)).toEqual([1, 2]);
+
+    expect(
+      sourcePositions('fused["a.mojo":1:1, "a.mojo":2:2]').map((p) => p.line),
+    ).toEqual([1, 2]);
   });
 
   it("finds nothing in unknown or name-only locations", () => {
@@ -65,6 +71,7 @@ describe("location index", () => {
     ["math.fma", 'fused["k.mojo":4:14, "k.mojo":10:31]'],
     ["return", "unknown"],
   ]);
+
   const index = buildLocIndex(snap);
 
   it("lists the files the IR names, once each", () => {

@@ -10,7 +10,11 @@ pub struct Interner {
 
 impl Interner {
     pub fn new() -> Self {
-        Self { map: HashMap::with_capacity(1024), spans: Vec::with_capacity(1024), pool: Vec::with_capacity(64 * 1024) }
+        Self {
+            map: HashMap::with_capacity(1024),
+            spans: Vec::with_capacity(1024),
+            pool: Vec::with_capacity(64 * 1024),
+        }
     }
 
     pub fn clear(&mut self) {
@@ -23,6 +27,7 @@ impl Interner {
         if let Some(&id) = self.map.get(s) {
             return id;
         }
+
         let off = self.pool.len() as u32;
         self.pool.extend_from_slice(s.as_bytes());
         let id = self.spans.len() as SymId;
@@ -42,8 +47,12 @@ impl Interner {
     }
 
     #[inline]
-    pub fn pool(&self) -> &[u8] { &self.pool }
+    pub fn pool(&self) -> &[u8] {
+        &self.pool
+    }
 
     #[inline]
-    pub fn len(&self) -> usize { self.spans.len() }
+    pub fn len(&self) -> usize {
+        self.spans.len()
+    }
 }

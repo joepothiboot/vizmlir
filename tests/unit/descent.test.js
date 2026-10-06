@@ -12,12 +12,15 @@ import {
   snapshotShape,
 } from "../../src/trace/descent.js";
 
-// module(0) > func(1) > a(2), b(3); b feeds from a.
 const shape = {
   parent: [-1, 0, 1, 1],
   kind: [0, 1, 2, 2],
   line: [0, 1, 2, 3],
-  edges: [[0, 1], [1, 2], [2, 3]],
+  edges: [
+    [0, 1],
+    [1, 2],
+    [2, 3],
+  ],
 };
 
 describe("snapshotShape", () => {
@@ -30,11 +33,15 @@ describe("snapshotShape", () => {
       irLineOf: (i) => [0, 1, 2][i],
       edges: new Uint32Array([0, 1, 1, 2]),
     };
+
     expect(snapshotShape(snapshot)).toEqual({
       parent: [-1, 0, 1],
       kind: [0, 1, 2],
       line: [0, 1, 2],
-      edges: [[0, 1], [1, 2]],
+      edges: [
+        [0, 1],
+        [1, 2],
+      ],
     });
   });
 
@@ -46,6 +53,7 @@ describe("snapshotShape", () => {
       kindOf: () => 0,
       edges: [],
     });
+
     expect(shape.line).toEqual([0]);
   });
 });
@@ -53,6 +61,7 @@ describe("snapshotShape", () => {
 describe("layout", () => {
   it("puts a column at each nesting depth and stacks siblings in a row", () => {
     expect(depths(shape)).toEqual([0, 1, 2, 2]);
+
     const layer = layoutLayer(shape, { cellX: 2, cellZ: 1 });
     const [m, f, a, b] = layer.pos;
     expect(f[0] - m[0]).toBe(2);
@@ -76,7 +85,6 @@ describe("layout", () => {
     expect(layer).toMatchObject({ shown: 2, hidden: 2 });
   });
 
-  // One module op over `n` ops all at depth 2.
   const wide = (n) => ({
     parent: [-1, 0, ...Array(n).fill(1)],
     kind: [0, 1, ...Array(n).fill(2)],
@@ -85,12 +93,16 @@ describe("layout", () => {
   });
 
   it("wraps a tall column into side-by-side sub-columns", () => {
-    const layer = layoutLayer(wide(30), { cellX: 3, cellZ: 1, maxRows: 10, subWidth: 1 });
+    const layer = layoutLayer(wide(30), {
+      cellX: 3,
+      cellZ: 1,
+      maxRows: 10,
+      subWidth: 1,
+    });
+
     const col = layer.pos.slice(2);
-    // 30 ops at 10 a column: three sub-columns, each 10 rows deep.
     expect(new Set(col.map((p) => p[0])).size).toBe(3);
     expect(layer.depth).toBe(9);
-    // Row 11 starts the second sub-column, level with row 1.
     expect(col[10][0] - col[0][0]).toBe(1);
     expect(col[10][1]).toBe(col[0][1]);
   });
@@ -102,9 +114,15 @@ describe("layout", () => {
       line: [],
       edges: [],
     };
-    const layer = layoutLayer(shape, { cellX: 3, cellZ: 1, maxRows: 10, subWidth: 1 });
+
+    const layer = layoutLayer(shape, {
+      cellX: 3,
+      cellZ: 1,
+      maxRows: 10,
+      subWidth: 1,
+    });
+
     const widest = Math.max(...layer.pos.slice(2, 32).map((p) => p[0]));
-    // The child of op 2 (depth 3) is right of every sub-column at depth 2.
     expect(layer.pos[32][0]).toBeGreaterThan(widest);
   });
 
@@ -151,9 +169,18 @@ describe("lineageSegments", () => {
     const entries = [
       { pass: 0, node: 4, change: "created", from: [] },
       { pass: 1, node: 5, change: "kept", from: [{ pass: 0, node: 4 }] },
-      { pass: 2, node: 7, change: "fused", from: [{ pass: 1, node: 5 }, { pass: 1, node: 6 }] },
+      {
+        pass: 2,
+        node: 7,
+        change: "fused",
+        from: [
+          { pass: 1, node: 5 },
+          { pass: 1, node: 6 },
+        ],
+      },
       { pass: 3, node: -1, change: "removed", from: [] },
     ];
+
     expect(lineageSegments(entries)).toEqual([
       { from: { pass: 0, node: 4 }, to: { pass: 1, node: 5 }, kind: "kept" },
       { from: { pass: 1, node: 5 }, to: { pass: 2, node: 7 }, kind: "fused" },
@@ -165,7 +192,11 @@ describe("lineageSegments", () => {
     const [segment] = lineageSegments([
       { pass: 1, node: 9, change: "inlined", from: [{ pass: 0, node: 2 }] },
     ]);
-    expect(segment).toMatchObject({ from: { pass: 0, node: 2 }, kind: "inlined" });
+
+    expect(segment).toMatchObject({
+      from: { pass: 0, node: 2 },
+      kind: "inlined",
+    });
   });
 
   it("is empty for no history", () => {
@@ -174,7 +205,11 @@ describe("lineageSegments", () => {
 });
 
 describe("pointAlong", () => {
-  const path = [[0, 0, 0], [10, 0, 0], [10, 10, 0]];
+  const path = [
+    [0, 0, 0],
+    [10, 0, 0],
+    [10, 10, 0],
+  ];
 
   it("walks the polyline by length", () => {
     expect(pointAlong(path, 0)).toEqual([0, 0, 0]);
@@ -189,7 +224,16 @@ describe("pointAlong", () => {
     expect(pointAlong(path, 2)).toEqual([10, 10, 0]);
     expect(pointAlong([], 0.5)).toBeNull();
     expect(pointAlong([[1, 2, 3]], 0.5)).toEqual([1, 2, 3]);
-    expect(pointAlong([[1, 1, 1], [1, 1, 1]], 0.5)).toEqual([1, 1, 1]);
+
+    expect(
+      pointAlong(
+        [
+          [1, 1, 1],
+          [1, 1, 1],
+        ],
+        0.5,
+      ),
+    ).toEqual([1, 1, 1]);
   });
 });
 

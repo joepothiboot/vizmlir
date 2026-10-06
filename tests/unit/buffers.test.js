@@ -60,9 +60,11 @@ describe("parseMemref", () => {
     const strided = parseMemref(
       "memref<128x256xf32, strided<[?, ?], offset: ?>>",
     );
+
     expect(strided).toMatchObject({ bytes: 131072, space: "" });
     expect(parseMemref("memref<4xf32, #map>").space).toBe("");
     expect(parseMemref("memref<4xf32, 3>").space).toBe("3");
+
     expect(
       parseMemref("memref<16xf16, #gpu.address_space<workgroup>>").space,
     ).toBe("workgroup");
@@ -80,15 +82,17 @@ describe("analyzeBuffers", () => {
   memref.dealloc %b : memref<32xf32>
   return
 }`);
+
     expect(fn.name).toBe("@f");
+
     expect(byName(fn, "%a")).toMatchObject({
       bytes: 64,
       start: 0,
       end: 3,
       freed: "dealloc",
     });
+
     expect(byName(fn, "%b")).toMatchObject({ start: 1, end: 5 });
-    // Both live from the copy to %a's dealloc.
     expect(fn.peak).toBe(64 + 128);
     expect(fn.peakAt).toBe(1);
     expect(fn.live).toEqual([64, 192, 192, 192, 128, 128, 0]);
@@ -106,18 +110,19 @@ describe("analyzeBuffers", () => {
   "test.after"() : () -> ()
   return
 }`);
-    // Positions: 0,1 constants; 2 alloc; 3 for; 4 load; 5 sink; 6 after.
-    // The load is the first op of the body, but the loop runs to the sink.
+
     expect(byName(fn, "%a")).toMatchObject({ start: 2, end: 5 });
   });
 
   it("follows aliases and marks returned buffers", () => {
-    const fn = only(`func.func @f() -> memref<4x4xf32, strided<[?, ?], offset: ?>> {
+    const fn =
+      only(`func.func @f() -> memref<4x4xf32, strided<[?, ?], offset: ?>> {
   %alloc = memref.alloc() {alignment = 64 : i64} : memref<4x4xf32>
   %cast = memref.cast %alloc : memref<4x4xf32> to memref<4x4xf32, strided<[?, ?], offset: ?>>
   "test.other"() : () -> ()
   return %cast : memref<4x4xf32, strided<[?, ?], offset: ?>>
 }`);
+
     const buffer = byName(fn, "%alloc");
     expect(buffer.aliases).toEqual(["%cast"]);
     expect(buffer.freed).toBe("returned");
@@ -132,11 +137,15 @@ describe("analyzeBuffers", () => {
   %d = gpu.alloc () : memref<?xf32>
   gpu.return
 }`);
-    expect(fn.buffers.map((b) => [b.name, b.op, b.bytes, b.space, b.freed])).toEqual([
+
+    expect(
+      fn.buffers.map((b) => [b.name, b.op, b.bytes, b.space, b.freed]),
+    ).toEqual([
       ["%s", "memref.alloca", 64, "workgroup", "scope"],
       ["%g", "memref.alloc", 16, "", "last-use"],
       ["%d", "gpu.alloc", null, "", "last-use"],
     ]);
+
     expect(fn.dynamic).toBe(1);
     expect(fn.allocated).toBe(80);
   });
@@ -154,10 +163,12 @@ describe("analyzeBuffers", () => {
     return
   }
 }`);
+
     expect(functions.map((fn) => [fn.name, fn.allocated])).toEqual([
       ["@a", 16],
       ["@b", 32],
     ]);
+
     expect(globals).toMatchObject([
       { name: "@__constant_4xf32", bytes: 16, constant: true, line: 1 },
     ]);
@@ -168,6 +179,7 @@ describe("analyzeBuffers", () => {
   %e = tensor.empty() : tensor<4xf32>
   return %e : tensor<4xf32>
 }`);
+
     expect(fn.buffers).toEqual([]);
     expect(fn.peak).toBe(0);
   });
@@ -175,21 +187,26 @@ describe("analyzeBuffers", () => {
 
 describe("the lowering sample", () => {
   const trace = parsePassTrace(lowering);
+
   const states = trace.events.map((_, i) =>
     analyzeBuffers(moduleStateAt(trace.events, i)),
   );
+
   const totals = states.map(bufferTotals);
 
   it("has no buffers until bufferization, then one 32 KB result", () => {
     const first = trace.events.findIndex((e) => /Bufferize/.test(e.pass));
     expect(first).toBeGreaterThan(0);
     for (let i = 0; i < first; i++) expect(totals[i].buffers).toBe(0);
-    for (let i = first; i < totals.length; i++)
+
+    for (let i = first; i < totals.length; i++) {
       expect(totals[i]).toMatchObject({
         buffers: 1,
         allocated: 128 * 64 * 4,
         peak: 128 * 64 * 4,
       });
+    }
+
     const [buffer] = states.at(-1).functions[0].buffers;
     expect(buffer).toMatchObject({ name: "%alloc", freed: "returned" });
   });
@@ -210,6 +227,7 @@ describe("compareBuffers", () => {
   memref.dealloc %a : memref<16xf32>
   return
 }`);
+
   const after = analyzeBuffers(`func.func @f() {
   %alloc = memref.alloc() : memref<16xf32>
   "test.use"(%alloc) : (memref<16xf32>) -> ()
@@ -220,8 +238,13 @@ describe("compareBuffers", () => {
 
   it("pairs buffers by op and type, not by SSA name", () => {
     const [f] = compareBuffers(before, after);
+
     expect(
-      f.rows.map((r) => [r.status, r.before?.name ?? null, r.after?.name ?? null]),
+      f.rows.map((r) => [
+        r.status,
+        r.before?.name ?? null,
+        r.after?.name ?? null,
+      ]),
     ).toEqual([
       ["changed", "%a", "%alloc"],
       ["added", null, "%alloc_0"],
@@ -239,7 +262,10 @@ describe("compareBuffers", () => {
     const g = analyzeBuffers(`func.func @g() {
   return
 }`);
-    expect(compareBuffers(before, g).map((f) => [f.name, !!f.before, !!f.after])).toEqual([
+
+    expect(
+      compareBuffers(before, g).map((f) => [f.name, !!f.before, !!f.after]),
+    ).toEqual([
       ["@f", true, false],
       ["@g", false, true],
     ]);
@@ -247,6 +273,7 @@ describe("compareBuffers", () => {
 
   it("serializes with 1-based lines", () => {
     const json = JSON.parse(buffersToJSON("t", compareBuffers(before, after)));
+
     expect(json.functions[0].buffers[0].after).toMatchObject({
       name: "%alloc",
       line: 2,

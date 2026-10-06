@@ -4,8 +4,6 @@ import { URL as FileURL } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createSourceView } from "../../src/app/source-view.js";
 
-// The real markup from index.html, so the classes under test are the ones the
-// app ships.
 const page = new DOMParser().parseFromString(
   readFileSync(new FileURL("../../index.html", import.meta.url), "utf8"),
   "text/html",
@@ -31,6 +29,7 @@ describe("source view", () => {
 
   it("lists the lines of the first file, numbered from 1", () => {
     view.setSources({ "k.mojo": SRC });
+
     expect(rows().map((r) => r.querySelector(".src-t").textContent)).toEqual([
       "fn a():",
       "    pass",
@@ -38,6 +37,7 @@ describe("source view", () => {
       "fn b():",
       "    pass",
     ]);
+
     expect(rows()[4].querySelector(".src-n").textContent).toBe("5");
   });
 
@@ -51,6 +51,7 @@ describe("source view", () => {
 
   it("asks for the files the IR names when none are loaded", () => {
     view.setSources({}, ["saxpy.mojo"]);
+
     const empty = root.querySelector(".src-empty");
     expect(empty.hidden).toBe(false);
     expect(empty.textContent).toContain("saxpy.mojo");
@@ -59,12 +60,22 @@ describe("source view", () => {
 
   it("names the files still missing next to loaded ones", () => {
     view.setSources({ "k.mojo": SRC }, ["other.mojo"]);
-    expect(root.querySelector(".src-empty").textContent).toContain("other.mojo");
+
+    expect(root.querySelector(".src-empty").textContent).toContain(
+      "other.mojo",
+    );
   });
 
   it("shows how many ops each line produced", () => {
     view.setSources({ "k.mojo": SRC });
-    view.setCounts(new Map([[1, 2], [4, 1]]));
+
+    view.setCounts(
+      new Map([
+        [1, 2],
+        [4, 1],
+      ]),
+    );
+
     expect(rows()[0].querySelector(".src-ops").textContent).toBe("2");
     expect(rows()[0].classList.contains("has-ops")).toBe(true);
     expect(rows()[1].querySelector(".src-ops").textContent).toBe("");
@@ -75,7 +86,12 @@ describe("source view", () => {
     view.setSources({ "k.mojo": SRC, "m.mojo": "x\ny\n" });
     view.mark("m.mojo", [2]);
     expect(view.file).toBe("m.mojo");
-    expect(rows().map((r) => r.classList.contains("hit"))).toEqual([false, true]);
+
+    expect(rows().map((r) => r.classList.contains("hit"))).toEqual([
+      false,
+      true,
+    ]);
+
     view.mark(null, []);
     expect(rows().some((r) => r.classList.contains("hit"))).toBe(false);
     expect(view.file).toBe("m.mojo");
@@ -89,6 +105,7 @@ describe("source view", () => {
 
   it("hands over files that are dropped on it", () => {
     view.setSources({}, []);
+
     const file = new File(["x"], "k.mojo");
     const drop = new Event("drop", { bubbles: true, cancelable: true });
     drop.dataTransfer = { files: [file], types: ["Files"] };

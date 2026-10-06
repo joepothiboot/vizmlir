@@ -25,10 +25,12 @@ describe("filterItems", () => {
       item("linalg.matmul"),
       item("@matmul"),
     ];
+
     expect(filterItems(items, "matmul").map((i) => i.text)).toEqual([
       "@matmul",
       "linalg.matmul",
     ]);
+
     expect(filterItems(items, "").map((i) => i.text)).toEqual([
       "arith.constant",
       "linalg.matmul",
@@ -41,6 +43,7 @@ describe("filterItems", () => {
       item("linalg.fill", "#4 · in func.func @matmul"),
       item("func.func @matmul", "#2"),
     ];
+
     expect(filterItems(items, "@matmul").map((i) => i.text)).toEqual([
       "func.func @matmul",
       "linalg.fill",

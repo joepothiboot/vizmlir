@@ -21,8 +21,6 @@ pub const STRIDE_NODE_XYWH: usize = 4;
 pub const STRIDE_NODE_META: usize = 4;
 pub const STRIDE_EDGE: usize = 2;
 pub const STRIDE_DIAG: usize = 4;
-// Per node: IR line, source line, source column, file (offset, length) and
-// resolved loc text (offset, length) in the strings pool, flags.
 pub const STRIDE_NODE_LOC: usize = 8;
 
 pub const STATUS_OK: u32 = 0;

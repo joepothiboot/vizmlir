@@ -1,0 +1,52 @@
+#menu-handle,
+#topbar,
+#pass-scrubber,
+#status,
+dialog {
+  --mono: var(--ui);
+  font-family: var(--ui);
+  letter-spacing: normal;
+}
+:root {
+  --ui:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+}
+#topbar h1,
+#topbar h1 span,
+dialog h2 {
+  font-weight: 600;
+  letter-spacing: normal;
+}
+#topbar h1 span {
+  color: var(--dim);
+}
+#topbar button,
+#topbar label.btn,
+dialog button {
+  background: transparent;
+  border-radius: 5px;
+}
+#topbar button:hover,
+#topbar label.btn:hover,
+dialog button:hover {
+  background: var(--raised);
+  border-color: var(--line);
+}
+#topbar .live {
+  border-color: var(--good);
+}
+dialog {
+  border-radius: 8px;
+  box-shadow: 0 12px 40px var(--shadow);
+}
+#sample-list button {
+  border-color: transparent;
+}
+#sample-list button:hover,
+#sample-list button:focus-visible {
+  border-color: var(--line);
+}
+#sample-list .title {
+  font-weight: 600;
+}

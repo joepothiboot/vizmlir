@@ -10,12 +10,14 @@ export class MemoryViews {
 
   refresh() {
     const buf = this.memory.buffer;
+
     if (buf !== this._buffer) {
       this._buffer = buf;
       this.u8 = new Uint8Array(buf);
       this.u32 = new Uint32Array(buf);
       this.f32 = new Float32Array(buf);
     }
+
     return this;
   }
 
@@ -25,6 +27,7 @@ export class MemoryViews {
         `misaligned pointer 0x${ptr.toString(16)} (needs ${align}-byte alignment)`,
       );
     }
+
     if (ptr + byteLen > this._buffer.byteLength) {
       throw new Error(
         `view 0x${ptr.toString(16)}+${byteLen} exceeds linear memory`,
@@ -36,6 +39,7 @@ export class MemoryViews {
     this.refresh();
     if (len === 0) return EMPTY_U32;
     this.#check(ptr, len * 4, 4);
+
     return this.u32.subarray(ptr >>> 2, (ptr >>> 2) + len);
   }
 
@@ -43,6 +47,7 @@ export class MemoryViews {
     this.refresh();
     if (len === 0) return EMPTY_F32;
     this.#check(ptr, len * 4, 4);
+
     return this.f32.subarray(ptr >>> 2, (ptr >>> 2) + len);
   }
 
@@ -50,6 +55,7 @@ export class MemoryViews {
     this.refresh();
     if (len === 0) return EMPTY_U8;
     this.#check(ptr, len, 1);
+
     return this.u8.subarray(ptr, ptr + len);
   }
 
@@ -57,6 +63,7 @@ export class MemoryViews {
     this.refresh();
     this.#check(ptr, bytes.length, 1);
     this.u8.set(bytes, ptr);
+
     return bytes.length;
   }
 }

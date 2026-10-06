@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-"""Launches each hardware-check kernel once from samples/ptx and checks its
-output, so ncu has one launch per kernel to measure. Needs a CUDA GPU and
-CuPy (preinstalled on Colab and Kaggle). See docs/hardware-check.md."""
 import json
 import pathlib
 import sys
@@ -11,8 +8,6 @@ import numpy as np
 
 PTX = pathlib.Path(__file__).resolve().parent.parent / "samples" / "ptx"
 
-# What each kernel writes to its last buffer, from its inputs (as NumPy).
-# Inputs hold 0, 1, 2, ... so every sum below is exact in f32.
 EXPECTED = {
     "aos_x_kernel": lambda points: points[:, 0],
     "soa_x_kernel": lambda xs: xs,
@@ -27,16 +22,18 @@ EXPECTED = {
 
 kernels = json.loads((PTX / "kernels.json").read_text())
 failed = []
+
 for k in kernels:
     name = k["name"]
     buffers = [cp.arange(np.prod(shape), dtype=cp.float32).reshape(shape) for shape in k["args"]]
-    buffers[-1].fill(-1)  # so a kernel that never ran can't pass
+    buffers[-1].fill(-1)
     kernel = cp.RawModule(path=str(PTX / f"{name}.ptx")).get_function(name)
     kernel(tuple(k["grid"]), tuple(k["block"]), tuple(buffers))
     cp.cuda.Device().synchronize()
     *inputs, out = (b.get() for b in buffers)
     ok = np.array_equal(out, EXPECTED[name](*inputs))
     print(f"{'ok  ' if ok else 'FAIL'} {name}")
+
     if not ok:
         failed.append(name)
 

@@ -1,17 +1,3 @@
-// Built-in samples. The inline one needs no fetch, so it is the fallback when
-// the first sample cannot be loaded; the rest are real mlir-opt output in
-// public/samples (see samples/generate.sh), fetched only when picked, or the
-// output of an out-of-tree driver built on MLIR (nanodsp-local-matmul, from
-// nanodsp-opt; see public/samples/NANODSP_VERSION). The
-// benchmark CSVs are the exception: hand-written mock timings (`*.mock.csv`,
-// flagged `mock`) to show the benchmark view. So is the Triton trace
-// (triton-coalesce.trace.txt, flagged `handwritten`): Triton does not run on
-// every machine, so it is written by hand in the format of a Triton 3.x
-// MLIR_ENABLE_DUMP=1 trace; replace it with a real one when one is at hand.
-// The saxpy trace (saxpy.trace.txt, with saxpy.mojo) is hand-written too, in the
-// format of `mlir-opt -mlir-print-ir-after-all -mlir-print-debuginfo`, to show
-// source locations through inlining, fusion and lowering.
-
 export const RENAME_SAMPLE = `module {
   func.func @matmul(%A: tensor<128x256xf32>, %B: tensor<256x64xf32>) -> tensor<128x64xf32> {
     %c0 = arith.constant 0.0 : f32
@@ -23,19 +9,8 @@ export const RENAME_SAMPLE = `module {
   }
 }`;
 
-// Nsight Compute counters for the gpu-patterns and gpu-transpose kernels,
-// measured on a real GPU (docs/hardware-check.md). The answer card shows them
-// next to the prediction.
 const T4_COUNTERS = { file: "gpu-patterns.t4.ncu.csv", device: "Tesla T4" };
 
-/**
- * In the order the Samples dialog lists them; the first opens on a first
- * visit. `baseline`/`current` name a before/after pair; `trace` names a pass
- * trace, and `benchmarks` optional baseline/current kernel results for it,
- * which are invented when `mock` is set. `measured` names an ncu counter CSV
- * for the trace's kernels and the GPU it came from. Paths are relative to the
- * samples directory.
- */
 export const SAMPLES = [
   {
     id: "gpu-transpose",
@@ -54,8 +29,6 @@ export const SAMPLES = [
       "Every op carries a loc(...) into saxpy.mojo. Watch one source line follow its ops through inlining (a call site), canonicalization (two ops fused into one fma) and lowering to NVVM. Open the Source tab and click a line, or an op. Hand-written in the format of mlir-opt -mlir-print-debuginfo output.",
     trace: "saxpy.trace.txt",
     sources: ["saxpy.mojo"],
-    // Breakpoints to try in Debug mode: the pass that inlines the call away,
-    // and the one that fuses the mul and add.
     breakpoints: ["gone func.call", "appears math.fma"],
     handwritten: true,
   },
@@ -101,8 +74,6 @@ export const SAMPLES = [
   {
     id: "nanodsp-local-matmul",
     scope: "dsp",
-    // Local memory only exists from nanodsp-promote-local on, so open there
-    // (0-based pass); a test keeps this in step with the trace.
     startPass: 11,
     startsAt: "nanodsp-promote-local",
     title: "DSP scratchpad: double-buffered DMA",
@@ -156,17 +127,13 @@ export const SAMPLES = [
   },
 ];
 
-/**
- * The scenarios: the kinds of work the samples are grouped under. Picking a
- * sample sets its scenario's starting layout: the view the canvas opens on and
- * whether Debug mode is on. Nothing is locked; every view stays one click away.
- */
 export const SCOPES = [
   {
     id: "debug",
     title: "Source tracing and debugging",
     short: "Debugging",
-    blurb: "Follow an op from its source line through the passes, and stop on a condition.",
+    blurb:
+      "Follow an op from its source line through the passes, and stop on a condition.",
     view: "graph",
     debug: true,
   },
@@ -174,7 +141,8 @@ export const SCOPES = [
     id: "gpu",
     title: "GPU memory",
     short: "GPU memory",
-    blurb: "How a kernel is launched, and whether its reads and writes suit the GPU.",
+    blurb:
+      "How a kernel is launched, and whether its reads and writes suit the GPU.",
     view: "gpu",
     debug: false,
   },
@@ -204,19 +172,20 @@ export const SCOPES = [
   },
 ];
 
-/** The sample a first visit opens on. */
 export const DEFAULT_SAMPLE_ID = "mojo-saxpy";
 
-export const scopeOf = (sample) => SCOPES.find((scope) => scope.id === sample.scope) ?? SCOPES.at(-1);
+export const scopeOf = (sample) =>
+  SCOPES.find((scope) => scope.id === sample.scope) ?? SCOPES.at(-1);
 
-/** The scenarios that have samples, each with its samples, in list order. */
 export function groupSamples(samples = SAMPLES, scopes = SCOPES) {
   return scopes
-    .map((scope) => ({ scope, samples: samples.filter((sample) => sample.scope === scope.id) }))
+    .map((scope) => ({
+      scope,
+      samples: samples.filter((sample) => sample.scope === scope.id),
+    }))
     .filter((group) => group.samples.length);
 }
 
-/** Every file a sample needs, relative to the samples directory. */
 export function sampleFiles(sample) {
   return [
     sample.baseline,
@@ -229,46 +198,60 @@ export function sampleFiles(sample) {
   ].filter(Boolean);
 }
 
-/**
- * Resolves a sample to a workspace state (the shape `applyState` takes).
- * @param {(path: string) => Promise<string>} fetchText
- */
 export async function loadSampleState(sample, fetchText) {
   const sourceName = `sample: ${sample.title}`;
+
   if (sample.trace) {
     const state = {
       sourceName,
       trace: await fetchText(sample.trace),
       traceIndex: sample.startPass ?? -1,
     };
-    if (sample.breakpoints)
-      state.breakpoints = sample.breakpoints.map((text) => ({ text, on: true }));
+
+    if (sample.breakpoints) {
+      state.breakpoints = sample.breakpoints.map((text) => ({
+        text,
+        on: true,
+      }));
+    }
+
     if (sample.sources) {
       state.sources = {};
-      for (const path of sample.sources)
-        state.sources[path.slice(path.lastIndexOf("/") + 1)] = await fetchText(path);
+
+      for (const path of sample.sources) {
+        state.sources[path.slice(path.lastIndexOf("/") + 1)] =
+          await fetchText(path);
+      }
     }
-    if (sample.measured)
+
+    if (sample.measured) {
       state.measured = {
         device: sample.measured.device,
         text: await fetchText(sample.measured.file),
       };
+    }
+
     if (sample.benchmarks) {
       state.benchmarks = {};
-      for (const [slot, path] of Object.entries(sample.benchmarks))
+
+      for (const [slot, path] of Object.entries(sample.benchmarks)) {
         state.benchmarks[slot] = {
           name: path,
           text: await fetchText(path),
           mock: !!sample.mock,
         };
+      }
     }
+
     return state;
   }
+
   const [baseline, current] = sample.inline
     ? [sample.inline.baseline, sample.inline.current]
     : await Promise.all([
         fetchText(sample.baseline),
         fetchText(sample.current),
       ]);
+
   return { sourceName, baseline, current, tab: "current" };
 }

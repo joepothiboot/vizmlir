@@ -1,7 +1,3 @@
-// Browser-local persistence in IndexedDB. Nothing here leaves the machine.
-// Every call resolves to a fallback value (null / []) when IndexedDB is
-// unavailable, e.g. in a private window, so callers never need to guard.
-
 const DB_NAME = "vizmlir";
 const DB_VERSION = 1;
 const SESSIONS = "sessions";
@@ -10,24 +6,32 @@ const KV = "kv";
 let dbPromise = null;
 
 function openDb() {
-  if (!dbPromise)
+  if (!dbPromise) {
     dbPromise = new Promise((resolve, reject) => {
       const request = indexedDB.open(DB_NAME, DB_VERSION);
+
       request.onupgradeneeded = () => {
         const db = request.result;
-        if (!db.objectStoreNames.contains(SESSIONS))
+
+        if (!db.objectStoreNames.contains(SESSIONS)) {
           db.createObjectStore(SESSIONS, { keyPath: "id" });
+        }
+
         if (!db.objectStoreNames.contains(KV)) db.createObjectStore(KV);
       };
+
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
+  }
+
   return dbPromise;
 }
 
 async function run(storeName, mode, action, fallback) {
   try {
     const db = await openDb();
+
     return await new Promise((resolve, reject) => {
       const tx = db.transaction(storeName, mode);
       const request = action(tx.objectStore(storeName));
@@ -37,6 +41,7 @@ async function run(storeName, mode, action, fallback) {
     });
   } catch (error) {
     console.warn("vizmlir storage unavailable:", error);
+
     return fallback;
   }
 }
@@ -48,10 +53,10 @@ export const kv = {
   delete: (key) => run(KV, "readwrite", (store) => store.delete(key), null),
 };
 
-/** Saved sessions: { id, name, savedAt, state }. */
 export const sessions = {
   async list() {
     const all = await run(SESSIONS, "readonly", (s) => s.getAll(), []);
+
     return (all ?? []).sort((a, b) => b.savedAt - a.savedAt);
   },
   get: (id) => run(SESSIONS, "readonly", (store) => store.get(id), null),
@@ -59,8 +64,6 @@ export const sessions = {
     run(SESSIONS, "readwrite", (store) => store.put(session), null),
   delete: (id) => run(SESSIONS, "readwrite", (store) => store.delete(id), null),
 };
-
-// ---- Session files -----------------------------------------------------------
 
 export const SESSION_FORMAT = "vizmlir-session";
 
@@ -72,15 +75,18 @@ export function sessionToFile(name, state) {
   );
 }
 
-/** Returns { name, state } for a VizMLIR session file, otherwise null. */
 export function sessionFromFile(text) {
   let data;
+
   try {
     data = JSON.parse(text);
   } catch {
     return null;
   }
-  if (data?.format !== SESSION_FORMAT || typeof data.state !== "object")
+
+  if (data?.format !== SESSION_FORMAT || typeof data.state !== "object") {
     return null;
+  }
+
   return { name: String(data.name ?? "session"), state: data.state };
 }

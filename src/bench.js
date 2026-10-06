@@ -1,35 +1,27 @@
-// Reads kernel benchmark results and matches each kernel to the symbol the
-// trace built it from, so a time can be read next to the passes that created,
-// changed, or lowered that kernel.
-//
-// Accepted input (the format is documented in docs/benchmark-format.md):
-//   - CSV with a kernel-name column and a time column whose header carries
-//     the unit (`time_us`, `Avg (ns)`, `duration [ms]`), such as the
-//     `nsys stats --report cuda_gpu_kern_sum --format csv` summary;
-//   - `ncu --csv` metrics (one row per kernel launch and metric), using
-//     `gpu__time_duration.sum`;
-//   - JSON: an array of objects with the same fields as the CSV columns, an
-//     object wrapping one under `kernels`, `results` or `benchmarks`, or
-//     Google Benchmark output (`name`, `real_time`, `time_unit`).
-// A `symbol` column (`@module::@kernel`) skips name matching for that row.
+import { signOf } from "./format.js";
 
 const UNIT_NS = {
   ns: 1,
   nsecond: 1,
   us: 1e3,
-  "µs": 1e3,
+  µs: 1e3,
   usecond: 1e3,
   ms: 1e6,
   msecond: 1e6,
   s: 1e9,
   second: 1e9,
 };
+
 const UNIT = /\s*(?:\(([^)]+)\)|\[([^\]]+)\]|[_ ]([a-zµ]+))$/;
 
-const NAME = /^(?:kernel[ _]?name|kernel|name|function|func|demangled[ _]name)$/;
+const NAME =
+  /^(?:kernel[ _]?name|kernel|name|function|func|demangled[ _]name)$/;
+
 const SYMBOL = /^symbol$/;
-const CALLS = /^(?:instances|calls|count|launches|invocations|num[ _]?calls|iterations)$/;
-// Per-call time first, then a plain time, then a total to divide by calls.
+
+const CALLS =
+  /^(?:instances|calls|count|launches|invocations|num[ _]?calls|iterations)$/;
+
 const TIME_PREFERENCE = [
   /^(?:avg|average|mean)(?:[ _]?time)?$/,
   /^(?:med|median)(?:[ _]?time)?$/,
@@ -41,14 +33,15 @@ export function unitScale(unit) {
   return UNIT_NS[String(unit).trim().toLowerCase()] ?? null;
 }
 
-// `Avg (ns)` → { base: "avg", scale: 1 }; `time` → { base: "time", scale: null }.
 function splitHeader(header) {
   const lower = header.trim().toLowerCase();
   const match = UNIT.exec(lower);
+
   if (match) {
     const scale = unitScale(match[1] ?? match[2] ?? match[3]);
     if (scale) return { base: lower.slice(0, match.index).trim(), scale };
   }
+
   return { base: lower, scale: null };
 }
 
@@ -57,16 +50,22 @@ export function parseCSV(text) {
   let row = [];
   let field = "";
   let quoted = false;
+
   for (let i = 0; i < text.length; i++) {
     const c = text[i];
+
     if (quoted) {
       if (c === '"' && text[i + 1] === '"') {
         field += '"';
         i += 1;
-      } else if (c === '"') quoted = false;
-      else field += c;
-    } else if (c === '"') quoted = true;
-    else if (c === ",") {
+      } else if (c === '"') {
+        quoted = false;
+      } else {
+        field += c;
+      }
+    } else if (c === '"') {
+      quoted = true;
+    } else if (c === ",") {
       row.push(field);
       field = "";
     } else if (c === "\n" || c === "\r") {
@@ -75,42 +74,54 @@ export function parseCSV(text) {
       rows.push(row);
       row = [];
       field = "";
-    } else field += c;
+    } else {
+      field += c;
+    }
   }
+
   if (field || row.length) {
     row.push(field);
     rows.push(row);
   }
+
   return rows;
 }
 
 function toNumber(value) {
   if (typeof value === "number") return value;
-  const n = Number(String(value ?? "").replaceAll(",", "").trim());
+
+  const n = Number(
+    String(value ?? "")
+      .replaceAll(",", "")
+      .trim(),
+  );
+
   return Number.isFinite(n) && String(value).trim() !== "" ? n : null;
 }
 
-// Picks the name, symbol, calls and time columns from `headers`, or returns
-// null when there is no name column. `unitColumn` names a per-row unit, as in
-// Google Benchmark's `time_unit`.
 function pickColumns(headers) {
   const parts = headers.map(splitHeader);
   const find = (pattern) => parts.findIndex((part) => pattern.test(part.base));
   const name = find(NAME);
   if (name < 0) return null;
+
   const unitColumn = find(/^(?:time[ _])?unit$/);
   let time = -1;
   let total = false;
+
   for (const [rank, pattern] of TIME_PREFERENCE.entries()) {
     time = parts.findIndex(
       (part, i) =>
-        pattern.test(part.base) && (part.scale || (unitColumn >= 0 && i !== unitColumn)),
+        pattern.test(part.base) &&
+        (part.scale || (unitColumn >= 0 && i !== unitColumn)),
     );
+
     if (time >= 0) {
       total = rank === TIME_PREFERENCE.length - 1;
       break;
     }
   }
+
   return {
     name,
     symbol: find(SYMBOL),
@@ -124,35 +135,49 @@ function pickColumns(headers) {
 
 function fromTable(headers, records, format) {
   const columns = pickColumns(headers);
-  if (!columns)
+
+  if (!columns) {
     throw new Error("no kernel name column (kernel, name, or Kernel Name)");
-  if (columns.time < 0)
+  }
+
+  if (columns.time < 0) {
     throw new Error(
       "no time column with a unit, such as time_us, Avg (ns) or duration [ms]",
     );
+  }
+
   const samples = [];
   let skipped = 0;
+
   for (const record of records) {
     const kernel = String(record[columns.name] ?? "").trim();
     const value = toNumber(record[columns.time]);
+
     const scale =
       columns.scale ??
       (columns.unitColumn >= 0 ? unitScale(record[columns.unitColumn]) : null);
+
     if (!kernel || value === null || !scale) {
       skipped += 1;
       continue;
     }
+
     const calls =
-      columns.calls >= 0 ? toNumber(record[columns.calls]) ?? 1 : 1;
+      columns.calls >= 0 ? (toNumber(record[columns.calls]) ?? 1) : 1;
+
     const ns = value * scale;
+
     samples.push({
       kernel,
       symbol:
-        columns.symbol >= 0 ? String(record[columns.symbol] ?? "").trim() || null : null,
+        columns.symbol >= 0
+          ? String(record[columns.symbol] ?? "").trim() || null
+          : null,
       calls,
       totalNs: columns.total ? ns : ns * calls,
     });
   }
+
   return {
     format,
     timeColumn: headers[columns.time],
@@ -161,23 +186,30 @@ function fromTable(headers, records, format) {
   };
 }
 
-// ncu --csv: one row per launch and metric. Keeps the launch duration.
 function fromNcu(headers, records) {
   const col = (name) =>
     headers.findIndex((header) => header.trim().toLowerCase() === name);
+
   const [name, metric, unit, value] = [
     col("kernel name"),
     col("metric name"),
     col("metric unit"),
     col("metric value"),
   ];
+
   const samples = [];
+
   for (const record of records) {
-    if (!/^(?:gpu__time_duration\.sum|duration)$/.test(record[metric]?.trim()))
+    if (
+      !/^(?:gpu__time_duration\.sum|duration)$/.test(record[metric]?.trim())
+    ) {
       continue;
+    }
+
     const scale = unitScale(record[unit]);
     const ns = toNumber(record[value]);
     if (!scale || ns === null) continue;
+
     samples.push({
       kernel: record[name].trim(),
       symbol: null,
@@ -185,47 +217,81 @@ function fromNcu(headers, records) {
       totalNs: ns * scale,
     });
   }
-  if (!samples.length)
+
+  if (!samples.length) {
     throw new Error("ncu CSV has no gpu__time_duration.sum metric rows");
-  return { format: "ncu", timeColumn: "gpu__time_duration.sum", ...aggregate(samples), skipped: 0 };
+  }
+
+  return {
+    format: "ncu",
+    timeColumn: "gpu__time_duration.sum",
+    ...aggregate(samples),
+    skipped: 0,
+  };
 }
 
-// The ncu metrics that measure what the GPU view's verdicts predict: sectors
-// per global request, and shared-memory wavefronts per instruction (1 when
-// conflict-free, n for an n-way bank conflict). Collect them with
-//   ncu --csv --metrics <NCU_COUNTER_METRICS joined by ","> ./app
 export const NCU_COUNTERS = {
-  globalLoad: ["l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum", "l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum"],
-  globalStore: ["l1tex__t_sectors_pipe_lsu_mem_global_op_st.sum", "l1tex__t_requests_pipe_lsu_mem_global_op_st.sum"],
-  sharedLoad: ["l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum", "smsp__inst_executed_op_shared_ld.sum"],
-  sharedStore: ["l1tex__data_pipe_lsu_wavefronts_mem_shared_op_st.sum", "smsp__inst_executed_op_shared_st.sum"],
+  globalLoad: [
+    "l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum",
+    "l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum",
+  ],
+  globalStore: [
+    "l1tex__t_sectors_pipe_lsu_mem_global_op_st.sum",
+    "l1tex__t_requests_pipe_lsu_mem_global_op_st.sum",
+  ],
+  sharedLoad: [
+    "l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum",
+    "smsp__inst_executed_op_shared_ld.sum",
+  ],
+  sharedStore: [
+    "l1tex__data_pipe_lsu_wavefronts_mem_shared_op_st.sum",
+    "smsp__inst_executed_op_shared_st.sum",
+  ],
 };
 export const NCU_COUNTER_METRICS = Object.values(NCU_COUNTERS).flat();
 
-// Reads `ncu --csv --metrics ...` output into Map(kernel → { globalLoad,
-// globalStore, sharedLoad, sharedStore }), each the ratio of its two
-// counters summed over every launch of the kernel, or null when the kernel
-// made no such request.
 export function parseNcuCounters(text) {
   const rows = parseCSV(text).filter((row) => row.some((cell) => cell.trim()));
+
   const start = rows.findIndex((row) => {
     const lower = row.map((cell) => cell.trim().toLowerCase());
+
     return lower.includes("kernel name") && lower.includes("metric name");
   });
-  if (start < 0) throw new Error("not ncu --csv output: no Kernel Name / Metric Name header");
-  const col = (name) => rows[start].findIndex((header) => header.trim().toLowerCase() === name);
-  const [name, metric, value] = [col("kernel name"), col("metric name"), col("metric value")];
+
+  if (start < 0) {
+    throw new Error(
+      "not ncu --csv output: no Kernel Name / Metric Name header",
+    );
+  }
+
+  const col = (name) =>
+    rows[start].findIndex((header) => header.trim().toLowerCase() === name);
+
+  const [name, metric, value] = [
+    col("kernel name"),
+    col("metric name"),
+    col("metric value"),
+  ];
+
   const sums = new Map();
+
   for (const record of rows.slice(start + 1)) {
     const n = toNumber(record[value]);
     const key = record[metric]?.trim();
     if (n === null || !NCU_COUNTER_METRICS.includes(key)) continue;
+
     const kernel = record[name].trim();
     if (!sums.has(kernel)) sums.set(kernel, new Map());
     sums.get(kernel).set(key, (sums.get(kernel).get(key) ?? 0) + n);
   }
-  if (!sums.size)
-    throw new Error(`ncu CSV has none of the counter metrics: ${NCU_COUNTER_METRICS.join(", ")}`);
+
+  if (!sums.size) {
+    throw new Error(
+      `ncu CSV has none of the counter metrics: ${NCU_COUNTER_METRICS.join(", ")}`,
+    );
+  }
+
   return new Map(
     [...sums].map(([kernel, metrics]) => [
       kernel,
@@ -239,129 +305,153 @@ export function parseNcuCounters(text) {
   );
 }
 
-// Rows for the same kernel (launches, repetitions) become one entry with the
-// mean time per call.
 function aggregate(samples) {
   const byKey = new Map();
+
   for (const sample of samples) {
     const key = `${sample.symbol ?? ""}\u0000${sample.kernel}`;
+
     const entry = byKey.get(key) ?? {
       kernel: sample.kernel,
       symbol: sample.symbol,
       calls: 0,
       totalNs: 0,
     };
+
     entry.calls += sample.calls;
     entry.totalNs += sample.totalNs;
     byKey.set(key, entry);
   }
+
   const entries = [...byKey.values()].map((entry) => ({
     ...entry,
     timeNs: entry.calls ? entry.totalNs / entry.calls : entry.totalNs,
   }));
+
   return { entries };
 }
 
 function jsonRecords(data) {
   if (Array.isArray(data)) return data;
-  for (const key of ["kernels", "results", "benchmarks"])
+
+  for (const key of ["kernels", "results", "benchmarks"]) {
     if (Array.isArray(data?.[key])) return data[key];
+  }
+
   return null;
 }
 
-// Returns { format, timeColumn, entries: [{ kernel, symbol, calls, timeNs,
-// totalNs }], skipped } or throws an Error that says what is missing.
 export function parseBenchmarks(text) {
   const trimmed = text.trim();
+
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
     let data;
+
     try {
       data = JSON.parse(trimmed);
     } catch (error) {
       throw new Error(`not valid JSON: ${error.message}`);
     }
+
     const records = jsonRecords(data)?.filter(
       (record) => record && typeof record === "object",
     );
-    if (!records?.length)
+
+    if (!records?.length) {
       throw new Error("JSON has no array of results (or kernels, benchmarks)");
-    // Google Benchmark adds mean/median/stddev rows next to the runs.
+    }
+
     const runs = records.filter(
       (record) => !record.aggregate_name || record.aggregate_name === "mean",
     );
+
     const headers = [...new Set(runs.flatMap(Object.keys))];
     const table = runs.map((record) => headers.map((header) => record[header]));
+
     const format = records.some((record) => "time_unit" in record)
       ? "google-benchmark"
       : "json";
+
     return fromTable(headers, table, format);
   }
 
   const rows = parseCSV(text).filter((row) => row.some((cell) => cell.trim()));
-  // Skip tool output before the header (nsys and ncu print progress lines).
+
   for (let i = 0; i < rows.length; i++) {
     const lower = rows[i].map((cell) => cell.trim().toLowerCase());
-    if (lower.includes("kernel name") && lower.includes("metric name"))
+
+    if (lower.includes("kernel name") && lower.includes("metric name")) {
       return fromNcu(rows[i], rows.slice(i + 1));
-    if (rows[i].length > 1 && pickColumns(rows[i]))
+    }
+
+    if (rows[i].length > 1 && pickColumns(rows[i])) {
       return fromTable(rows[i], rows.slice(i + 1), "csv");
+    }
   }
+
   throw new Error("no header row with a kernel name column");
 }
 
-// `void foo<float>(float*)` → `foo`; `ns::foo(int)` → `foo`.
 export function cleanKernelName(name) {
   let clean = name.trim();
   const paren = clean.indexOf("(");
   if (paren > 0) clean = clean.slice(0, paren);
+
   let depth = 0;
   let out = "";
+
   for (const c of clean) {
     if (c === "<") depth += 1;
     else if (c === ">") depth = Math.max(0, depth - 1);
     else if (!depth) out += c;
   }
+
   clean = out.trim().split(/\s+/).at(-1) ?? "";
+
   return clean.slice(clean.lastIndexOf("::") + 1).replace(/^:/, "");
 }
 
 function normalizePath(symbol) {
   return symbol
     .split("::")
-    .map((part) => `@${part.trim().replace(/^@/, "").replace(/^"(.*)"$/, "$1")}`)
+    .map(
+      (part) =>
+        `@${part
+          .trim()
+          .replace(/^@/, "")
+          .replace(/^"(.*)"$/, "$1")}`,
+    )
     .join("::");
 }
 
 const isFunction = (record) => record.ops.some((op) => /\.func$/.test(op));
 
-// Matches each benchmark entry to a symbol record from symbolHistory(). Tries
-// an explicit `symbol`, then the kernel name as given, then without argument
-// lists, templates and namespaces, then an Itanium-mangled `<len><name>`.
-// Functions are preferred over the modules that hold them, so `main_kernel`
-// matches `@main_kernel::@main_kernel` rather than its gpu.module. Returns
-// [{ entry, path, how, candidates }] with `path` null when nothing matched or
-// more than one symbol did.
 export function matchBenchmarks(entries, history) {
   const byLeaf = new Map();
+
   for (const record of history) {
     const list = byLeaf.get(record.symbol) ?? [];
     list.push(record);
     byLeaf.set(record.symbol, list);
   }
+
   const byPath = new Map(history.map((record) => [record.path, record]));
 
   const pick = (records) => {
     const functions = records.filter(isFunction);
+
     return functions.length ? functions : records;
   };
 
   return entries.map((entry) => {
     if (entry.symbol) {
       const path = normalizePath(entry.symbol);
+
       return byPath.has(path)
         ? { entry, path, how: "symbol", candidates: [path] }
         : { entry, path: null, how: "symbol", candidates: [] };
     }
+
     const tiers = [
       ["exact", byLeaf.get(entry.kernel) ?? []],
       ["cleaned", byLeaf.get(cleanKernelName(entry.kernel)) ?? []],
@@ -372,9 +462,12 @@ export function matchBenchmarks(entries, history) {
         ),
       ],
     ];
+
     for (const [how, found] of tiers) {
       if (!found.length) continue;
+
       const candidates = pick(found).map((record) => record.path);
+
       return {
         entry,
         path: candidates.length === 1 ? candidates[0] : null,
@@ -382,27 +475,28 @@ export function matchBenchmarks(entries, history) {
         candidates,
       };
     }
+
     return { entry, path: null, how: null, candidates: [] };
   });
 }
 
-// Combines matchBenchmarks() results per symbol: { times: Map(path → {
-// timeNs, totalNs, calls, kernels, how }), unmatched: [match] }. Several
-// kernels that match one symbol are weighted by calls.
 export function symbolTimes(entries, history) {
   const times = new Map();
   const unmatched = [];
+
   for (const match of matchBenchmarks(entries, history)) {
     if (!match.path) {
       unmatched.push(match);
       continue;
     }
+
     const time = times.get(match.path) ?? {
       calls: 0,
       totalNs: 0,
       kernels: [],
       how: [],
     };
+
     time.calls += match.entry.calls;
     time.totalNs += match.entry.totalNs;
     time.timeNs = time.calls ? time.totalNs / time.calls : time.totalNs;
@@ -410,59 +504,69 @@ export function symbolTimes(entries, history) {
     time.how.push(match.how);
     times.set(match.path, time);
   }
+
   return { times, unmatched };
 }
 
-// Joins two symbolTimes() maps (either may be null) by symbol path. Each value
-// is { baseline, current, deltaNs, change }, with `change` the relative change
-// ((current − baseline) / baseline) and both null unless both sides measured
-// the symbol.
 export function compareBenchmarks(baseline, current) {
-  const paths = new Set([...(baseline?.keys() ?? []), ...(current?.keys() ?? [])]);
+  const paths = new Set([
+    ...(baseline?.keys() ?? []),
+    ...(current?.keys() ?? []),
+  ]);
+
   const comparison = new Map();
+
   for (const path of paths) {
     const before = baseline?.get(path) ?? null;
     const after = current?.get(path) ?? null;
     const both = before && after;
+
     comparison.set(path, {
       baseline: before,
       current: after,
       deltaNs: both ? after.timeNs - before.timeNs : null,
-      change: both && before.timeNs ? (after.timeNs - before.timeNs) / before.timeNs : null,
+      change:
+        both && before.timeNs
+          ? (after.timeNs - before.timeNs) / before.timeNs
+          : null,
     });
   }
+
   return comparison;
 }
 
-// True when `row` should stay under a "changed by more than `percent`%"
-// filter. A symbol measured on one side only counts as changed.
 export function changedBeyond(row, percent) {
   if (!row) return false;
   if (!row.baseline || !row.current) return true;
+
   return row.change !== null && Math.abs(row.change) * 100 > percent;
 }
 
-// Orders compared symbols for reading: largest slowdown first, then symbols
-// measured on one side only, slowest first.
 export function comparisonOrder(a, b) {
   if (!a || !b) return (b ? 1 : 0) - (a ? 1 : 0);
-  if (a.change !== null || b.change !== null)
+
+  if (a.change !== null || b.change !== null) {
     return (b.change ?? -Infinity) - (a.change ?? -Infinity);
+  }
+
   const time = (row) => (row.current ?? row.baseline).timeNs;
+
   return time(b) - time(a);
 }
 
-// Map(path → JSON object) for historyToJSON(), in nanoseconds per call.
 export function comparisonToJSON(comparison) {
   const side = (time) =>
     time && { time_ns: time.timeNs, calls: time.calls, kernels: time.kernels };
+
   return new Map(
     [...comparison].map(([path, row]) => [
       path,
       {
         ...(row.baseline ? { baseline: side(row.baseline) } : {}),
         ...(row.current ? { current: side(row.current) } : {}),
-        ...(row.change !== null ? { delta_ns: row.deltaNs, change: row.change } : {}),
+        ...(row.change !== null
+          ? { delta_ns: row.deltaNs, change: row.change }
+          : {}),
       },
     ]),
   );
@@ -470,9 +574,15 @@ export function comparisonToJSON(comparison) {
 
 export function formatChange(change) {
   if (change === null || change === undefined) return "";
+
   const percent = change * 100;
-  const text = Math.abs(percent) < 10 ? Math.abs(percent).toFixed(1) : Math.abs(percent).toFixed(0);
-  return `${percent > 0 ? "+" : percent < 0 ? "−" : "±"}${text}%`;
+
+  const text =
+    Math.abs(percent) < 10
+      ? Math.abs(percent).toFixed(1)
+      : Math.abs(percent).toFixed(0);
+
+  return `${signOf(percent)}${text}%`;
 }
 
 export function formatDuration(ns) {
@@ -480,5 +590,6 @@ export function formatDuration(ns) {
   if (ns < 1e3) return `${ns.toFixed(0)} ns`;
   if (ns < 1e6) return `${(ns / 1e3).toFixed(ns < 1e4 ? 2 : 1)} µs`;
   if (ns < 1e9) return `${(ns / 1e6).toFixed(ns < 1e7 ? 2 : 1)} ms`;
+
   return `${(ns / 1e9).toFixed(2)} s`;
 }

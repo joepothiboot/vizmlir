@@ -13,8 +13,18 @@ describe("createSelection", () => {
     selection.select({ line: 4 });
     selection.select({ pass: 2 });
     expect(selection.state).toEqual({ pass: 2, node: -1, line: 4 });
-    expect(listener).toHaveBeenNthCalledWith(1, { pass: -1, node: -1, line: 4 }, ["line"]);
-    expect(listener).toHaveBeenNthCalledWith(2, { pass: 2, node: -1, line: 4 }, ["pass"]);
+
+    expect(listener).toHaveBeenNthCalledWith(
+      1,
+      { pass: -1, node: -1, line: 4 },
+      ["line"],
+    );
+
+    expect(listener).toHaveBeenNthCalledWith(
+      2,
+      { pass: 2, node: -1, line: 4 },
+      ["pass"],
+    );
   });
 
   it("notifies when the same value is picked again", () => {
@@ -38,6 +48,7 @@ describe("createSelection", () => {
   it("clears a key without notifying", () => {
     const selection = createSelection();
     selection.select({ line: 4, node: 1 });
+
     const listener = vi.fn();
     selection.subscribe(listener);
     selection.clear("line");

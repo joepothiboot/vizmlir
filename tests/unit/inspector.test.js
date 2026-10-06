@@ -5,16 +5,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createInspector } from "../../src/app/inspector.js";
 import { createScrubber } from "../../src/app/scrubber.js";
 
-// The real markup from index.html, so the ids and roles under test are the
-// ones the app ships.
 const page = new DOMParser().parseFromString(
   readFileSync(new FileURL("../../index.html", import.meta.url), "utf8"),
   "text/html",
 );
+
 const take = (id) => document.importNode(page.getElementById(id), true);
 
 const key = (target, k) =>
   target.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true }));
+
 const panel = (name) => document.querySelector(`[data-panel="${name}"]`);
 
 describe("inspector", () => {
@@ -31,6 +31,7 @@ describe("inspector", () => {
     root = take("inspector");
     document.body.append(editor, toggle, root);
     onShow = vi.fn();
+
     inspector = createInspector(root, {
       toggle,
       closeButton: root.querySelector("#inspector-close"),
@@ -41,8 +42,20 @@ describe("inspector", () => {
   it("starts closed, with the tabs from the page", () => {
     expect(root.hidden).toBe(true);
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
-    const tabs = [...root.querySelectorAll('[role="tab"]')].map((t) => t.textContent.trim());
-    expect(tabs).toEqual(["Changes", "Line", "Timing", "Buffers", "Op count", "Symbols", "History"]);
+
+    const tabs = [...root.querySelectorAll('[role="tab"]')].map((t) =>
+      t.textContent.trim(),
+    );
+
+    expect(tabs).toEqual([
+      "Changes",
+      "Line",
+      "Timing",
+      "Buffers",
+      "Op count",
+      "Symbols",
+      "History",
+    ]);
   });
 
   it("opens on the tab for a selection, and draws it", () => {
@@ -54,12 +67,12 @@ describe("inspector", () => {
     expect(panel("line").hidden).toBe(false);
     expect(panel("changes").hidden).toBe(true);
     expect(onShow).toHaveBeenLastCalledWith("line");
-    // Opening does not take focus from what was selected.
     expect(document.activeElement).toBe(editor);
   });
 
   it("closes on Escape and returns focus to the selected element", () => {
     inspector.show("line", { from: editor });
+
     const tab = root.querySelector("#tab-line");
     tab.focus();
     key(tab, "Escape");
@@ -70,6 +83,7 @@ describe("inspector", () => {
 
   it("leaves Escape in a field to the page, which closes it after", () => {
     inspector.show("opcount");
+
     const filter = root.querySelector("#opcount-filter");
     filter.focus();
     key(filter, "Escape");
@@ -95,6 +109,7 @@ describe("inspector", () => {
     expect(panel("timing").hidden).toBe(false);
     expect(panel("changes").hidden).toBe(true);
     expect(onShow).toHaveBeenLastCalledWith("timing");
+
     const timing = root.querySelector("#tab-timing");
     expect(timing.getAttribute("aria-selected")).toBe("true");
     expect(timing.tabIndex).toBe(0);
@@ -134,10 +149,12 @@ describe("inspector", () => {
   it("reports open and tab changes, for remembering them", () => {
     const onChange = vi.fn();
     document.body.replaceChildren(take("inspector"));
+
     const other = createInspector(document.getElementById("inspector"), {
       onChange,
       tab: "opcount",
     });
+
     expect(other.active).toBe("opcount");
     other.open();
     expect(onChange).toHaveBeenLastCalledWith({ open: true, tab: "opcount" });
@@ -153,20 +170,34 @@ describe("pass scrubber", () => {
   let range;
   let onSelect;
   let scrubber;
-  const names = ["canonicalize", "cse", "gpu-kernel-outlining", "convert-gpu-to-nvvm"];
+
+  const names = [
+    "canonicalize",
+    "cse",
+    "gpu-kernel-outlining",
+    "convert-gpu-to-nvvm",
+  ];
 
   beforeEach(() => {
     document.body.replaceChildren(take("pass-scrubber"));
     root = document.getElementById("pass-scrubber");
     range = document.getElementById("pass-range");
     onSelect = vi.fn();
+
     scrubber = createScrubber(root, {
       onSelect,
       schedule: (run) => run(),
       label: (i) => `Pass ${i + 1} of 4: ${names[i]}`,
-      preview: (i) => ({ title: `${i + 1}. ${names[i]}`, lines: [`IR ${i + 1} KB`, "changed ops: 2"] }),
+      preview: (i) => ({
+        title: `${i + 1}. ${names[i]}`,
+        lines: [`IR ${i + 1} KB`, "changed ops: 2"],
+      }),
     });
-    scrubber.setPasses(names.map((_, i) => ({ failed: i === 3, share: i / 3 })));
+
+    scrubber.setPasses(
+      names.map((_, i) => ({ failed: i === 3, share: i / 3 })),
+    );
+
     scrubber.setValue(0);
   });
 
@@ -174,9 +205,17 @@ describe("pass scrubber", () => {
     expect(range.min).toBe("1");
     expect(range.max).toBe("4");
     expect(range.value).toBe("1");
-    expect(range.getAttribute("aria-valuetext")).toBe("Pass 1 of 4: canonicalize");
+
+    expect(range.getAttribute("aria-valuetext")).toBe(
+      "Pass 1 of 4: canonicalize",
+    );
+
     expect(root.querySelectorAll(".scrub-ticks span")).toHaveLength(4);
-    expect(root.querySelector(".scrub-ticks .failed")).toBe(root.querySelectorAll(".scrub-ticks span")[3]);
+
+    expect(root.querySelector(".scrub-ticks .failed")).toBe(
+      root.querySelectorAll(".scrub-ticks span")[3],
+    );
+
     expect(root.querySelector(".scrub-prev").disabled).toBe(true);
   });
 
@@ -184,8 +223,14 @@ describe("pass scrubber", () => {
     range.value = "3";
     range.dispatchEvent(new Event("input", { bubbles: true }));
     expect(onSelect).toHaveBeenLastCalledWith(2);
-    expect(range.getAttribute("aria-valuetext")).toBe("Pass 3 of 4: gpu-kernel-outlining");
-    expect(root.querySelector(".scrub-label").textContent).toBe("Pass 3 of 4: gpu-kernel-outlining");
+
+    expect(range.getAttribute("aria-valuetext")).toBe(
+      "Pass 3 of 4: gpu-kernel-outlining",
+    );
+
+    expect(root.querySelector(".scrub-label").textContent).toBe(
+      "Pass 3 of 4: gpu-kernel-outlining",
+    );
   });
 
   it("steps with the next and previous buttons, within 1 … N", () => {
@@ -202,17 +247,23 @@ describe("pass scrubber", () => {
   it("coalesces a drag into one selection per frame", () => {
     const frames = [];
     document.body.replaceChildren(take("pass-scrubber"));
+
     const select = vi.fn();
+
     const other = createScrubber(document.getElementById("pass-scrubber"), {
       onSelect: select,
       schedule: (run) => frames.push(run),
     });
+
     other.setPasses(names.map(() => ({ failed: false, share: null })));
+
     const slider = document.getElementById("pass-range");
+
     for (const value of ["2", "3", "4"]) {
       slider.value = value;
       slider.dispatchEvent(new Event("input"));
     }
+
     expect(select).not.toHaveBeenCalled();
     frames.forEach((run) => run());
     expect(select).toHaveBeenCalledTimes(1);
@@ -226,8 +277,17 @@ describe("pass scrubber", () => {
     expect(tip.textContent).toContain("1. canonicalize");
     expect(tip.textContent).toContain("changed ops: 2");
 
-    range.getBoundingClientRect = () => ({ left: 0, width: 300, top: 0, height: 20 });
-    range.dispatchEvent(new MouseEvent("pointermove", { clientX: 200, bubbles: true }));
+    range.getBoundingClientRect = () => ({
+      left: 0,
+      width: 300,
+      top: 0,
+      height: 20,
+    });
+
+    range.dispatchEvent(
+      new MouseEvent("pointermove", { clientX: 200, bubbles: true }),
+    );
+
     expect(tip.textContent).toContain("3. gpu-kernel-outlining");
     expect(onSelect).not.toHaveBeenCalled();
 
@@ -238,7 +298,11 @@ describe("pass scrubber", () => {
   it("shows a selected pass without reporting it back", () => {
     scrubber.setValue(2);
     expect(range.value).toBe("3");
-    expect(root.querySelector(".scrub-ticks .current")).toBe(root.querySelectorAll(".scrub-ticks span")[2]);
+
+    expect(root.querySelector(".scrub-ticks .current")).toBe(
+      root.querySelectorAll(".scrub-ticks span")[2],
+    );
+
     expect(onSelect).not.toHaveBeenCalled();
   });
 });

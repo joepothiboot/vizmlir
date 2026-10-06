@@ -12,9 +12,10 @@ const page = new DOMParser().parseFromString(
 describe("scrubber op marks", () => {
   let root;
   let scrubber;
+
   const classes = () =>
-    [...root.querySelectorAll(".scrub-ticks span")].map((t) =>
-      ["op", "life"].find((c) => t.classList.contains(c)) ?? "",
+    [...root.querySelectorAll(".scrub-ticks span")].map(
+      (t) => ["op", "life"].find((c) => t.classList.contains(c)) ?? "",
     );
 
   beforeEach(() => {
@@ -22,8 +23,18 @@ describe("scrubber op marks", () => {
     root = document.importNode(page.getElementById("pass-scrubber"), true);
     root.hidden = false;
     document.body.append(root);
-    scrubber = createScrubber(root, { onSelect: vi.fn(), schedule: (run) => run() });
-    scrubber.setPasses([{ failed: false }, { failed: false }, { failed: false }, { failed: false }]);
+
+    scrubber = createScrubber(root, {
+      onSelect: vi.fn(),
+      schedule: (run) => run(),
+    });
+
+    scrubber.setPasses([
+      { failed: false },
+      { failed: false },
+      { failed: false },
+      { failed: false },
+    ]);
   });
 
   it("marks changes and the passes an op merely exists in differently", () => {
@@ -31,6 +42,7 @@ describe("scrubber op marks", () => {
       { pass: 1, kind: "op" },
       { pass: 2, kind: "life" },
     ]);
+
     expect(classes()).toEqual(["", "op", "life", ""]);
   });
 
@@ -47,6 +59,7 @@ describe("scrubber op marks", () => {
     scrubber.setMarks([1]);
     scrubber.setValue(1);
     scrubber.setValue(3);
+
     const tick = root.querySelectorAll(".scrub-ticks span")[1];
     expect(tick.classList.contains("op")).toBe(true);
     expect(tick.classList.contains("bp")).toBe(true);
@@ -54,7 +67,13 @@ describe("scrubber op marks", () => {
 
   it("survive the ticks being rebuilt for the same trace", () => {
     scrubber.setOpMarks([{ pass: 2, kind: "op" }]);
-    scrubber.setPasses([{ failed: false }, { failed: false }, { failed: false }]);
+
+    scrubber.setPasses([
+      { failed: false },
+      { failed: false },
+      { failed: false },
+    ]);
+
     expect(classes()).toEqual(["", "", "op"]);
   });
 });
@@ -62,16 +81,29 @@ describe("scrubber op marks", () => {
 describe("scrubber breakpoint marks", () => {
   let root;
   let scrubber;
+
   const marked = () =>
-    [...root.querySelectorAll(".scrub-ticks span")].map((t) => t.classList.contains("bp"));
+    [...root.querySelectorAll(".scrub-ticks span")].map((t) =>
+      t.classList.contains("bp"),
+    );
 
   beforeEach(() => {
     document.body.replaceChildren();
     root = document.importNode(page.getElementById("pass-scrubber"), true);
     root.hidden = false;
     document.body.append(root);
-    scrubber = createScrubber(root, { onSelect: vi.fn(), schedule: (run) => run() });
-    scrubber.setPasses([{ failed: false }, { failed: true }, { failed: false }, { failed: false }]);
+
+    scrubber = createScrubber(root, {
+      onSelect: vi.fn(),
+      schedule: (run) => run(),
+    });
+
+    scrubber.setPasses([
+      { failed: false },
+      { failed: true },
+      { failed: false },
+      { failed: false },
+    ]);
   });
 
   it("marks the given passes and no others", () => {
@@ -94,6 +126,7 @@ describe("scrubber breakpoint marks", () => {
 
   it("keeps the marks on a failed pass's tick", () => {
     scrubber.setMarks([1]);
+
     const tick = root.querySelectorAll(".scrub-ticks span")[1];
     expect(tick.classList.contains("failed")).toBe(true);
     expect(tick.classList.contains("bp")).toBe(true);

@@ -11,7 +11,6 @@ import {
 } from "../../src/trace/timing.js";
 import { parsePassTrace } from "../../src/trace/trace.js";
 
-// Traces in tests/fixtures/traces are real mlir-opt output; see generate.sh.
 function fixture(name) {
   return readFileSync(
     new URL(`../fixtures/traces/${name}.txt`, import.meta.url),
@@ -32,6 +31,7 @@ describe("extractReports", () => {
     expect(timing.display).toBe("tree");
     expect(timing.columns).toEqual(["wall"]);
     expect(timing.total).toBeGreaterThan(0);
+
     expect(names(timing)).toEqual([
       "Parser",
       "SymbolDCEPass",
@@ -44,6 +44,7 @@ describe("extractReports", () => {
       "Output",
       "Rest",
     ]);
+
     const cse = timing.rows[3];
     expect(cse).toMatchObject({ kind: "pass", anchor: "func.func", parent: 2 });
     expect(timing.rows[1]).toMatchObject({ kind: "pass", anchor: null });
@@ -63,6 +64,7 @@ describe("extractReports", () => {
     expect(timing.display).toBe("list");
     expect(timing.columns).toEqual(["user", "wall"]);
     expect(timing.rows.map((row) => row.name)).not.toContain("root");
+
     const cse = timing.rows.find((row) => row.name === "CSEPass");
     expect(cse.user.seconds).toBeGreaterThanOrEqual(0);
     expect(cse.wall.percent).toBeGreaterThanOrEqual(0);
@@ -71,6 +73,7 @@ describe("extractReports", () => {
   it("reads -mlir-output-format=json", () => {
     const { text, timing } = extractReports(fixture("timing-json"));
     expect(timing.display).toBe("tree");
+
     expect(names(timing)).toEqual([
       "Parser",
       "'func.func' Pipeline",
@@ -80,6 +83,7 @@ describe("extractReports", () => {
       "Output",
       "Rest",
     ]);
+
     expect(timing.total).toBeGreaterThan(0);
     expect(text).not.toMatch(/"duration"/);
     expect(text).toMatch(/func\.func @f/);
@@ -102,6 +106,7 @@ describe("extractReports", () => {
       "\tPage size (bytes): 4096",
       "\tExit status: 0",
     ].join("\n");
+
     const { text, memory } = extractReports(log);
     expect(memory).toEqual({ peakBytes: 20480 * 1024, source: "time -v" });
     expect(text).toBe("module {\n}\n\n\n\n\n");
@@ -120,8 +125,11 @@ describe("parsePassTrace with timing", () => {
     const trace = parsePassTrace(fixture("timing-after-all"));
     expect(trace.events).toHaveLength(7);
     expect(trace.timing.rows.length).toBeGreaterThan(0);
-    for (const event of trace.events)
+
+    for (const event of trace.events) {
       expect(event.ir).not.toMatch(/Execution time|Wall Time/);
+    }
+
     expect(trace.output).toMatch(/^module \{/);
     expect(trace.output).not.toMatch(/Wall Time/);
   });
@@ -129,6 +137,7 @@ describe("parsePassTrace with timing", () => {
   it("still reports a failed pass", () => {
     const trace = parsePassTrace(fixture("timing-failed"));
     expect(trace.events.some((event) => event.failed)).toBe(true);
+
     expect(trace.timing.rows.map((row) => row.name)).toContain(
       "InterpreterPass",
     );
@@ -139,10 +148,11 @@ describe("matchTiming", () => {
   it("maps repeated passes in a nested pipeline by position", () => {
     const trace = parsePassTrace(fixture("timing-after-all"));
     const matches = matchTiming(trace.events, trace.timing);
+
     const rowNames = matches.map(
       (match) => match && `${match.row.index}:${match.row.name}`,
     );
-    // symbol-dce on the module, then cse, canonicalize, cse on @f and on @g.
+
     expect(rowNames).toEqual([
       "1:SymbolDCEPass",
       "3:CSEPass",
@@ -152,6 +162,7 @@ describe("matchTiming", () => {
       "5:CanonicalizerPass",
       "6:CSEPass",
     ]);
+
     expect(matches[0].runs).toBe(1);
     expect(matches[1].runs).toBe(2);
   });
@@ -159,6 +170,7 @@ describe("matchTiming", () => {
   it("maps top-level passes in a module-scope trace", () => {
     const trace = parsePassTrace(fixture("timing-failed"));
     const matches = matchTiming(trace.events, trace.timing);
+
     expect(matches.map((match) => match?.row.name)).toEqual(
       trace.events.map((event) => event.pass),
     );
@@ -170,6 +182,7 @@ describe("matchTiming", () => {
       { phase: "after", pass: "CSEPass", root: { op: "func.func" } },
       { phase: "after", pass: "Unknown", root: { op: "func.func" } },
     ];
+
     const { timing } = extractReports(fixture("timing-list"));
     const matches = matchTiming(events, timing);
     expect(matches[0].row).toBe(matches[1].row);
@@ -214,9 +227,11 @@ describe("timingToJSON", () => {
   it("serialises rows, memory, and event links", () => {
     const trace = parsePassTrace(fixture("timed-run"));
     const matches = matchTiming(trace.events, trace.timing);
+
     const json = JSON.parse(
       timingToJSON("t", trace.timing, trace.memory, trace.events, matches),
     );
+
     expect(json.peakMemoryBytes).toBe(trace.memory.peakBytes);
     expect(json.rows[0]).toHaveProperty("wallSeconds");
     expect(json.events[0].timingRow).toBe(matches[0].row.index);
@@ -235,9 +250,11 @@ describe("lowering sample", () => {
     const matches = matchTiming(trace.events, trace.timing);
     expect(trace.memory.peakBytes).toBeGreaterThan(0);
     expect(matches.every(Boolean)).toBe(true);
+
     const canonicalize = trace.events
       .map((event, i) => event.pass === "CanonicalizerPass" && matches[i])
       .filter(Boolean);
+
     expect(canonicalize).toHaveLength(2);
     expect(canonicalize[0].row).not.toBe(canonicalize[1].row);
     expect(trace.output).toMatch(/^module/);
