@@ -7,8 +7,11 @@ this page checks the predictions against Nsight Compute counters measured on
 an actual GPU. VizMLIR itself still never runs code; the measurement is taken
 elsewhere and compared here.
 
-**Status: predictions committed, GPU run pending.** No column below is
-measured yet.
+**Result: 22 of 22 counters match on an NVIDIA Tesla T4 (compute capability
+7.5, driver 580.82.07, free Colab), every one exactly**, including the fractional ones (4.5, 4.875, 2.5). The
+raw ncu output is [`public/samples/gpu-patterns.t4.ncu.csv`](../public/samples/gpu-patterns.t4.ncu.csv);
+`node scripts/predict.mjs --check public/samples/gpu-patterns.t4.ncu.csv`
+reproduces the comparison.
 
 ## What is predicted
 
@@ -22,18 +25,29 @@ that kind of access in the kernel.
 
 | Kernel                   | Counter             | Predicted | Why                                          | Measured (T4) |
 | ------------------------ | ------------------- | --------: | -------------------------------------------- | ------------- |
-| `soa_x_kernel`           | global ld sectors/req |       4 | 32 neighboring floats = 128 B                | pending       |
-| `aos_x_kernel`           | global ld sectors/req |       8 | every other float: twice the sectors         | pending       |
-| `diff_kernel`            | global ld sectors/req |     4.5 | `in[i]` takes 4, `in[i+1]` straddles into 5  | pending       |
-| `window_sum_kernel`      | global ld sectors/req |   4.875 | the warp drifts by 4 B a trip: 1 trip in 8 aligned | pending |
-| `add_bias_kernel`        | global ld sectors/req |     2.5 | 4 for `in[i]`, 1 for the broadcast `bias[0]` | pending       |
-| `tile_copy_16x16_kernel` | global ld sectors/req |       4 | two half rows of 64 B                        | pending       |
-| `transpose_naive_kernel` | global st sectors/req |      32 | each lane writes a different row             | pending       |
-| `transpose_tiled_kernel` | shared ld wavefronts/inst | 32  | reading a 32×32 tile down a column           | pending       |
-| `transpose_padded_kernel`| shared ld wavefronts/inst |  1  | the 33rd column shifts each row by one bank  | pending       |
+| `soa_x_kernel`           | global ld sectors/req |       4 | 32 neighboring floats = 128 B                | **4** ✓ |
+| `aos_x_kernel`           | global ld sectors/req |       8 | every other float: twice the sectors         | **8** ✓ |
+| `diff_kernel`            | global ld sectors/req |     4.5 | `in[i]` takes 4, `in[i+1]` straddles into 5  | **4.5** ✓ |
+| `window_sum_kernel`      | global ld sectors/req |   4.875 | the warp drifts by 4 B a trip: 1 trip in 8 aligned | **4.875** ✓ |
+| `add_bias_kernel`        | global ld sectors/req |     2.5 | 4 for `in[i]`, 1 for the broadcast `bias[0]` | **2.5** ✓ |
+| `tile_copy_16x16_kernel` | global ld sectors/req |       4 | two half rows of 64 B                        | **4** ✓ |
+| `transpose_naive_kernel` | global st sectors/req |      32 | each lane writes a different row             | **32** ✓ |
+| `transpose_tiled_kernel` | shared ld wavefronts/inst | 32  | reading a 32×32 tile down a column           | **32** ✓ |
+| `transpose_padded_kernel`| shared ld wavefronts/inst |  1  | the 33rd column shifts each row by one bank  | **1** ✓ |
 
 Every store and the remaining loads are predicted too (4 sectors, or 1
-wavefront); see `predictions.json`.
+wavefront), and match too: 22 counters in all. See `predictions.json`.
+
+### What the match does and doesn't show
+
+- It shows the analysis models what the hardware fetches for these access
+  patterns, after `ptxas` compiled them: `ptxas` didn't merge, widen or hoist
+  any of these accesses in a way that changed the counts.
+- The kernels are small and have one pattern each, so per-kernel counters
+  test per-access verdicts. A kernel mixing many patterns would need
+  per-instruction counters (ncu's source view) to check the same way.
+- One GPU (Turing, `sm_75`). 32-byte sectors and 32 four-byte banks are the
+  same on newer NVIDIA GPUs, but they weren't measured.
 
 ## Measuring
 
@@ -70,9 +84,10 @@ free T4.
    NumPy. It must print `9 / 9 kernels correct` before the counters mean
    anything.
 
-2. Find `ncu` with `!which ncu || ls /usr/local/cuda/bin/ncu`. If neither
-   exists, `!apt-cache search nsight-compute` and `apt-get install` the
-   package it lists. Then measure:
+2. Find `ncu` with `!which ncu || ls /usr/local/cuda/bin/ncu`. On Colab it
+   is preinstalled at `/usr/local/cuda/bin/ncu`. If neither exists,
+   `!apt-cache search nsight-compute` lists packages; install one by name,
+   for example `!apt-get install -y cuda-nsight-compute-12-8`. Then measure:
 
    ```
    !ncu --csv --log-file t4.ncu.csv -k regex:'_kernel$' --metrics l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum,l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum,l1tex__t_sectors_pipe_lsu_mem_global_op_st.sum,l1tex__t_requests_pipe_lsu_mem_global_op_st.sum,l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum,smsp__inst_executed_op_shared_ld.sum,l1tex__data_pipe_lsu_wavefronts_mem_shared_op_st.sum,smsp__inst_executed_op_shared_st.sum python scripts/run_kernels.py
@@ -95,10 +110,8 @@ free T4.
    with the GPU and driver from step 1, and list every disagreement here with
    its explanation rather than dropping it.
 
-## Known gaps before the run
+## Notes
 
-- `ptxas` may still rewrite accesses (merge, vectorize, or hoist loads) in
-  ways the IR doesn't show. Any such case would show up as a disagreement here.
 - Some hosted GPUs refuse counter access (`ERR_NVGPUCTRPERM`). Without
   counters there is no check, only timings.
 - The PTX is built with bare-pointer parameters and constants sunk into the
