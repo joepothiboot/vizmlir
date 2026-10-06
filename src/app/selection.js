@@ -3,6 +3,7 @@ const EMPTY = Object.freeze({ pass: -1, node: -1, line: -1 });
 export function createSelection() {
   let state = EMPTY;
   const listeners = new Set();
+
   return {
     get state() {
       return state;
@@ -23,6 +24,7 @@ export function createSelection() {
     },
     subscribe(listener) {
       listeners.add(listener);
+
       return () => listeners.delete(listener);
     },
   };

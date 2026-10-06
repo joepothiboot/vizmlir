@@ -23,6 +23,7 @@ export class MlirEngine {
 
   constructor(instance) {
     this.#exports = instance.exports;
+
     const {
       memory,
       mlir_header_ptr,
@@ -30,9 +31,11 @@ export class MlirEngine {
       mlir_input_cap,
       mlir_abi_version,
     } = this.#exports;
+
     if (!memory) throw new Error("wasm module does not export `memory`");
 
     const version = mlir_abi_version();
+
     if (version !== ABI_VERSION) {
       throw new Error(
         `ABI mismatch: wasm=${version}, js=${ABI_VERSION}. Rebuild and sync abi.js.`,
@@ -45,6 +48,7 @@ export class MlirEngine {
     this.#inputCap = mlir_input_cap() >>> 0;
 
     const magic = this.#header()[HDR.MAGIC];
+
     if (magic !== ABI_MAGIC) {
       throw new Error(
         `bad ABI magic 0x${magic.toString(16)} — memory layout is not what JS expects`,
@@ -54,6 +58,7 @@ export class MlirEngine {
 
   static async load(url = "/mlir_core.wasm") {
     let instance;
+
     if (typeof WebAssembly.instantiateStreaming === "function") {
       try {
         ({ instance } = await WebAssembly.instantiateStreaming(fetch(url), {}));
@@ -61,10 +66,12 @@ export class MlirEngine {
         instance = null;
       }
     }
+
     if (!instance) {
       const bytes = await (await fetch(url)).arrayBuffer();
       ({ instance } = await WebAssembly.instantiate(bytes, {}));
     }
+
     return new MlirEngine(instance);
   }
 
@@ -92,6 +99,7 @@ export class MlirEngine {
     const bytes = encoder.encode(text);
     if (bytes.length > this.#inputCap) return STATUS.TOO_LARGE;
     this.#views.writeBytes(this.#inputPtr, bytes);
+
     return this.#exports.mlir_parse(bytes.length) >>> 0;
   }
 
@@ -109,6 +117,7 @@ export class MlirEngine {
     const stringsLen = h[HDR.STRINGS_LEN];
 
     const strings = this.#views.u8At(h[HDR.PTR_STRINGS], stringsLen);
+
     const meta = this.#views.u32At(
       h[HDR.PTR_NODE_META],
       nodeCount * STRIDE.NODE_META,
@@ -118,6 +127,7 @@ export class MlirEngine {
       h[HDR.PTR_NODE_LOC],
       nodeCount * STRIDE.NODE_LOC,
     );
+
     const text = (off, len) =>
       len === 0 ? "" : decoder.decode(strings.subarray(off, off + len));
 
@@ -136,26 +146,24 @@ export class MlirEngine {
       kindOf: (i) => meta[i * STRIDE.NODE_META],
       parentOf: (i) => {
         const p = meta[i * STRIDE.NODE_META + 3];
+
         return p === NONE ? -1 : p;
       },
       labelOf: (i) => {
         const b = i * STRIDE.NODE_META;
         const off = meta[b + 1];
         const len = meta[b + 2];
+
         return len === 0
           ? ""
           : decoder.decode(strings.subarray(off, off + len));
       },
-      // The 1-based line of node `i` in the printed IR, or 0 for the module.
       irLineOf: (i) => locs[i * STRIDE.NODE_LOC],
-      // Where node `i` came from in the source, read from its `loc(...)`:
-      // { file, line, col, text, callsite, fused, unknown }, or null when it
-      // has none. `file`, `line` and `col` are empty / 0 when the location is
-      // not a plain `"file":line:col` (a fused or unknown one, say).
       locOf: (i) => {
         const b = i * STRIDE.NODE_LOC;
         const flags = locs[b + 7];
         if (!(flags & LOC_FLAG.HAS)) return null;
+
         return {
           file: text(locs[b + 3], locs[b + 4]),
           line: locs[b + 1],
@@ -169,10 +177,12 @@ export class MlirEngine {
       diagnostics: () => {
         const dv = this.#views.u32At(h[HDR.PTR_DIAG], diagCount * STRIDE.DIAG);
         const out = [];
+
         for (let i = 0; i < diagCount; i++) {
           const b = i * STRIDE.DIAG;
           const off = dv[b + 2];
           const len = dv[b + 3];
+
           out.push({
             code: dv[b],
             line: dv[b + 1],
@@ -180,6 +190,7 @@ export class MlirEngine {
             message: DIAG_CODE[dv[b]] ?? "unknown diagnostic",
           });
         }
+
         return out;
       },
     };

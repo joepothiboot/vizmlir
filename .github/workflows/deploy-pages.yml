@@ -50,9 +50,6 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
-      # Deploying succeeds even when Pages is set to "Deploy from a branch",
-      # in which case the site serves the raw repo and main.js never runs.
-      # Fail unless the live page loads the bundle this build produced.
       - name: Check the live site serves the build
         env:
           PAGE_URL: ${{ steps.deployment.outputs.page_url }}

@@ -17,6 +17,7 @@ const rows = [
   },
   { type: "removed", before: { label: "tensor.empty", parent: -1 } },
 ];
+
 const parentOf = (row, parent) => (parent === 1 ? "func.func @matmul" : "");
 
 describe("diff export", () => {
@@ -38,6 +39,7 @@ describe("diff export", () => {
       ...diffRecords(rows, parentOf),
       { type: "added", op: "a|b", parent: null },
     ]);
+
     expect(md).toContain("| + | `memref.alloc` | in `func.func @matmul` |");
     expect(md).toContain("| ~ | `linalg.fill_relu` | was `linalg.fill` |");
     expect(md).toContain("| − | `tensor.empty` | top level |");
@@ -62,6 +64,7 @@ describe("diff export", () => {
 
   it("says when there is nothing to report", () => {
     expect(diffToMarkdown("t", [])).toContain("No structural changes.");
+
     expect(JSON.parse(diffToJSON("t", []))).toEqual({
       title: "t",
       changes: [],
@@ -77,6 +80,7 @@ describe("diff export", () => {
 describe("session files", () => {
   it("round-trips", () => {
     const state = { current: "module {}", trace: null };
+
     expect(sessionFromFile(sessionToFile("demo", state))).toEqual({
       name: "demo",
       state,

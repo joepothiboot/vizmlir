@@ -13,12 +13,12 @@ export function copySnapshot(snapshot) {
         parent: snapshot.parentOf(index),
         label: snapshot.labelOf(index),
       };
-      // Snapshots from the engine carry source locations; hand-built ones
-      // (tests) may not.
+
       if (snapshot.locOf) {
         node.line = snapshot.irLineOf(index);
         node.loc = snapshot.locOf(index);
       }
+
       return node;
     }),
   };
@@ -35,6 +35,7 @@ export function diffSnapshots(before, after) {
       (candidate, index) =>
         !used.has(index) && candidate.signature === operation.signature,
     );
+
     if (exact >= 0) {
       used.add(exact);
       continue;
@@ -46,8 +47,10 @@ export function diffSnapshots(before, after) {
         candidate.kind === operation.kind &&
         candidate.parent === operation.parent,
     );
+
     if (changed >= 0) {
       used.add(changed);
+
       rows.push({
         type: "changed",
         before: beforeOps[changed],
@@ -67,12 +70,15 @@ export function diffSnapshots(before, after) {
 
 function snapshotOperations(snapshot) {
   if (!snapshot) return [];
-  if (snapshot.nodes)
+
+  if (snapshot.nodes) {
     return snapshot.nodes.map((node, index) => ({
       ...node,
       index,
       signature: `${node.kind}:${normalizeLabel(node.label)}`,
     }));
+  }
+
   return Array.from({ length: snapshot.nodeCount }, (_, index) => ({
     index,
     kind: snapshot.kindOf(index),

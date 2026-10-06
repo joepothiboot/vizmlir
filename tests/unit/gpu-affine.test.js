@@ -1,8 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { buildDefs } from "../../src/gpu/access.js";
+import { buildDefs } from "../../src/gpu/access-ir.js";
 import { formatAffine, linearize } from "../../src/gpu/affine.js";
 
-const env = { bdx: 32, bdy: 32, bdz: 1, gdx: 32, gdy: null, gdz: 1, args: new Map() };
+const env = {
+  bdx: 32,
+  bdy: 32,
+  bdz: 1,
+  gdx: 32,
+  gdy: null,
+  gdz: 1,
+  args: new Map(),
+};
+
 const terms = (e) => Object.fromEntries(e.t);
 
 describe("linearize", () => {
@@ -29,16 +38,27 @@ describe("linearize", () => {
   ]);
 
   it("folds sizes and constants into coefficients of the ids", () => {
-    expect(linearize("%1", defs, env)).toEqual({ c: 0, t: new Map([["bx", 32], ["tx", 1]]) });
+    expect(linearize("%1", defs, env)).toEqual({
+      c: 0,
+      t: new Map([
+        ["bx", 32],
+        ["tx", 1],
+      ]),
+    });
+
     expect(terms(linearize("%2", defs, env))).toEqual({ tx: 16 });
-    // Terms that cancel disappear.
     expect(terms(linearize("%3", defs, env))).toEqual({ bx: 32 });
     expect(linearize("%f", defs, env).c).toBe(0);
   });
 
   it("writes a loop variable as lower bound + step · iteration, and records the trip count", () => {
     const ctx = {};
-    expect(terms(linearize("%4", defs, env, ctx))).toEqual({ "iter:%i": 32, tx: 1 });
+
+    expect(terms(linearize("%4", defs, env, ctx))).toEqual({
+      "iter:%i": 32,
+      tx: 1,
+    });
+
     expect(ctx.loops).toEqual(new Map([["iter:%i", 4]]));
   });
 
@@ -55,8 +75,15 @@ describe("linearize", () => {
   });
 
   it("keeps an unknown kernel argument as a variable", () => {
-    const args = new Map([["%n", null], ["%k", 3]]);
-    expect(terms(linearize("%n", defs, { ...env, args }))).toEqual({ "arg:%n": 1 });
+    const args = new Map([
+      ["%n", null],
+      ["%k", 3],
+    ]);
+
+    expect(terms(linearize("%n", defs, { ...env, args }))).toEqual({
+      "arg:%n": 1,
+    });
+
     expect(linearize("%k", defs, { ...env, args }).c).toBe(3);
   });
 });
@@ -78,7 +105,6 @@ describe("formatAffine", () => {
   it("prints largest coefficients first and loop variables by name", () => {
     const ctx = {};
     const e = linearize("%2", defs, env, ctx);
-    // %k = 1 + 2·iter, written back as %k.
     expect(formatAffine(e, ctx.ivs)).toBe("64·by + %k - tx");
   });
 

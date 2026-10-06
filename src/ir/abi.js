@@ -24,8 +24,6 @@ export const STRIDE = Object.freeze({
   NODE_META: 4,
   EDGE: 2,
   DIAG: 4,
-  // IR line, source line, source column, file (offset, length), loc text
-  // (offset, length), flags.
   NODE_LOC: 8,
 });
 
@@ -66,7 +64,6 @@ export const DIAG_CODE = Object.freeze({
   2: "unbalanced brace",
 });
 
-// How the parser classified a node's `loc(...)`; combine with `&`.
 export const LOC_FLAG = Object.freeze({
   HAS: 1,
   CALLSITE: 2,

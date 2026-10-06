@@ -8,3 +8,4 @@ Important project constraints:
 - Rust code in `wasm/src/` is compiled to `public/mlir_core.wasm` by `npm run wasm`.
 - Keep the Rust exported ABI and `src/ir/abi.js` synchronized.
 - Validate changes with `npm run build`; inspect the app for parser and rendering changes.
+- Code style is in CONTRIBUTING.md > Making changes: no comments in code, blank lines between blocks, no nested ternaries, files under ~500 lines, shared values in `src/constants.js`.

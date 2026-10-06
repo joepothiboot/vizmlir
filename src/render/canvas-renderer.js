@@ -7,6 +7,7 @@ const BADGE = { added: "+", changed: "~" };
 function readTheme() {
   const css = getComputedStyle(document.documentElement);
   const v = (name, fallback) => css.getPropertyValue(name).trim() || fallback;
+
   return {
     background: v("--bg", "#161616"),
     gridDot: v("--grid-dot", "#262626"),
@@ -68,13 +69,11 @@ export class CanvasRenderer {
     this.requestDraw();
   }
 
-  /** Re-read colours after the page theme changes. */
   refreshTheme() {
     this.theme = readTheme();
     this.requestDraw();
   }
 
-  /** Map of node index -> "added" | "changed", drawn as coloured outlines. */
   setMarks(marks) {
     this.marks = marks;
     this.requestDraw();
@@ -83,13 +82,16 @@ export class CanvasRenderer {
   select(index, { center = false } = {}) {
     const s = this.snapshot;
     this.selected = s && index >= 0 && index < s.nodeCount ? index : -1;
+
     if (center && this.selected >= 0) {
       const o = this.selected * STRIDE.NODE_XYWH;
       const { scale } = this.camera;
       this.camera.x = this.width / 2 - (s.xywh[o] + s.xywh[o + 2] / 2) * scale;
+
       this.camera.y =
         this.height / 2 - (s.xywh[o + 1] + s.xywh[o + 3] / 2) * scale;
     }
+
     this.onSelect?.(this.selected, s);
     this.requestDraw();
   }
@@ -97,20 +99,22 @@ export class CanvasRenderer {
   fit(padding = 48) {
     const s = this.snapshot;
     if (!s || s.nodeCount === 0) return;
+
     const [minX, minY, maxX, maxY] = s.bounds;
     const w = Math.max(1, maxX - minX);
     const h = Math.max(1, maxY - minY);
+
     const scale = Math.min(
       (this.width - padding * 2) / w,
       (this.height - padding * 2) / h,
       2,
     );
+
     this.camera.scale = Math.max(scale, 0.05);
     this.camera.x = this.width / 2 - ((minX + maxX) / 2) * this.camera.scale;
     this.camera.y = this.height / 2 - ((minY + maxY) / 2) * this.camera.scale;
   }
 
-  /** Zoom by `factor` around a point in canvas pixels (default: centre). */
   zoomBy(factor, mx = this.width / 2, my = this.height / 2) {
     const next = Math.min(4, Math.max(0.05, this.camera.scale * factor));
     const k = next / this.camera.scale;
@@ -120,14 +124,13 @@ export class CanvasRenderer {
     this.requestDraw();
   }
 
-  /** Render the whole graph (not just the view) to a PNG blob. */
   exportPNG({ scale = 2, padding = 32 } = {}) {
     const s = this.snapshot;
     if (!s || s.nodeCount === 0) return Promise.resolve(null);
+
     const [minX, minY, maxX, maxY] = s.bounds;
     const width = maxX - minX + padding * 2;
     const height = maxY - minY + padding * 2;
-    // Browsers cap canvas size; shrink very large graphs instead of failing.
     const pixelScale = Math.min(scale, 8000 / width, 8000 / height);
     const out = document.createElement("canvas");
     out.width = Math.max(1, Math.round(width * pixelScale));
@@ -141,6 +144,7 @@ export class CanvasRenderer {
       camera: this.camera,
       selected: this.selected,
     };
+
     Object.assign(this, {
       ctx: out.getContext("2d"),
       width,
@@ -150,34 +154,39 @@ export class CanvasRenderer {
       selected: -1,
       exporting: true,
     });
+
     try {
       this.draw();
     } finally {
       Object.assign(this, saved, { exporting: false });
       this.requestDraw();
     }
+
     return new Promise((resolve) => out.toBlob(resolve, "image/png"));
   }
 
-  /** The whole graph as a standalone SVG document string. */
   exportSVG({ padding = 32 } = {}) {
     const s = this.snapshot;
     if (!s || s.nodeCount === 0) return null;
+
     const { xywh, edges } = s;
     const t = this.theme;
     const [minX, minY, maxX, maxY] = s.bounds;
     const w = maxX - minX + padding * 2;
     const h = maxY - minY + padding * 2;
+
     const esc = (text) =>
       text.replace(
         /[&<>"]/g,
         (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c],
       );
+
     const out = [
       `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX - padding} ${minY - padding} ${w} ${h}" width="${w}" height="${h}" font-family='${MONO}' font-size="12">`,
       `<rect x="${minX - padding}" y="${minY - padding}" width="${w}" height="${h}" fill="${t.background}"/>`,
       `<g fill="none" stroke="${t.edge}" stroke-width="1">`,
     ];
+
     for (let i = 0; i < s.edgeCount; i++) {
       const a = edges[i * STRIDE.EDGE] * STRIDE.NODE_XYWH;
       const b = edges[i * STRIDE.EDGE + 1] * STRIDE.NODE_XYWH;
@@ -186,34 +195,42 @@ export class CanvasRenderer {
       const x2 = xywh[b];
       const y2 = xywh[b + 1] + xywh[b + 3] / 2;
       const mid = (x1 + x2) / 2;
+
       out.push(
         `<path d="M${x1} ${y1}C${mid} ${y1} ${mid} ${y2} ${x2} ${y2}"/>`,
       );
     }
+
     out.push("</g>");
+
     for (let i = 0; i < s.nodeCount; i++) {
       const o = i * STRIDE.NODE_XYWH;
       const [x, y, nw, nh] = [xywh[o], xywh[o + 1], xywh[o + 2], xywh[o + 3]];
       const style = t.kinds[s.kindOf(i)] ?? t.kinds[2];
       const mark = this.marks.get(i);
       const r = Math.min(6, nh / 2);
+
       out.push(
         `<rect x="${x}" y="${y}" width="${nw}" height="${nh}" rx="${r}" fill="${style.fill}" stroke="${mark ? t[mark] : style.stroke}" stroke-width="${mark ? 2 : 1.25}"/>`,
-        // A nested <svg> clips long labels to the node, like the canvas does.
         `<svg x="${x + 6}" y="${y}" width="${Math.max(0, nw - 12)}" height="${nh}" overflow="hidden"><text x="4" y="${nh / 2}" dominant-baseline="central" fill="${style.text}">${esc(s.labelOf(i))}</text></svg>`,
       );
-      if (mark)
+
+      if (mark) {
         out.push(
           `<circle cx="${x + nw}" cy="${y}" r="7" fill="${t[mark]}"/>`,
           `<text x="${x + nw}" y="${y}" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="800" fill="${t.background}">${BADGE[mark]}</text>`,
         );
+      }
     }
+
     out.push("</svg>");
+
     return out.join("\n");
   }
 
   requestDraw() {
     if (this._raf) return;
+
     this._raf = requestAnimationFrame(() => {
       this._raf = 0;
       this.draw();
@@ -225,14 +242,17 @@ export class CanvasRenderer {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = this.theme.background;
     ctx.fillRect(0, 0, this.width, this.height);
+
     if (!this.exporting) {
       this.#drawGrid();
       this.onViewChange?.(this.camera.scale);
     }
 
     const s = this.snapshot;
+
     if (!s || s.nodeCount === 0) {
       this.#placeholder();
+
       return;
     }
 
@@ -256,6 +276,7 @@ export class CanvasRenderer {
     const ox = ((this.camera.x % step) + step) % step;
     const oy = ((this.camera.y % step) + step) % step;
     ctx.fillStyle = this.theme.gridDot;
+
     for (let x = ox; x < this.width; x += step) {
       for (let y = oy; y < this.height; y += step) ctx.fillRect(x, y, 1, 1);
     }
@@ -284,6 +305,7 @@ export class CanvasRenderer {
       ctx.moveTo(x1, y1);
       ctx.bezierCurveTo(mid, y1, mid, y2, x2, y2);
     }
+
     ctx.stroke();
   }
 
@@ -301,18 +323,17 @@ export class CanvasRenderer {
       const w = xywh[o + 2];
       const h = xywh[o + 3];
 
-      if (x + w < view.l || x > view.r || y + h < view.t || y > view.b)
+      if (x + w < view.l || x > view.r || y + h < view.t || y > view.b) {
         continue;
+      }
 
       const style = this.theme.kinds[s.kindOf(i)] ?? this.theme.kinds[2];
       const mark = this.marks.get(i);
       ctx.fillStyle = style.fill;
-      ctx.strokeStyle =
-        i === this.selected
-          ? this.theme.selected
-          : mark
-            ? this.theme[mark]
-            : style.stroke;
+
+      ctx.strokeStyle = mark ? this.theme[mark] : style.stroke;
+      if (i === this.selected) ctx.strokeStyle = this.theme.selected;
+
       ctx.lineWidth = (i === this.selected || mark ? 2 : 1.25) / scale;
 
       const r = Math.min(6, h / 2);
@@ -361,12 +382,14 @@ export class CanvasRenderer {
   hitTest(clientX, clientY) {
     const s = this.snapshot;
     if (!s) return -1;
+
     const rect = this.canvas.getBoundingClientRect();
     const wx = (clientX - rect.left - this.camera.x) / this.camera.scale;
     const wy = (clientY - rect.top - this.camera.y) / this.camera.scale;
 
     for (let i = s.nodeCount - 1; i >= 0; i--) {
       const o = i * STRIDE.NODE_XYWH;
+
       if (
         wx >= s.xywh[o] &&
         wx <= s.xywh[o] + s.xywh[o + 2] &&
@@ -376,6 +399,7 @@ export class CanvasRenderer {
         return i;
       }
     }
+
     return -1;
   }
 
@@ -396,6 +420,7 @@ export class CanvasRenderer {
 
     c.addEventListener("pointermove", (e) => {
       if (!dragging) return;
+
       const dx = e.clientX - lastX;
       const dy = e.clientY - lastY;
       moved += Math.abs(dx) + Math.abs(dy);
@@ -416,6 +441,7 @@ export class CanvasRenderer {
       "wheel",
       (e) => {
         e.preventDefault();
+
         const rect = c.getBoundingClientRect();
         const mx = e.clientX - rect.left;
         const my = e.clientY - rect.top;
@@ -424,7 +450,6 @@ export class CanvasRenderer {
       { passive: false },
     );
 
-    // Pane layout changes (pass strip, resized editor) also resize the canvas.
     new ResizeObserver(() => this.resize()).observe(c);
   }
 }

@@ -2,12 +2,12 @@ pub mod abi;
 pub mod arena;
 pub mod intern;
 
+#[path = "parser/ast.rs"]
+pub mod ast;
 #[path = "parser/lexer.rs"]
 pub mod lexer;
 #[path = "parser/loc.rs"]
 pub mod loc;
-#[path = "parser/ast.rs"]
-pub mod ast;
 
 use abi::*;
 use arena::Arena;
@@ -55,15 +55,19 @@ static mut ENGINE: Option<Engine> = None;
 fn engine() -> &'static mut Engine {
     unsafe {
         let slot = &mut *core::ptr::addr_of_mut!(ENGINE);
+
         if slot.is_none() {
             *slot = Some(Engine::new());
         }
+
         slot.as_mut().unwrap()
     }
 }
 
 #[no_mangle]
-pub extern "C" fn mlir_abi_version() -> u32 { ABI_VERSION }
+pub extern "C" fn mlir_abi_version() -> u32 {
+    ABI_VERSION
+}
 
 #[no_mangle]
 pub extern "C" fn mlir_header_ptr() -> u32 {
@@ -76,7 +80,9 @@ pub extern "C" fn mlir_input_ptr() -> u32 {
 }
 
 #[no_mangle]
-pub extern "C" fn mlir_input_cap() -> u32 { INPUT_CAP as u32 }
+pub extern "C" fn mlir_input_cap() -> u32 {
+    INPUT_CAP as u32
+}
 
 #[no_mangle]
 pub extern "C" fn mlir_reset() {
@@ -98,10 +104,13 @@ pub extern "C" fn mlir_parse(len: u32) -> u32 {
 
     if len > INPUT_CAP {
         e.header[HDR_STATUS] = STATUS_TOO_LARGE;
+
         return STATUS_TOO_LARGE;
     }
+
     if len == 0 {
         mlir_reset();
+
         return STATUS_EMPTY;
     }
 
@@ -109,6 +118,7 @@ pub extern "C" fn mlir_parse(len: u32) -> u32 {
         Ok(s) => s,
         Err(_) => {
             e.header[HDR_STATUS] = STATUS_BAD_UTF8;
+
             return STATUS_BAD_UTF8;
         }
     };
@@ -123,20 +133,55 @@ pub extern "C" fn mlir_parse(len: u32) -> u32 {
     let pool_len = e.interner.pool().len();
 
     let alloc = |a: &mut Arena, bytes: usize, align: usize| a.alloc(bytes, align);
-    let off_xywh = match alloc(&mut e.arena, n * STRIDE_NODE_XYWH * 4, 4) { Some(o) => o, None => return oom(e) };
-    let off_meta = match alloc(&mut e.arena, n * STRIDE_NODE_META * 4, 4) { Some(o) => o, None => return oom(e) };
-    let off_loc = match alloc(&mut e.arena, n * STRIDE_NODE_LOC * 4, 4) { Some(o) => o, None => return oom(e) };
-    let off_edges = match alloc(&mut e.arena, m * STRIDE_EDGE * 4, 4) { Some(o) => o, None => return oom(e) };
-    let off_diag = match alloc(&mut e.arena, d * STRIDE_DIAG * 4, 4) { Some(o) => o, None => return oom(e) };
-    let off_bounds = match alloc(&mut e.arena, 4 * 4, 4) { Some(o) => o, None => return oom(e) };
-    let off_strings = match alloc(&mut e.arena, pool_len.max(1), 8) { Some(o) => o, None => return oom(e) };
+    let off_xywh = match alloc(&mut e.arena, n * STRIDE_NODE_XYWH * 4, 4) {
+        Some(o) => o,
+        None => return oom(e),
+    };
 
-    e.arena.bytes(off_strings, pool_len).copy_from_slice(e.interner.pool());
+    let off_meta = match alloc(&mut e.arena, n * STRIDE_NODE_META * 4, 4) {
+        Some(o) => o,
+        None => return oom(e),
+    };
+
+    let off_loc = match alloc(&mut e.arena, n * STRIDE_NODE_LOC * 4, 4) {
+        Some(o) => o,
+        None => return oom(e),
+    };
+
+    let off_edges = match alloc(&mut e.arena, m * STRIDE_EDGE * 4, 4) {
+        Some(o) => o,
+        None => return oom(e),
+    };
+
+    let off_diag = match alloc(&mut e.arena, d * STRIDE_DIAG * 4, 4) {
+        Some(o) => o,
+        None => return oom(e),
+    };
+
+    let off_bounds = match alloc(&mut e.arena, 4 * 4, 4) {
+        Some(o) => o,
+        None => return oom(e),
+    };
+
+    let off_strings = match alloc(&mut e.arena, pool_len.max(1), 8) {
+        Some(o) => o,
+        None => return oom(e),
+    };
+
+    e.arena
+        .bytes(off_strings, pool_len)
+        .copy_from_slice(e.interner.pool());
 
     {
-        let spans: Vec<(u32, u32)> = e.ast.nodes.iter().map(|nd| e.interner.span(nd.label)).collect();
+        let spans: Vec<(u32, u32)> = e
+            .ast
+            .nodes
+            .iter()
+            .map(|nd| e.interner.span(nd.label))
+            .collect();
         let kinds: Vec<(u32, u32)> = e.ast.nodes.iter().map(|nd| (nd.kind, nd.parent)).collect();
         let meta = e.arena.u32s(off_meta, n * STRIDE_NODE_META);
+
         for i in 0..n {
             let b = i * STRIDE_NODE_META;
             meta[b] = kinds[i].0;
@@ -153,12 +198,25 @@ pub extern "C" fn mlir_parse(len: u32) -> u32 {
             .iter()
             .zip(&e.ast.locs)
             .map(|(nd, lc)| {
-                let (file_off, file_len) = if lc.file == NONE { (0, 0) } else { e.interner.span(lc.file) };
-                let (text_off, text_len) = if lc.text == NONE { (0, 0) } else { e.interner.span(lc.text) };
-                [nd.line, lc.line, lc.col, file_off, file_len, text_off, text_len, lc.flags]
+                let (file_off, file_len) = if lc.file == NONE {
+                    (0, 0)
+                } else {
+                    e.interner.span(lc.file)
+                };
+
+                let (text_off, text_len) = if lc.text == NONE {
+                    (0, 0)
+                } else {
+                    e.interner.span(lc.text)
+                };
+
+                [
+                    nd.line, lc.line, lc.col, file_off, file_len, text_off, text_len, lc.flags,
+                ]
             })
             .collect();
         let lv = e.arena.u32s(off_loc, n * STRIDE_NODE_LOC);
+
         for (i, row) in rows.iter().enumerate() {
             lv[i * STRIDE_NODE_LOC..(i + 1) * STRIDE_NODE_LOC].copy_from_slice(row);
         }
@@ -167,6 +225,7 @@ pub extern "C" fn mlir_parse(len: u32) -> u32 {
     {
         let pairs: Vec<(u32, u32)> = e.ast.edges.clone();
         let ed = e.arena.u32s(off_edges, m * STRIDE_EDGE);
+
         for (i, (s, t)) in pairs.iter().enumerate() {
             ed[i * STRIDE_EDGE] = *s;
             ed[i * STRIDE_EDGE + 1] = *t;
@@ -184,6 +243,7 @@ pub extern "C" fn mlir_parse(len: u32) -> u32 {
             })
             .collect();
         let dv = e.arena.u32s(off_diag, d * STRIDE_DIAG);
+
         for (i, it) in items.iter().enumerate() {
             let b = i * STRIDE_DIAG;
             dv[b] = it.0;
@@ -193,7 +253,15 @@ pub extern "C" fn mlir_parse(len: u32) -> u32 {
         }
     }
 
-    e.layout = Some(Layout { off_xywh, off_meta, off_edges, off_strings, off_diag, off_bounds, off_loc });
+    e.layout = Some(Layout {
+        off_xywh,
+        off_meta,
+        off_edges,
+        off_strings,
+        off_diag,
+        off_bounds,
+        off_loc,
+    });
 
     let h = &mut e.header;
     h[HDR_STATUS] = STATUS_OK;
@@ -235,6 +303,7 @@ pub extern "C" fn mlir_layout(node_w: f32, node_h: f32, col_gap: f32, row_gap: f
     };
 
     let n = e.ast.nodes.len();
+
     if n == 0 {
         return STATUS_EMPTY;
     }
@@ -246,9 +315,11 @@ pub extern "C" fn mlir_layout(node_w: f32, node_h: f32, col_gap: f32, row_gap: f
 
     for nd in &e.ast.nodes {
         let col = nd.depth as usize;
+
         if col >= rows.len() {
             rows.resize(col + 1, 0);
         }
+
         let row = rows[col];
         rows[col] += 1;
 
@@ -266,6 +337,7 @@ pub extern "C" fn mlir_layout(node_w: f32, node_h: f32, col_gap: f32, row_gap: f
 
     {
         let xywh = e.arena.f32s(lay.off_xywh, n * STRIDE_NODE_XYWH);
+
         for (i, b) in boxes.iter().enumerate() {
             let o = i * STRIDE_NODE_XYWH;
             xywh[o] = b.0;
@@ -274,6 +346,7 @@ pub extern "C" fn mlir_layout(node_w: f32, node_h: f32, col_gap: f32, row_gap: f
             xywh[o + 3] = b.3;
         }
     }
+
     {
         let bb = e.arena.f32s(lay.off_bounds, 4);
         bb[0] = min_x;

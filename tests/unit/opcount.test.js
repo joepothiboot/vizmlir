@@ -9,7 +9,6 @@ import {
 } from "../../src/trace/opcount.js";
 import { KIND } from "../../src/ir/abi.js";
 
-// Builds an object shaped like MlirEngine#snapshot() from [kind, label, parent].
 function liveSnapshot(nodes) {
   return {
     nodeCount: nodes.length,
@@ -62,19 +61,32 @@ describe("countOps", () => {
 
 describe("opCountTable", () => {
   const columns = [
-    new Map([["arith.addi", 2], ["arith.constant", 1], ["func.return", 1]]),
-    new Map([["arith.addi", 2], ["arith.constant", 1], ["func.return", 1]]),
-    new Map([["arith.muli", 1], ["func.return", 1]]),
+    new Map([
+      ["arith.addi", 2],
+      ["arith.constant", 1],
+      ["func.return", 1],
+    ]),
+    new Map([
+      ["arith.addi", 2],
+      ["arith.constant", 1],
+      ["func.return", 1],
+    ]),
+    new Map([
+      ["arith.muli", 1],
+      ["func.return", 1],
+    ]),
   ];
 
   it("sorts by the size of the net change and flags changed ops", () => {
     const { rows, totals, changedColumns } = opCountTable(columns);
+
     expect(rows.map((row) => [row.op, row.delta, row.changed])).toEqual([
       ["arith.addi", -2, true],
       ["arith.constant", -1, true],
       ["arith.muli", 1, true],
       ["func.return", 0, false],
     ]);
+
     expect(rows[0].counts).toEqual([2, 2, 0]);
     expect(totals).toEqual([4, 4, 2]);
     expect(changedColumns).toEqual([2]);
@@ -86,11 +98,13 @@ describe("opCountTable", () => {
       new Map([["a", 3]]),
       new Map([["a", 1]]),
     ]);
+
     expect(rows[0]).toMatchObject({ delta: 0, changed: true });
   });
 
   it("writes CSV with a totals row", () => {
     const csv = opCountsToCSV(["#1", "#2", "#3"], opCountTable(columns));
+
     expect(csv.split("\n").slice(0, 3)).toEqual([
       "op,#1,#2,#3,delta",
       "(all ops),4,4,2,-2",

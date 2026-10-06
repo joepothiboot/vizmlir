@@ -7,8 +7,16 @@ These modules take the data from `gpu/`, `trace/` and `ir/` and turn it into pix
 ## 🧰 What's here
 
 - **`canvas-renderer.js`**: the op graph on a canvas, with pan, zoom and fit.
-- **`gpu-view.js`**: the GPU view. The memory accesses table, the answer card with its Plain and Compiler modes, the Across passes strip, and the "Who holds which element" grid for Triton.
-- **`gpu-3d.js`**: the launch in 3D. Blocks and warps, the memory plate, and the Elements layer.
+- **`gpu-view.js`**: the GPU view: one section per launch with its facts and the memory accesses table, plus the path a line takes into the GPU.
+- **`gpu-verdict.js`**: verdict chips and the plain and compiler explanations of a verdict.
+- **`gpu-answer.js`**: the answer card for the picked access, its Plain/Compiler toggle, and the measured counter beside the prediction.
+- **`gpu-passes.js`**: the Across passes strip: how a verdict changes from pass to pass.
+- **`gpu-layout.js`**: the "Who holds which element" grid for Triton and the lane-by-lane detail.
+- **`gpu-memory.js`**: the Memory panel: buffers by memory space and the PTX note.
+- **`gpu-3d.js`**: the launch in 3D: the canvas, its tools, picking and camera control.
+- **`gpu-3d-model.js`**: the scene's static model (blocks, threads, IR nodes, memory sizes) built once per launch.
+- **`gpu-3d-draw.js`**: one frame of the scene, drawn in steps (plates, tiles, cubes, edges, labels, titles).
+- **`gpu-3d-geometry.js`**: launch layout, the camera and the hit test.
 - **`descent.js`**: the Descent view: every pass as a layer in a 3D stack, with the selected op's path down through them and a camera that slides to the lit pass.
 - **`local-view.js`**: the Local memory tab. The scratchpad budget bar and the DMA, wait and compute lanes.
 

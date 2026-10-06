@@ -2,10 +2,15 @@ import { describe, expect, it } from "vitest";
 import { camera, elementTiles, layoutLaunch } from "../../src/render/gpu-3d.js";
 
 describe("elementTiles", () => {
-  // Warp 0 of a 32-wide block over a 1024 × 1024 buffer of f32.
   const memref = { dims: [1024, 1024], element: "f32" };
+
   const tiles = (offsetOf, space = "global") => {
-    const lanes = Array.from({ length: 32 }, (_, lane) => ({ lane, offset: offsetOf(lane), group: lane }));
+    const lanes = Array.from({ length: 32 }, (_, lane) => ({
+      lane,
+      offset: offsetOf(lane),
+      group: lane,
+    }));
+
     return elementTiles(
       { access: { buffer: "%out" }, memref, space },
       { lanes, elementBytes: 4 },
@@ -25,7 +30,6 @@ describe("elementTiles", () => {
     expect([t.rows, t.cols]).toEqual([32, 32]);
     expect(t.of.get(5)).toEqual([5, 0]);
     expect(t.cells.get(5 * 32).lane).toBe(5);
-    // Shading alternates every 32-byte sector (8 floats) along a row.
     expect([t.shade(0, 7), t.shade(0, 8)]).toEqual([false, true]);
   });
 });
@@ -35,12 +39,16 @@ describe("layoutLaunch", () => {
     const layout = layoutLaunch([2, 3, 1], [32, 2, 1]);
     expect(layout.blocks).toHaveLength(6);
     expect(layout.blocks.at(-1).id).toEqual([1, 2, 0]);
-    // Block y runs away from the viewer (-z), block x to the right.
     expect(layout.blocks[1].at[0]).toBeGreaterThan(layout.blocks[0].at[0]);
     expect(layout.blocks[2].at[2]).toBeLessThan(layout.blocks[0].at[2]);
     expect(layout.threads).toHaveLength(64);
-    expect(layout.threads[33]).toMatchObject({ id: [1, 1, 0], warp: 1, lane: 1 });
-    // The opened block sits to the right of the grid.
+
+    expect(layout.threads[33]).toMatchObject({
+      id: [1, 1, 0],
+      warp: 1,
+      lane: 1,
+    });
+
     expect(layout.threads[0].at[0]).toBeGreaterThan(layout.blocks[1].at[0] + 1);
     expect(layout.clipped).toEqual({ grid: false, threads: false });
   });
@@ -50,6 +58,7 @@ describe("layoutLaunch", () => {
     expect(layout.blocks).toHaveLength(16);
     expect(layout.clipped.grid).toBe(true);
     expect(layout.shownGrid).toEqual([16, 1, 1]);
+
     const [a, b] = [layout.threads[0], layout.threads[32]];
     expect(b.id).toEqual([32, 0, 0]);
     expect(b.at[0]).toBe(a.at[0]);
@@ -65,8 +74,17 @@ describe("layoutLaunch", () => {
 
 describe("camera", () => {
   it("projects the center to the middle and keeps far floor points higher", () => {
-    const cam = camera({ yaw: 0, pitch: 0.8, center: [0, 0, 0], scale: 10, cx: 100, cy: 50 });
+    const cam = camera({
+      yaw: 0,
+      pitch: 0.8,
+      center: [0, 0, 0],
+      scale: 10,
+      cx: 100,
+      cy: 50,
+    });
+
     expect(cam.screen(cam.view([0, 0, 0]))).toEqual([100, 50]);
+
     const near = cam.screen(cam.view([0, 0, -5]));
     const far = cam.screen(cam.view([0, 0, 5]));
     expect(far[1]).toBeLessThan(near[1]);

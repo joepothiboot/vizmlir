@@ -16,6 +16,7 @@ const keywords = new Set([
   "true",
   "false",
 ]);
+
 const types = new Set(["tensor", "memref", "vector", "index", "bf16"]);
 
 function escapeHtml(text) {
@@ -37,12 +38,14 @@ function tokenClass(token) {
   if (types.has(token) || /^[if][0-9]+$/.test(token)) return "syntax-type";
   if (/^[0-9]/.test(token)) return "syntax-number";
   if (token.includes(".")) return "syntax-operation";
+
   return "syntax-identifier";
 }
 
 export function highlightMlir(source) {
   let output = "";
   let cursor = 0;
+
   for (const match of source.matchAll(tokenPattern)) {
     const token = match[0];
     const start = match.index;
@@ -50,16 +53,19 @@ export function highlightMlir(source) {
     output += `<span class="${tokenClass(token)}">${escapeHtml(token)}</span>`;
     cursor = start + token.length;
   }
+
   return output + escapeHtml(source.slice(cursor)) + "\n";
 }
 
 export function bindHighlighting(textarea, layer) {
   const scroller = layer.parentElement;
+
   const sync = () => {
     layer.innerHTML = highlightMlir(textarea.value);
     scroller.scrollTop = textarea.scrollTop;
     scroller.scrollLeft = textarea.scrollLeft;
   };
+
   textarea.addEventListener("input", sync);
   textarea.addEventListener("scroll", sync);
   textarea.addEventListener("focus", () => layer.classList.add("focused"));

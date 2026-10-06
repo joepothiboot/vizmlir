@@ -1,49 +1,55 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parseMemref } from "../../src/trace/buffers.js";
-import {
-  buildDefs,
-  evaluate,
-  findAccesses,
-  warpAccess,
-  warpLanes,
-} from "../../src/gpu/access.js";
+import { buildDefs, evaluate, findAccesses } from "../../src/gpu/access-ir.js";
+import { warpAccess, warpLanes } from "../../src/gpu/access.js";
 import { analyzeGpu, loweredArgs, memorySpace } from "../../src/gpu/model.js";
 import { parsePassTrace } from "../../src/trace/trace.js";
 
 const events = (name) =>
   parsePassTrace(
-    readFileSync(new URL(`../../public/samples/${name}`, import.meta.url), "utf8"),
+    readFileSync(
+      new URL(`../../public/samples/${name}`, import.meta.url),
+      "utf8",
+    ),
   ).events;
 
-// Every access of every launch in `ir`, as [kind, buffer, verdict, detail].
+function costText(result) {
+  if (!result.analyzed) return result.reason;
+
+  if (result.sectors !== undefined) {
+    return `${result.sectors}/${result.needed} sectors`;
+  }
+
+  return `${result.ways}-way`;
+}
+
 function verdicts(ir) {
   const model = analyzeGpu(ir);
+
   return model.launches.flatMap((launch) => {
     const kernel = model.kernels[launch.kernel];
+
     return kernel.accesses.map((access) => {
       const memref = parseMemref(access.type);
+
       const result = warpAccess(access, memref, memorySpace(memref.space), {
         defs: kernel.defs,
         args: kernel.args,
         block: launch.block,
         grid: launch.grid,
       });
+
       return [
         access.kind,
         access.buffer,
         result.analyzed ? result.verdict : "not analyzed",
-        result.analyzed
-          ? result.sectors !== undefined
-            ? `${result.sectors}/${result.needed} sectors`
-            : `${result.ways}-way`
-          : result.reason,
+        costText(result),
       ];
     });
   });
 }
 
-// A function with one inline launch of a single 32-thread block around `body`.
 const kernel = (body) =>
   [
     "func.func @f(%x: memref<64x64xf32>, %s: memref<64xf32, #gpu.address_space<workgroup>>, %n: index) {",
@@ -71,6 +77,7 @@ describe("evaluate", () => {
     "%v = memref.load %buf[%i] : memref<8xindex>",
     "%w = arith.addi %v, %a : index",
   ]);
+
   const env = { tx: 3, bx: 2, bdx: 32 };
 
   it("interprets thread ids, block sizes and integer arithmetic", () => {
@@ -86,8 +93,15 @@ describe("evaluate", () => {
 
   it("uses kernel argument values", () => {
     const trace = {};
-    expect(evaluate("%p", defs, { args: new Map([["%p", 16]]) }, trace)).toBe(16);
-    expect(evaluate("%q", defs, { args: new Map([["%q", null]]) }, trace)).toBe(null);
+
+    expect(evaluate("%p", defs, { args: new Map([["%p", 16]]) }, trace)).toBe(
+      16,
+    );
+
+    expect(evaluate("%q", defs, { args: new Map([["%q", null]]) }, trace)).toBe(
+      null,
+    );
+
     expect(trace.stuck).toBe("%q");
   });
 });
@@ -103,9 +117,26 @@ describe("findAccesses", () => {
       ],
       10,
     );
+
     expect(accesses).toEqual([
-      { line: 10, kind: "load", value: null, buffer: "%a", indices: ["%i", "%j"], type: "memref<4x4xf32>", inLoop: false },
-      { line: 12, kind: "store", value: "%v", buffer: "%b", indices: ["%k"], type: "memref<4xf32, 3>", inLoop: true },
+      {
+        line: 10,
+        kind: "load",
+        value: null,
+        buffer: "%a",
+        indices: ["%i", "%j"],
+        type: "memref<4x4xf32>",
+        inLoop: false,
+      },
+      {
+        line: 12,
+        kind: "store",
+        value: "%v",
+        buffer: "%b",
+        indices: ["%k"],
+        type: "memref<4xf32, 3>",
+        inLoop: true,
+      },
     ]);
   });
 });
@@ -129,9 +160,9 @@ describe("warpAccess verdicts", () => {
       "%v = memref.load %x[%c0, %tx] : memref<64x64xf32>",
       "memref.store %v, %x[%tx, %c0] : memref<64x64xf32>",
     ]);
+
     expect(verdicts(ir)).toEqual([
       ["load", "%x", "coalesced", "4/4 sectors"],
-      // 32 floats need 4 sectors; a column of 64-float rows spreads them over 32.
       ["store", "%x", "strided", "32/4 sectors"],
     ]);
   });
@@ -147,6 +178,7 @@ describe("warpAccess verdicts", () => {
       "%i = arith.muli %tx, %c2 : index",
       "memref.store %v, %s[%i] : memref<64xf32, #gpu.address_space<workgroup>>",
     ]);
+
     expect(verdicts(ir)).toEqual([
       ["load", "%s", "conflict-free", "1-way"],
       ["store", "%s", "bank-conflict", "2-way"],
@@ -165,8 +197,10 @@ describe("proofs", () => {
     const model = analyzeGpu(kernel(body));
     const [launch] = model.launches;
     const k = model.kernels[launch.kernel];
+
     return k.accesses.map((access) => {
       const memref = parseMemref(access.type);
+
       return warpAccess(access, memref, memorySpace(memref.space), {
         defs: k.defs,
         args: k.args,
@@ -215,9 +249,13 @@ describe("proofs", () => {
       "  %w = memref.load %x[%c0, %b] : memref<64x64xf32>",
       "}",
     ]);
-    expect(aligned).toMatchObject({ status: "proven", verdict: "coalesced", iterations: true });
-    // Warp 0 on the first iteration is aligned; 7 of every 8 iterations straddle
-    // one more sector.
+
+    expect(aligned).toMatchObject({
+      status: "proven",
+      verdict: "coalesced",
+      iterations: true,
+    });
+
     expect(drifting).toMatchObject({
       status: "varies",
       outcomes: [
@@ -234,6 +272,7 @@ describe("proofs", () => {
       "%r = arith.remui %tx, %c2 : index",
       "%v = memref.load %x[%c0, %r] : memref<64x64xf32>",
     ]);
+
     expect(shown).toEqual({
       status: "sampled",
       reason: "%r is not affine in the thread ids, block ids and loop counters",
@@ -241,25 +280,28 @@ describe("proofs", () => {
   });
 });
 
-// Every access of the first launch in `ir`, with its warpAccess result.
 function judged(ir) {
   const model = analyzeGpu(ir);
   const [launch] = model.launches;
   const k = model.kernels[launch.kernel];
+
   return k.accesses.map((access) => {
     const memref = parseMemref(access.type);
+
     const result = warpAccess(access, memref, memorySpace(memref.space), {
       defs: k.defs,
       args: k.args,
       block: launch.block,
       grid: launch.grid,
     });
+
     return { access, result };
   });
 }
 
 describe("affine ops", () => {
-  const ir = (body) => ["#row = affine_map<(d0)[s0] -> (d0 * 64 + s0)>", kernel(body)].join("\n");
+  const ir = (body) =>
+    ["#row = affine_map<(d0)[s0] -> (d0 * 64 + s0)>", kernel(body)].join("\n");
 
   it("reads affine.apply through a #map alias and inline", () => {
     const [aliased, inline] = judged(
@@ -270,10 +312,12 @@ describe("affine ops", () => {
         "memref.store %v, %x[%c0, %j] : memref<64x64xf32>",
       ]),
     );
+
     expect(aliased.result).toMatchObject({
       verdict: "coalesced",
       proof: { status: "proven", formula: "tx" },
     });
+
     expect(inline.result).toMatchObject({
       verdict: "strided",
       proof: { status: "proven", laneStride: 64 },
@@ -288,13 +332,15 @@ describe("affine ops", () => {
         "}",
       ]),
     );
+
     expect(divided.access.indices).toEqual(["%tx floordiv 32", "%k + %tx"]);
-    // floordiv of a thread id is not affine: warp 0 is judged, not proven.
+
     expect(divided.result).toMatchObject({
       analyzed: true,
       verdict: "coalesced",
       proof: { status: "sampled" },
     });
+
     const [aligned] = judged(
       ir([
         "affine.for %k = 0 to 64 step 8 {",
@@ -302,6 +348,7 @@ describe("affine ops", () => {
         "}",
       ]),
     );
+
     expect(aligned.result.proof).toMatchObject({
       status: "proven",
       verdict: "coalesced",
@@ -311,9 +358,9 @@ describe("affine ops", () => {
 });
 
 describe("lowered kernels", () => {
-  // A kernel after convert-gpu-to-nvvm: the memref argument is split into
-  // pointers, offset, sizes and strides, and the block size is an argument.
-  const struct = "!llvm.struct<(ptr, ptr, i64, array<2 x i64>, array<2 x i64>)>";
+  const struct =
+    "!llvm.struct<(ptr, ptr, i64, array<2 x i64>, array<2 x i64>)>";
+
   const lowered = [
     "module attributes {gpu.container_module} {",
     "  func.func @main(%a: memref<64x64xf32>) {",
@@ -342,31 +389,26 @@ describe("lowered kernels", () => {
   ].join("\n");
 
   it("expands memref launch arguments into pointers, offset, sizes and strides", () => {
-    expect(loweredArgs(["%c32 : index", "%a : memref<64x64xf32>"], 8, () => 32)).toEqual([
-      32,
-      null,
-      null,
-      0,
-      64,
-      64,
-      64,
-      1,
-    ]);
+    expect(
+      loweredArgs(["%c32 : index", "%a : memref<64x64xf32>"], 8, () => 32),
+    ).toEqual([32, null, null, 0, 64, 64, 64, 1]);
   });
 
   it("reads loads and stores through getelementptr, back to the argument", () => {
     const [load, store] = judged(lowered);
+
     expect(load.access).toMatchObject({
       kind: "load",
       buffer: "%arg2",
       indices: ["%4"],
       type: "memref<?xf32>",
     });
+
     expect(load.result).toMatchObject({
       verdict: "coalesced",
       proof: { status: "proven", formula: "tx" },
     });
-    // The row stride (%arg6) comes from the expanded launch arguments.
+
     expect(store.result).toMatchObject({
       verdict: "strided",
       proof: { status: "proven", formula: "64·tx" },
@@ -388,6 +430,7 @@ describe("lowered kernels", () => {
         "^bb3:",
       ]),
     );
+
     expect(load.result.proof).toMatchObject({
       status: "varies",
       formula: "%i + tx",
@@ -409,6 +452,7 @@ describe("lowered kernels", () => {
         "  cf.br ^bb1(%next : index)",
       ]),
     );
+
     expect(load.result).toMatchObject({ analyzed: false });
   });
 });
@@ -416,44 +460,49 @@ describe("lowered kernels", () => {
 describe("the GPU samples", () => {
   it("the memory patterns sample shows one pattern per kernel, from the first pass to LLVM", () => {
     const expected = [
-      // aos_x: x of {x, y} pairs, every other float
       ["load", "strided", "8/4 sectors", "proven"],
       ["store", "coalesced", "4/4 sectors", "proven"],
-      // soa_x
       ["load", "coalesced", "4/4 sectors", "proven"],
       ["store", "coalesced", "4/4 sectors", "proven"],
-      // diff: in[i] and the shifted in[i + 1]
       ["load", "coalesced", "4/4 sectors", "proven"],
       ["load", "misaligned", "5/4 sectors", "proven"],
       ["store", "coalesced", "4/4 sectors", "proven"],
-      // window_sum: the loop shifts the warp by one element per trip
       ["load", "coalesced", "4/4 sectors", "varies"],
       ["store", "coalesced", "4/4 sectors", "proven"],
-      // add_bias: bias[0] for every thread
       ["load", "coalesced", "4/4 sectors", "proven"],
       ["load", "broadcast", "1/1 sectors", "proven"],
       ["store", "coalesced", "4/4 sectors", "proven"],
-      // tile_copy_16x16: a warp covers two half rows
       ["load", "coalesced", "4/4 sectors", "proven"],
       ["store", "coalesced", "4/4 sectors", "proven"],
     ];
+
     const trace = events("gpu-patterns.trace.txt");
-    // Inline launches, outlined kernels, and the kernels lowered to NVVM.
+
     for (const pass of [0, 1, trace.length - 2]) {
       const model = analyzeGpu(trace[pass].ir);
+
       const rows = model.launches.flatMap((launch) => {
         const k = model.kernels[launch.kernel];
+
         return k.accesses.map((access) => {
           const memref = parseMemref(access.type);
+
           const result = warpAccess(access, memref, memorySpace(memref.space), {
             defs: k.defs,
             args: k.args,
             block: launch.block,
             grid: launch.grid,
           });
-          return [access.kind, result.verdict, `${result.sectors}/${result.needed} sectors`, result.proof.status];
+
+          return [
+            access.kind,
+            result.verdict,
+            `${result.sectors}/${result.needed} sectors`,
+            result.proof.status,
+          ];
         });
       });
+
       expect(rows).toEqual(expected);
     }
   });
@@ -470,23 +519,29 @@ describe("the GPU samples", () => {
 
   it("the transpose sample shows a strided write, a 32-way conflict, and the padded fix", () => {
     const expected = [
-      // naive
       ["load", "coalesced", "4/4 sectors"],
       ["store", "strided", "32/4 sectors"],
-      // 32x32 tile
       ["load", "coalesced", "4/4 sectors"],
       ["store", "conflict-free", "1-way"],
       ["load", "bank-conflict", "32-way"],
       ["store", "coalesced", "4/4 sectors"],
-      // 32x33 tile
       ["load", "coalesced", "4/4 sectors"],
       ["store", "conflict-free", "1-way"],
       ["load", "conflict-free", "1-way"],
       ["store", "coalesced", "4/4 sectors"],
     ];
+
     const trace = events("gpu-transpose.trace.txt");
-    for (const event of [trace[0], trace[1]])
-      expect(verdicts(event.ir).map(([kind, , verdict, detail]) => [kind, verdict, detail])).toEqual(expected);
+
+    for (const event of [trace[0], trace[1]]) {
+      expect(
+        verdicts(event.ir).map(([kind, , verdict, detail]) => [
+          kind,
+          verdict,
+          detail,
+        ]),
+      ).toEqual(expected);
+    }
   });
 
   it("proves the transpose verdicts for all 32,768 warps", () => {
@@ -495,6 +550,7 @@ describe("the GPU samples", () => {
     const k = model.kernels[launch.kernel];
     const store = k.accesses.find((a) => a.kind === "store");
     const memref = parseMemref(store.type);
+
     expect(
       warpAccess(store, memref, memorySpace(memref.space), {
         defs: k.defs,
@@ -520,21 +576,26 @@ describe("the GPU samples", () => {
     ]) {
       const model = analyzeGpu(events(file)[pass].ir);
       let seen = 0;
+
       for (const launch of model.launches) {
         const k = model.kernels[launch.kernel];
         expect(k.op).toBe("llvm.func");
+
         for (const access of k.accesses) {
           const memref = parseMemref(access.type);
+
           const result = warpAccess(access, memref, memorySpace(memref.space), {
             defs: k.defs,
             args: k.args,
             block: launch.block,
             grid: launch.grid,
           });
+
           expect(result.proof).toMatchObject({ status: "proven", warps });
           seen++;
         }
       }
+
       expect(seen).toBe(count);
     }
   });
@@ -549,8 +610,17 @@ describe("the GPU samples", () => {
       ["load", "conflict-free", "1-way"],
       ["store", "coalesced", "4/4 sectors"],
     ];
+
     const trace = events("gpu-tiled-matmul.trace.txt");
-    for (const event of [trace[0], trace[1]])
-      expect(verdicts(event.ir).map(([kind, , verdict, detail]) => [kind, verdict, detail])).toEqual(expected);
+
+    for (const event of [trace[0], trace[1]]) {
+      expect(
+        verdicts(event.ir).map(([kind, , verdict, detail]) => [
+          kind,
+          verdict,
+          detail,
+        ]),
+      ).toEqual(expected);
+    }
   });
 });

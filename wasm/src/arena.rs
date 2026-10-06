@@ -6,17 +6,27 @@ pub struct Arena {
 
 impl Arena {
     pub fn with_words(words: usize) -> Self {
-        Self { buf: vec![0u64; words], head: 0, oom: false }
+        Self {
+            buf: vec![0u64; words],
+            head: 0,
+            oom: false,
+        }
     }
 
     #[inline]
-    pub fn capacity(&self) -> usize { self.buf.len() * 8 }
+    pub fn capacity(&self) -> usize {
+        self.buf.len() * 8
+    }
 
     #[inline]
-    pub fn used(&self) -> usize { self.head }
+    pub fn used(&self) -> usize {
+        self.head
+    }
 
     #[inline]
-    pub fn is_oom(&self) -> bool { self.oom }
+    pub fn is_oom(&self) -> bool {
+        self.oom
+    }
 
     pub fn reset(&mut self) {
         self.head = 0;
@@ -27,19 +37,26 @@ impl Arena {
         debug_assert!(align.is_power_of_two() && align <= 8);
         let start = (self.head + align - 1) & !(align - 1);
         let end = start.checked_add(bytes)?;
+
         if end > self.capacity() {
             self.oom = true;
+
             return None;
         }
+
         self.head = end;
         Some(start)
     }
 
     #[inline]
-    fn base(&self) -> *mut u8 { self.buf.as_ptr() as *mut u8 }
+    fn base(&self) -> *mut u8 {
+        self.buf.as_ptr() as *mut u8
+    }
 
     #[inline]
-    pub fn addr(&self, off: usize) -> u32 { (self.base() as usize + off) as u32 }
+    pub fn addr(&self, off: usize) -> u32 {
+        (self.base() as usize + off) as u32
+    }
 
     #[inline]
     pub fn u32s(&mut self, off: usize, len: usize) -> &mut [u32] {

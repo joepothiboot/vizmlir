@@ -5,7 +5,10 @@ import { parsePassTrace } from "../../src/trace/trace.js";
 
 const sample = (name) =>
   parsePassTrace(
-    readFileSync(new URL(`../../public/samples/${name}`, import.meta.url), "utf8"),
+    readFileSync(
+      new URL(`../../public/samples/${name}`, import.meta.url),
+      "utf8",
+    ),
   ).events;
 
 describe("memorySpace", () => {
@@ -31,7 +34,9 @@ describe("memorySpace", () => {
 
 describe("analyzeGpu", () => {
   it("returns null for IR without GPU code", () => {
-    expect(analyzeGpu("module {\n  func.func @f() {\n    return\n  }\n}")).toBe(null);
+    expect(analyzeGpu("module {\n  func.func @f() {\n    return\n  }\n}")).toBe(
+      null,
+    );
   });
 
   it("reads an inline gpu.launch printed over several lines", () => {
@@ -51,13 +56,31 @@ describe("analyzeGpu", () => {
       "  return",
       "}",
     ].join("\n");
+
     const { launches, kernels } = analyzeGpu(ir);
+
     expect(launches).toEqual([
-      { line: 5, host: "@f", kernel: 0, grid: [2, 1, 1], block: [32, null, 1], threads: null },
+      {
+        line: 5,
+        host: "@f",
+        kernel: 0,
+        grid: [2, 1, 1],
+        block: [32, null, 1],
+        threads: null,
+      },
     ]);
+
     expect(kernels[0]).toMatchObject({ inline: true, op: "gpu.launch" });
+
     expect(
-      kernels[0].buffers.map((b) => [b.name, b.space, b.bytes, b.source, b.loads, b.stores]),
+      kernels[0].buffers.map((b) => [
+        b.name,
+        b.space,
+        b.bytes,
+        b.source,
+        b.loads,
+        b.stores,
+      ]),
     ).toEqual([
       ["%sh", "shared", 128, "workgroup", 0, 1],
       ["%p", "private", 16, "private", 0, 0],
@@ -68,15 +91,25 @@ describe("analyzeGpu", () => {
   it("follows the saxpy sample from inline launch to PTX", () => {
     const events = sample("gpu-kernels.trace.txt");
     const before = analyzeGpu(events[0].ir);
-    expect(before.launches.map((l) => [l.host, l.grid, l.block, l.threads])).toEqual([
+
+    expect(
+      before.launches.map((l) => [l.host, l.grid, l.block, l.threads]),
+    ).toEqual([
       ["@saxpy", [4, 1, 1], [256, 1, 1], 1024],
       ["@relu", [4, 1, 1], [256, 1, 1], 1024],
     ]);
 
     const outlined = analyzeGpu(events[1].ir);
     const saxpy = outlined.kernels[outlined.launches[0].kernel];
-    expect(saxpy).toMatchObject({ path: "@saxpy_kernel::@saxpy_kernel", op: "gpu.func" });
-    expect(saxpy.buffers.map((b) => [b.name, b.space, b.source, b.loads, b.stores])).toEqual([
+
+    expect(saxpy).toMatchObject({
+      path: "@saxpy_kernel::@saxpy_kernel",
+      op: "gpu.func",
+    });
+
+    expect(
+      saxpy.buffers.map((b) => [b.name, b.space, b.source, b.loads, b.stores]),
+    ).toEqual([
       ["%arg1", "global", "argument", 1, 0],
       ["%arg2", "global", "argument", 1, 1],
     ]);
@@ -84,6 +117,7 @@ describe("analyzeGpu", () => {
     const binary = analyzeGpu(events.at(-1).ir);
     const ptx = binary.kernels[binary.launches[0].kernel];
     expect(ptx).toMatchObject({ op: "gpu.binary", lowered: true, buffers: [] });
+
     expect(ptx.ptx.registers).toEqual([
       { type: "b32", count: 8 },
       { type: "b64", count: 12 },
@@ -94,21 +128,28 @@ describe("analyzeGpu", () => {
     const events = sample("gpu-tiled-matmul.trace.txt");
     const outlined = analyzeGpu(events[1].ir);
     const [launch] = outlined.launches;
+
     expect([launch.grid, launch.block, launch.threads]).toEqual([
       [8, 8, 1],
       [16, 16, 1],
       16384,
     ]);
+
     const kernel = outlined.kernels[launch.kernel];
     const shared = kernel.buffers.filter((b) => b.space === "shared");
+
     expect(shared.map((b) => [b.bytes, b.source, b.loads, b.stores])).toEqual([
       [1024, "workgroup", 1, 1],
       [1024, "workgroup", 1, 1],
     ]);
+
     expect(kernel.buffers.filter((b) => b.space === "global")).toHaveLength(3);
 
     const binary = analyzeGpu(events.at(-1).ir);
-    expect(binary.kernels[binary.launches[0].kernel].ptx.sharedBytes).toBe(2048);
+
+    expect(binary.kernels[binary.launches[0].kernel].ptx.sharedBytes).toBe(
+      2048,
+    );
   });
 });
 
@@ -125,6 +166,7 @@ describe("ptxEntries", () => {
       "\t.reg .f32 \t%f<2>;",
       "}",
     ].join("\n");
+
     expect(ptxEntries(ptx)).toEqual([
       {
         name: "a",
