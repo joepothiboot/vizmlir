@@ -59,6 +59,7 @@ import {
   formatChange,
   formatDuration,
   parseBenchmarks,
+  parseNcuCounters,
   symbolTimes,
 } from "./bench.js";
 import { bindHighlighting, highlightMlir } from "./app/index.js";
@@ -214,6 +215,10 @@ let opPinned = null;
 // { name, text, mock, result } or null; `mock` marks a sample's invented data. Kept with the trace (and its live reloads)
 // and saved with the session.
 let benchmarks = { baseline: null, current: null };
+// Nsight Compute counters measured for the trace's kernels on a real GPU, as
+// { device, text, counters } with counters from parseNcuCounters, or null.
+// Only the GPU samples carry them; kept with the trace and its session.
+let measured = null;
 
 // What is selected: the pass, the graph node, the marked source line.
 const selection = createSelection();
@@ -417,6 +422,7 @@ function run() {
     // Files and watched files load traces directly; this path is a paste.
     sourceName.textContent = "pasted trace";
     sourceName.title = sourceName.textContent;
+    measured = null; // a sample's measurements don't describe pasted IR
     loadTrace(input.value);
     return;
   }
@@ -725,6 +731,7 @@ function clearTrace() {
   opShapes = null;
   opPinned = null;
   benchmarks = { baseline: null, current: null };
+  measured = null;
   traceText = "";
   traceNote = "";
   traceIndex = -1;
@@ -1695,6 +1702,7 @@ fileInput.addEventListener("change", async () => {
   sourceName.title = file.name;
   if (isPassTrace(text)) {
     benchmarks = { baseline: null, current: null };
+    measured = null;
     loadTrace(text);
     return;
   }
@@ -1858,6 +1866,7 @@ function getState() {
           ]),
         )
       : null,
+    measured: traceText && measured ? { device: measured.device, text: measured.text } : null,
   };
 }
 
@@ -1873,6 +1882,11 @@ function applyState(state) {
   splitToggle.setAttribute("aria-pressed", String(!!state.split));
   if (state.trace && isPassTrace(state.trace)) {
     traceIndex = state.traceIndex ?? -1;
+    // Before loadTrace, so the GPU view it draws can show them.
+    if (state.measured?.text)
+      try {
+        measured = { ...state.measured, counters: parseNcuCounters(state.measured.text) };
+      } catch {}
     loadTrace(state.trace, { keepIndex: true });
     // Sessions from before baseline benchmarks held one run, as `current`.
     const saved = state.benchmarks?.text
@@ -2857,6 +2871,7 @@ const GPU_VIEW_OPTIONS = {
     inspect("line", document.activeElement);
   },
   onAnswer: setGpuAnswer,
+  measured: () => measured,
   passes: () =>
     trace?.events.length > 1
       ? {
@@ -3752,6 +3767,7 @@ const watcher = new FileWatcher((change, error) => {
   sourceName.textContent = change.name;
   sourceName.title = `${change.name} · watching`;
   if (isPassTrace(change.text)) {
+    measured = null;
     loadTrace(change.text, { keepIndex: !!trace });
   } else {
     clearTrace();

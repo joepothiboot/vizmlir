@@ -11,7 +11,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { NCU_COUNTER_METRICS, parseNcuCounters } from "../src/bench.js";
-import { warpAccess } from "../src/gpu/access.js";
+import { expectedCost, warpAccess } from "../src/gpu/access.js";
 import { analyzeGpu, memorySpace } from "../src/gpu/model.js";
 import { parseMemref } from "../src/trace/buffers.js";
 
@@ -22,26 +22,6 @@ const OUT = "docs/predictions.json";
 const TOLERANCE = 0.05;
 
 const KIND = { global: { load: "globalLoad", store: "globalStore" }, shared: { load: "sharedLoad", store: "sharedStore" } };
-
-// What one warp request costs: sectors for global memory, wavefronts (bank
-// conflict ways; 1 for a broadcast) for shared memory. A proven access has one
-// value; one that varies across warps or loop trips gives its range and the
-// mean over the cases the proof checked.
-function cost(result, space) {
-  const unit = space === "shared" ? "ways" : "sectors";
-  const proof = result.proof;
-  if (proof?.status === "proven") {
-    const n = proof[unit];
-    return { status: "proven", verdict: proof.verdict, min: n, max: n, mean: n };
-  }
-  if (proof?.status === "varies") {
-    const values = proof.outcomes.map((o) => o[unit]);
-    const mean = proof.outcomes.reduce((s, o) => s + o[unit] * o.cases, 0) / proof.cases;
-    return { status: "varies", verdict: proof.outcomes.map((o) => o.verdict).join("/"), min: Math.min(...values), max: Math.max(...values), mean };
-  }
-  // ponytail: first warp only when the proof can't run; such a prediction is marked "sampled".
-  return { status: "sampled", verdict: result.verdict, min: result[unit], max: result[unit], mean: result[unit] };
-}
 
 // Per access, and per kernel the counter ratio ncu reports: the mean cost over
 // that kind's accesses. Every access in a kernel runs once per thread here
@@ -56,7 +36,7 @@ export function predict(ir, file) {
       const space = memorySpace(memref.space);
       const result = warpAccess(access, memref, space, { defs: kernel.defs, args: kernel.args, block: launch.block, grid: launch.grid });
       const base = { file, line: access.line, kind: access.kind, buffer: access.buffer, space, inLoop: access.inLoop };
-      return result.analyzed ? { ...base, ...cost(result, space) } : { ...base, status: "not analyzed", reason: result.reason };
+      return result.analyzed ? { ...base, ...expectedCost(result, space) } : { ...base, status: "not analyzed", reason: result.reason };
     });
     const counters = {};
     for (const [space, kinds] of Object.entries(KIND))
