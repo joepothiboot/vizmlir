@@ -35,8 +35,6 @@ export async function openSample(sample) {
 }
 
 const scenarioButton = document.getElementById("samples-open");
-const samplesWelcome = document.getElementById("samples-welcome");
-const samplesClose = document.getElementById("samples-close");
 const sampleButtons = new Map();
 const scopeHeads = new Map();
 let currentSample = null;
@@ -108,14 +106,7 @@ function sampleItem(sample) {
   return item;
 }
 
-export function openSamples({ welcome = false } = {}) {
-  samplesWelcome.hidden = !welcome || !currentSample;
-
-  if (!samplesWelcome.hidden) {
-    samplesWelcome.textContent = `Starting with \u201c${currentSample.title}\u201d in the ${scenario.short} scenario. Close this to keep it, or pick another.`;
-  }
-
-  samplesClose.textContent = welcome ? "Keep this one" : "Close";
+export function openSamples() {
   samplesDialog.showModal();
 
   const current = sampleButtons.get(currentSample?.id);

@@ -101,10 +101,6 @@ kbd {
   font: 11px/16px var(--mono);
   text-align: center;
 }
-.love-note {
-  color: var(--dim);
-  font-size: 11px;
-}
 button,
 label.btn {
   background: var(--panel);
@@ -199,6 +195,45 @@ a:focus-visible {
 }
 .debug-bar {
   flex-wrap: wrap;
+}
+.bp-group {
+  position: relative;
+  flex: 0 0 auto;
+}
+.bp-group summary {
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--dim);
+  cursor: pointer;
+  list-style: none;
+}
+.bp-group summary::-webkit-details-marker {
+  display: none;
+}
+.bp-group summary::after {
+  content: " ▾";
+}
+.bp-group[open] summary {
+  color: var(--fg);
+  border-color: var(--accent);
+}
+.bp-body {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 6;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: max-content;
+  max-width: min(560px, 90vw);
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
 }
 .bp-pop {
   flex: 1 0 100%;

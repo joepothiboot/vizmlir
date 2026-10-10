@@ -15,7 +15,6 @@ export const STORAGE_KEYS = {
   paneWidths: "vizmlir-pane-widths",
   sample: "vizmlir.sample",
   theme: "vizmlir-theme",
-  welcomed: "vizmlir.welcomed",
 };
 
 export const RUN_DELAY_MS = 140;

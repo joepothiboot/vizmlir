@@ -109,8 +109,6 @@
         <button id="help-open" class="icon-btn" aria-label="Keyboard shortcuts">
           ?
         </button>
-
-        <span class="love-note">built with care for compiler explorers</span>
       </header>
 
       <button
@@ -213,61 +211,69 @@
           op ▶
         </button>
 
-        <button
-          id="bp-back"
-          type="button"
-          title="Run back to the previous breakpoint (,)"
-          disabled
-        >
-          ⏴ back
-        </button>
+        <details id="bp-group" class="bp-group">
+          <summary title="Stop when a condition becomes true">
+            Breakpoints<span id="bp-count"></span>
+          </summary>
 
-        <button
-          id="bp-continue"
-          type="button"
-          title="Continue to the next breakpoint (.)"
-          disabled
-        >
-          ⏵ continue
-        </button>
+          <div class="bp-body">
+            <button
+              id="bp-back"
+              type="button"
+              title="Run back to the previous breakpoint (,)"
+              disabled
+            >
+              ⏴ back
+            </button>
 
-        <button
-          id="bp-open"
-          type="button"
-          aria-expanded="false"
-          aria-controls="bp-pop"
-          title="Stop when a condition becomes true"
-        >
-          Break when…<span id="bp-count"></span>
-        </button>
+            <button
+              id="bp-continue"
+              type="button"
+              title="Continue to the next breakpoint (.)"
+              disabled
+            >
+              ⏵ continue
+            </button>
+
+            <button
+              id="bp-open"
+              type="button"
+              aria-expanded="false"
+              aria-controls="bp-pop"
+              title="Stop when a condition becomes true"
+            >
+              Add condition…
+            </button>
+
+            <div id="bp-pop" class="bp-pop" hidden>
+              <form id="bp-form" class="bp-form">
+                <input
+                  id="bp-input"
+                  type="text"
+                  autocomplete="off"
+                  spellcheck="false"
+                  aria-label="Break when"
+                  placeholder="linalg.matmul == 0"
+                />
+
+                <button type="submit">Add</button>
+              </form>
+
+              <p id="bp-error" class="bp-error" role="alert" hidden></p>
+              <ul id="bp-list" class="bp-list"></ul>
+
+              <p class="dialog-note">
+                Stops when a condition <em>becomes</em> true. Try
+                <code>linalg.matmul == 0</code>, <code>ops &lt; 20</code>,
+                <code>live &gt; 1MB</code>, <code>appears gpu.launch</code>,
+                <code>gone func.call</code>, <code>fails</code> or
+                <code>diag</code>.
+              </p>
+            </div>
+          </div>
+        </details>
 
         <span id="debug-status" class="debug-status" aria-live="polite"></span>
-
-        <div id="bp-pop" class="bp-pop" hidden>
-          <form id="bp-form" class="bp-form">
-            <input
-              id="bp-input"
-              type="text"
-              autocomplete="off"
-              spellcheck="false"
-              aria-label="Break when"
-              placeholder="linalg.matmul == 0"
-            />
-
-            <button type="submit">Add</button>
-          </form>
-
-          <p id="bp-error" class="bp-error" role="alert" hidden></p>
-          <ul id="bp-list" class="bp-list"></ul>
-
-          <p class="dialog-note">
-            Stops when a condition <em>becomes</em> true. Try
-            <code>linalg.matmul == 0</code>, <code>ops &lt; 20</code>,
-            <code>live &gt; 1MB</code>, <code>appears gpu.launch</code>,
-            <code>gone func.call</code>, <code>fails</code> or
-            <code>diag</code>.
-          </p>
-        </div>
       </div>
 
       <div id="workspace">
@@ -1055,8 +1061,6 @@
 
       <dialog id="samples" aria-labelledby="samples-title">
         <h2 id="samples-title">Choose a scenario</h2>
-        <p id="samples-welcome" class="samples-welcome" hidden></p>
-
         <p class="dialog-note">
           Each scenario is a kind of work, with a sample to start from and the
           views that suit it. Nothing is locked: every view stays one click

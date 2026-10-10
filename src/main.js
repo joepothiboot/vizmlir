@@ -10,7 +10,6 @@ import { renderExplain, setupLineExplain } from "./workbench/line-explain.js";
 import {
   applyScenario,
   fetchSampleText,
-  openSamples,
   setupScenarios,
 } from "./workbench/scenarios.js";
 import { setupSourceTabs, showTab } from "./workbench/source-tabs.js";
@@ -56,7 +55,6 @@ renderPath();
 updateWatchUi();
 
 const saved = await kv.get("autosave");
-let firstVisit = false;
 
 const hasContent = (workspace) =>
   !!(
@@ -74,7 +72,6 @@ if (hasContent(saved)) {
   try {
     applyState(await loadSampleState(first, fetchSampleText));
     applyScenario(first);
-    firstVisit = true;
   } catch {
     applyState(await loadSampleState(SAMPLES.find((sample) => sample.inline)));
   }
@@ -91,14 +88,3 @@ try {
 if (state.inspectorSaved.open) inspector.open();
 
 restoreWatch();
-
-if (firstVisit) {
-  try {
-    if (!localStorage.getItem(STORAGE_KEYS.welcomed)) {
-      localStorage.setItem("1");
-      openSamples({ welcome: true });
-    }
-  } catch {
-    openSamples({ welcome: true });
-  }
-}

@@ -389,11 +389,6 @@
   border-radius: 2px;
   background: var(--legend-color);
 }
-@media (max-width: 1500px) {
-  .love-note {
-    display: none;
-  }
-}
 @media (max-width: 1100px) {
   .hints,
   #source-name {

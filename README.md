@@ -15,6 +15,23 @@ Live version: https://joepothiboot.github.io/vizmlir/
 
 ![Tracing a Mojo saxpy through the pipeline](public/demo/vizmlir-tour.gif)
 
+## Start here
+
+The app opens on one story: **follow one source line through a compiler.** Click a line
+in the Source tab, or an op in the graph, and use the `op ◀ ▶` buttons to jump to each
+pass that created, fused, lowered or erased it. A saxpy written in Mojo-style source goes
+from a call site, through inlining and canonicalization, down to NVVM.
+
+Everything else is one click away and stays out of the way until you need it:
+
+- **Scenario ▾** switches to GPU memory patterns, a tiled matmul, a Triton kernel, or the
+  DSP scratchpad trace from [nano-dsp-mlir](https://github.com/joepothiboot/nano-dsp-mlir).
+- **Breakpoints ▾** (in the Step bar) stops on a condition such as `linalg.matmul == 0`.
+- The **GPU** and **Local memory** tabs appear only when the loaded IR has something to show.
+
+vizmlir is a companion tool for reading compiler output, not a compiler. It is built to
+read logs from `mlir-opt` and from compilers like nano-dsp-mlir.
+
 ## What it does
 
 **Pass debugging**
