@@ -367,3 +367,45 @@ button.buf-label:hover {
 #buffers-pass-table .link-btn:hover {
   color: var(--accent);
 }
+.compare-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin: 0 0 10px;
+  font-size: 11px;
+}
+#compare-rows {
+  max-height: 200px;
+  margin: 0 0 10px;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+  font-size: 11px;
+}
+#compare-rows .link-btn {
+  padding: 2px 0;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+}
+#compare-rows .link-btn[data-kind="same"] {
+  color: var(--dim);
+}
+#compare-rows .link-btn[aria-pressed="true"] {
+  color: var(--accent);
+}
+#compare-diff {
+  max-height: min(420px, 50vh);
+  margin: 0;
+  overflow: auto;
+  font-size: 11px;
+}
+.compare-line {
+  white-space: pre;
+}
+.compare-line.add {
+  background: color-mix(in srgb, var(--good) 18%, transparent);
+}
+.compare-line.del {
+  background: color-mix(in srgb, var(--err) 18%, transparent);
+}

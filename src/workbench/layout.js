@@ -1,6 +1,7 @@
 import { STORAGE_KEYS } from "../constants.js";
 import { bindSplitters, createInspector } from "../app/index.js";
 import { renderBuffersPanel } from "./buffers-panel.js";
+import { renderComparePanel } from "./compare-panel.js";
 import { focusChange } from "./diff-panel.js";
 import { canvas } from "./dom.js";
 import { renderer } from "./graph.js";
@@ -49,6 +50,7 @@ const PANELS = {
   opcount: renderOpCountPanel,
   symbols: renderSymbolsPanel,
   ophistory: renderOpHistoryPanel,
+  compare: renderComparePanel,
 };
 
 export const inspector = createInspector(inspectorEl, {

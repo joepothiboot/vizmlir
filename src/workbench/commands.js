@@ -95,6 +95,7 @@ const palette = new CommandPalette(document.getElementById("palette"), () => {
     ["Inspector: changes in this pass", "", () => showPanel("changes")],
     ["Inspector: pass timing and memory", "p", openTiming],
     ["Inspector: op counts per pass", "o", openOpCounts],
+    ["Inspector: compare two logs", "m", () => showPanel("compare")],
     ["Inspector: buffers and peak memory", "b", openBuffers],
     [
       "Inspector: symbol history (which pass made each kernel)",
@@ -227,6 +228,7 @@ const WORKSPACE_KEYS = {
   h: () => inspector.toggleTab("symbols"),
   w: () => inspector.toggleTab("line"),
   y: () => inspector.toggleTab("ophistory"),
+  m: () => inspector.toggleTab("compare"),
   "\\": toggleInspector,
   g: () =>
     state.gpuModel &&

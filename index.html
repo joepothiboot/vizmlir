@@ -618,6 +618,15 @@
                 >
                   History
                 </button>
+                <button
+                  id="tab-compare"
+                  role="tab"
+                  data-tab="compare"
+                  aria-controls="panel-compare"
+                  title="Compare two pass-trace logs (m)"
+                >
+                  Compare
+                </button>
               </div>
 
               <button
@@ -815,6 +824,38 @@
                   <button id="buffers-export">Download .json</button>
                 </div>
               </div>
+            </section>
+
+            <section
+              id="panel-compare"
+              class="inspector-panel"
+              role="tabpanel"
+              data-panel="compare"
+              aria-labelledby="tab-compare"
+              hidden
+            >
+              <p class="dialog-note">
+                Load two <code>-mlir-print-ir-after-all</code> logs of the same
+                input to see where they diverge. Passes are matched by position;
+                value names are ignored.
+              </p>
+
+              <div class="compare-inputs">
+                <label
+                  >Log A
+                  <input id="compare-a" type="file" accept=".txt,.log,.mlir"
+                /></label>
+                <label
+                  >Log B
+                  <input id="compare-b" type="file" accept=".txt,.log,.mlir"
+                /></label>
+              </div>
+
+              <p id="compare-verdict" class="dialog-note" role="status"></p>
+
+              <ul id="compare-rows" aria-label="Passes"></ul>
+
+              <pre id="compare-diff" aria-label="Diff of A and B"></pre>
             </section>
 
             <section

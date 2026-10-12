@@ -22,6 +22,7 @@ import { setupTimingPanel } from "./workbench/timing-panel.js";
 import { setupOpCountPanel } from "./workbench/opcount-panel.js";
 import { setupBuffersPanel } from "./workbench/buffers-panel.js";
 import { setupSymbolHistory } from "./workbench/symbol-history.js";
+import { setupComparePanel } from "./workbench/compare-panel.js";
 import { setupOpHistory } from "./workbench/op-history.js";
 import { setupSymbolView } from "./workbench/symbol-view.js";
 import { STORAGE_KEYS } from "./constants.js";
@@ -41,6 +42,7 @@ setupSymbolHistory();
 setupCanvasViews();
 setupLineExplain();
 setupOpHistory();
+setupComparePanel();
 setupSymbolView();
 setupFiles();
 

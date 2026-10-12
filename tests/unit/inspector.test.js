@@ -55,6 +55,7 @@ describe("inspector", () => {
       "Op count",
       "Symbols",
       "History",
+      "Compare",
     ]);
   });
 
@@ -118,7 +119,7 @@ describe("inspector", () => {
     expect(inspector.active).toBe("buffers");
     expect(document.activeElement).toBe(root.querySelector("#tab-buffers"));
     key(document.activeElement, "End");
-    expect(inspector.active).toBe("ophistory");
+    expect(inspector.active).toBe("compare");
     key(document.activeElement, "ArrowRight");
     expect(inspector.active).toBe("changes");
   });
