@@ -6,6 +6,7 @@ export {
   elementBytes,
   parseMemref,
 } from "./buffers.js";
+export { canonicalIr, compareTraces, rowDiff } from "./compare.js";
 export { diffStats, lineDiff } from "./linediff.js";
 export { countOps, opCountTable, opCountsToCSV, totalOps } from "./opcount.js";
 export {
