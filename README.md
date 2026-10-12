@@ -46,6 +46,10 @@ read logs from `mlir-opt` and from compilers like nano-dsp-mlir.
   `live > 1MB`, `appears gpu.launch` or `fails`, and run to the next hit.
 - Show the pipeline as a 3D stack of passes (the Descent view).
 
+**Comparing logs**
+
+- The **Compare** tab (`m`) loads two pass-trace logs of the same input and shows the first pass where they differ, whether the final IR matches, and a line diff of any pass. Passes are matched by position and value names are ignored.
+
 **GPU analysis**
 
 - Draw each `gpu.launch` as a grid of blocks, with one block opened into warps,

@@ -21,6 +21,7 @@ Each module owns one feature and exports a `setup…()` function that attaches i
 - **`workspace.js`**: autosave and named sessions.
 - **`timing-panel.js`**, **`opcount-panel.js`**, **`buffers-panel.js`**, **`symbol-history.js`**, **`symbol-view.js`**: the inspector's analysis tabs.
 - **`canvas-views.js`**, **`line-explain.js`**, **`op-history.js`**: the Graph/GPU/Local/Descent views, the explained line and an op's history.
+- **`compare-panel.js`**: the Compare tab: load two pass-trace logs and see where they diverge.
 - **`files.js`**: export and live file watching.
 
 ## 🔗 How other folders use it
