@@ -32,6 +32,9 @@ Everything else is one click away and stays out of the way until you need it:
 vizmlir is a companion tool for reading compiler output, not a compiler. It is built to
 read logs from `mlir-opt` and from compilers like nano-dsp-mlir.
 
+**Status: frozen, maintenance only.** vizmlir gets fixes for broken builds,
+tests and parser regressions, not new features.
+
 ## What it does
 
 **Pass debugging**
@@ -135,7 +138,6 @@ VizMLIR works on printed IR, not on in-memory compiler objects.
 - [docs/benchmark-format.md](docs/benchmark-format.md): importing measured results
 - [docs/hardware-check.md](docs/hardware-check.md): predictions vs Nsight Compute on a T4
 - [docs/DEMO.md](docs/DEMO.md): walkthrough of the debugging sample
-- [CONTRIBUTING.md](CONTRIBUTING.md): source layout, conventions, checks
 
 ## License
 
