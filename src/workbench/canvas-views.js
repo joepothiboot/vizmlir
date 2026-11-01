@@ -199,13 +199,36 @@ export function setCanvasView(view, { remember = true } = {}) {
     entry.show(name === state.canvasView);
   }
 
+  renderLevelNav();
   renderVerdictChip();
   renderPath();
   if (state.canvasView === "gpu") focusGpu(selection.state.line);
   renderExplain(state.explainedLine);
 }
 
+const levelUp = document.getElementById("level-up");
+const levelDown = document.getElementById("level-down");
+
+function stepLevel(by) {
+  const shown = vizTabs.filter((t) => !t.hidden);
+  const target = shown[shown.findIndex((t) => t.dataset.view === state.canvasView) + by];
+  if (!target) return;
+  if (state.localModel) state.localWanted = target.dataset.view === "local";
+  setCanvasView(target.dataset.view);
+}
+
+function renderLevelNav() {
+  const shown = vizTabs.filter((t) => !t.hidden);
+  const at = shown.findIndex((t) => t.dataset.view === state.canvasView);
+  levelUp.disabled = at <= 0;
+  levelDown.disabled = at >= shown.length - 1;
+  levelUp.parentElement.hidden = shown.length < 2;
+}
+
 export function setupCanvasViews() {
+  levelUp.addEventListener("click", () => stepLevel(-1));
+  levelDown.addEventListener("click", () => stepLevel(1));
+
   vizVerdict.addEventListener("click", () => inspect("line", vizVerdict));
 
   for (const tab of vizTabs) {

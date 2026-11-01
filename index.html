@@ -409,6 +409,18 @@
                 </button>
 
                 <button
+                  id="view-descent"
+                  role="tab"
+                  data-view="descent"
+                  aria-selected="false"
+                  aria-controls="descent-view"
+                  title="Descent: the passes as layers, and an op's path down through them"
+                  hidden
+                >
+                  Descent
+                </button>
+
+                <button
                   id="view-gpu"
                   role="tab"
                   data-view="gpu"
@@ -432,17 +444,6 @@
                   Local memory
                 </button>
 
-                <button
-                  id="view-descent"
-                  role="tab"
-                  data-view="descent"
-                  aria-selected="false"
-                  aria-controls="descent-view"
-                  title="Descent: the passes as layers, and an op's path down through them"
-                  hidden
-                >
-                  Descent
-                </button>
               </div>
 
               <button
@@ -467,6 +468,11 @@
             </div>
 
             <div class="viz-body">
+              <div class="level-nav" aria-label="Lowering level">
+                <button id="level-up" aria-label="Higher level" title="Higher level">↑</button>
+                <button id="level-down" aria-label="Lower level" title="Lower level">↓</button>
+              </div>
+
               <div id="graph-view" role="tabpanel" aria-labelledby="view-graph">
                 <canvas
                   id="canvas"
